@@ -13,6 +13,7 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - Sternfarben, Horizont und Linien markanter Sternbilder
 - Objektinformationen und berechnete Positionen für die nächsten zwölf Stunden
 - Live-Wetter von Open-Meteo ohne API-Schlüssel
+- interaktive Wetterkarte mit Regenradar-Zeitleiste und Bewölkung
 - Dunkles, für Nachtbeobachtung optimiertes Compose-UI
 
 ## Lokal starten
@@ -29,7 +30,7 @@ Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung be
 - größerer, lizenzierter Stern- und Deep-Sky-Katalog
 - Planeten, Sonne und Mond mit Ephemeriden
 - weitere Sternbilder, Sternbildnamen und Illustrationen
-- interaktive Wetterkarte mit Wolken- und Niederschlags-Layern
+- Vorhersage-Zeitleiste für die Bewölkungsfläche
 - nutzergeführte Kompass- und AR-Feinkalibrierung
 - Tests mit Referenz-Ephemeriden
 

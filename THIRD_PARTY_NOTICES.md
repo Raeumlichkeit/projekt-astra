@@ -13,3 +13,12 @@ HYG Stellar Database v4.1 by David Nash / Astronomy Nexus.
   magnitude, distance, spectral type, colour index, and constellation abbreviation.
 
 The generated subset remains available under CC BY-SA 4.0.
+
+## Weather map
+
+- Rain radar tiles and timeline metadata: RainViewer Weather Maps API, free for personal and
+  educational use with attribution, https://www.rainviewer.com/api.html
+- Cloud-cover values: Open-Meteo, https://open-meteo.com/
+- Base map: © OpenStreetMap contributors, used according to the OSM tile usage policy,
+  https://operations.osmfoundation.org/policies/tiles/
+- Map renderer: Leaflet 1.9.4, BSD-2-Clause, https://leafletjs.com/

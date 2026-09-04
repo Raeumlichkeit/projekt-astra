@@ -14,6 +14,9 @@ import android.location.LocationManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Bundle
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -291,7 +294,7 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
                 )
                 SensorManager.getOrientation(remapped, angles)
                 val targetAzimuth = ((Math.toDegrees(angles[0].toDouble()) + magneticDeclination + 360.0) % 360.0).toFloat()
-                val targetPitch = Math.toDegrees(angles[1].toDouble()).toFloat().coerceIn(-90f, 90f)
+                val targetPitch = (-Math.toDegrees(angles[1].toDouble())).toFloat().coerceIn(-90f, 90f)
                 val delta = ((targetAzimuth - azimuth + 540f) % 360f) - 180f
                 azimuth = (azimuth + delta * 0.18f + 360f) % 360f
                 pitch += (targetPitch - pitch) * 0.18f
@@ -661,15 +664,60 @@ private fun WeatherScreen(location: GeoPoint?) {
                     WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
                 }
                 Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
-                Card(colors = CardDefaults.cardColors(containerColor = NightBlue)) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("Wetterkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Die interaktive Wolken- und Niederschlagskarte ist für den nächsten Ausbauschritt vorbereitet.")
-                    }
-                }
+                Text("Wolken- und Regenkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
+                    color = Color(0xFFAAB8CE),
+                    fontSize = 13.sp
+                )
+                WeatherMap(observer)
             }
         }
+    }
+}
+
+@Composable
+private fun WeatherMap(observer: GeoPoint) {
+    val context = LocalContext.current
+    val webView = remember(context) {
+        WebView(context).apply {
+            webViewClient = WebViewClient()
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.3"
+        }
+    }
+
+    LaunchedEffect(observer) {
+        val html = context.assets.open("weather_map.html").bufferedReader().use { it.readText() }
+            .replace("__ASTRA_LAT__", observer.latitude.toString())
+            .replace("__ASTRA_LON__", observer.longitude.toString())
+        webView.loadDataWithBaseURL(
+            "https://projekt-astra.local/",
+            html,
+            "text/html",
+            "UTF-8",
+            null
+        )
+    }
+
+    DisposableEffect(webView) {
+        onDispose {
+            webView.stopLoading()
+            webView.destroy()
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().height(520.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = NightBlue)
+    ) {
+        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -720,7 +768,8 @@ private fun AboutScreen() {
         Text("Die Sensoranzeige ist eine Orientierungshilfe. Für präzise Beobachtungen sollte der Kompass kalibriert und magnetische Störquellen vermieden werden.")
         Spacer(Modifier.height(18.dp))
         Text("Sternkatalog: HYG v4.1 · CC BY-SA 4.0", color = Color(0xFFAAB8CE))
-        Text("Version 0.2.0 · AR Preview", color = Color(0xFFAAB8CE))
+        Text("Wetterkarte: RainViewer, Open-Meteo und OpenStreetMap", color = Color(0xFFAAB8CE))
+        Text("Version 0.3.0 · AR und Wetterkarte", color = Color(0xFFAAB8CE))
     }
 }
 

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>
+    html, body, #map { height: 100%; width: 100%; margin: 0; background: #07101f; }
+    body { font-family: system-ui, sans-serif; color: #edf3ff; }
+    .leaflet-control-attribution { background: rgba(7,16,31,.82) !important; color: #dbe8ff; }
+    .leaflet-control-attribution a { color: #8eb8ff; }
+    .base-map { filter: brightness(.64) saturate(.72) hue-rotate(178deg); }
+    .panel {
+      position: absolute; z-index: 1000; left: 10px; right: 10px; bottom: 22px;
+      padding: 10px 12px; border-radius: 14px; background: rgba(7,16,31,.91);
+      box-shadow: 0 6px 24px rgba(0,0,0,.38); backdrop-filter: blur(9px);
+    }
+    .row { display: flex; gap: 12px; align-items: center; }
+    .row + .row { margin-top: 9px; }
+    label { display: flex; align-items: center; gap: 5px; font-size: 13px; white-space: nowrap; }
+    input[type=range] { flex: 1; accent-color: #6da8ff; min-width: 80px; }
+    input[type=checkbox] { accent-color: #6da8ff; width: 17px; height: 17px; }
+    button { border: 0; border-radius: 9px; color: #07101f; background: #ffd98a; padding: 7px 10px; font-weight: 700; }
+    #time { margin-left: auto; color: #ffd98a; font-weight: 700; font-size: 13px; }
+    #status { font-size: 11px; color: #aab8ce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .location-dot { background:#6da8ff; border:3px solid white; border-radius:50%; box-shadow:0 0 0 7px rgba(109,168,255,.25); }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <div class="row">
+    <label><input id="rainToggle" type="checkbox" checked> Regenradar</label>
+    <label><input id="cloudToggle" type="checkbox" checked> Bewölkung</label>
+    <span id="time">–</span>
+  </div>
+  <div class="row">
+    <button id="play" aria-label="Animation starten">▶</button>
+    <input id="timeline" type="range" min="0" max="0" value="0">
+  </div>
+  <div id="status">Kartendaten werden geladen …</div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(() => {
+  const lat = __ASTRA_LAT__;
+  const lon = __ASTRA_LON__;
+  const map = L.map('map', { zoomControl: true }).setView([lat, lon], 7);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    className: 'base-map',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  L.marker([lat, lon], {
+    icon: L.divIcon({ className: 'location-dot', iconSize: [16,16], iconAnchor: [8,8] })
+  }).addTo(map).bindPopup('Dein Beobachtungsort');
+
+  const rainToggle = document.getElementById('rainToggle');
+  const cloudToggle = document.getElementById('cloudToggle');
+  const timeline = document.getElementById('timeline');
+  const timeLabel = document.getElementById('time');
+  const status = document.getElementById('status');
+  const play = document.getElementById('play');
+  let radarFrames = [];
+  let radarLayer = null;
+  let radarHost = '';
+  let cloudLayer = L.layerGroup().addTo(map);
+  let animation = null;
+
+  function showRadar(index) {
+    if (!radarFrames.length) return;
+    index = Math.max(0, Math.min(index, radarFrames.length - 1));
+    if (radarLayer) map.removeLayer(radarLayer);
+    const frame = radarFrames[index];
+    radarLayer = L.tileLayer(radarHost + frame.path + '/256/{z}/{x}/{y}/2/1_1.png', {
+      tileSize: 256, opacity: .72, maxNativeZoom: 7, maxZoom: 19,
+      attribution: 'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'
+    });
+    if (rainToggle.checked) radarLayer.addTo(map);
+    timeline.value = index;
+    timeLabel.textContent = new Date(frame.time * 1000).toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+  }
+
+  async function loadRadar() {
+    try {
+      const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      radarHost = data.host;
+      radarFrames = [...(data.radar?.past || []), ...(data.radar?.nowcast || [])];
+      if (!radarFrames.length) throw new Error('Keine Radarframes');
+      timeline.max = radarFrames.length - 1;
+      showRadar(radarFrames.length - 1);
+      status.textContent = 'Aktuell · Radar: RainViewer · Wolken: Open-Meteo';
+    } catch (error) {
+      status.textContent = 'Regenradar momentan nicht verfügbar';
+    }
+  }
+
+  async function loadClouds() {
+    const points = [];
+    const step = 0.7;
+    for (let y = -3; y <= 3; y++) {
+      for (let x = -3; x <= 3; x++) points.push([lat + y * step, lon + x * step]);
+    }
+    const lats = points.map(p => p[0].toFixed(3)).join(',');
+    const lons = points.map(p => p[1].toFixed(3)).join(',');
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=cloud_cover&forecast_days=1`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const values = await response.json();
+      const rows = Array.isArray(values) ? values : [values];
+      cloudLayer.clearLayers();
+      rows.forEach((row, i) => {
+        const cover = row.current?.cloud_cover ?? 0;
+        const p = points[i];
+        L.rectangle([[p[0]-step/2,p[1]-step/2],[p[0]+step/2,p[1]+step/2]], {
+          stroke: false,
+          fillColor: cover > 75 ? '#d8e1ef' : cover > 40 ? '#aebbd0' : '#8da0bc',
+          fillOpacity: .04 + cover / 100 * .48,
+          interactive: false
+        }).addTo(cloudLayer);
+      });
+    } catch (error) {
+      status.textContent = 'Bewölkungsdaten momentan nicht verfügbar';
+    }
+  }
+
+  timeline.addEventListener('input', () => showRadar(Number(timeline.value)));
+  rainToggle.addEventListener('change', () => {
+    if (!radarLayer) return;
+    if (rainToggle.checked) radarLayer.addTo(map); else map.removeLayer(radarLayer);
+  });
+  cloudToggle.addEventListener('change', () => {
+    if (cloudToggle.checked) cloudLayer.addTo(map); else map.removeLayer(cloudLayer);
+  });
+  play.addEventListener('click', () => {
+    if (animation) {
+      clearInterval(animation); animation = null; play.textContent = '▶'; return;
+    }
+    play.textContent = '■';
+    animation = setInterval(() => {
+      const next = (Number(timeline.value) + 1) % radarFrames.length;
+      showRadar(next);
+    }, 650);
+  });
+
+  loadRadar();
+  loadClouds();
+  setInterval(loadRadar, 5 * 60 * 1000);
+  setInterval(loadClouds, 15 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
