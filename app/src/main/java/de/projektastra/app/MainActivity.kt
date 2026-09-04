@@ -67,11 +67,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -81,11 +83,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -146,6 +150,7 @@ private fun AstraApp() {
     var permissionGranted by remember { mutableStateOf(false) }
     var cameraGranted by remember { mutableStateOf(false) }
     var arEnabled by remember { mutableStateOf(false) }
+    var locationRefreshKey by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -175,7 +180,7 @@ private fun AstraApp() {
         }
     }
 
-    LocationEffect(permissionGranted) { location = it }
+    LocationEffect(permissionGranted, locationRefreshKey) { location = it }
 
     Scaffold(
         containerColor = Night,
@@ -223,7 +228,10 @@ private fun AstraApp() {
                         else cameraLauncher.launch(Manifest.permission.CAMERA)
                     }
                 )
-                AstraTab.WEATHER -> WeatherScreen(location)
+                AstraTab.WEATHER -> WeatherScreen(
+                    location = location,
+                    refreshLocation = { locationRefreshKey++ }
+                )
                 AstraTab.ABOUT -> AboutScreen()
             }
         }
@@ -231,9 +239,9 @@ private fun AstraApp() {
 }
 
 @Composable
-private fun LocationEffect(enabled: Boolean, onLocation: (GeoPoint) -> Unit) {
+private fun LocationEffect(enabled: Boolean, refreshKey: Int, onLocation: (GeoPoint) -> Unit) {
     val context = LocalContext.current
-    DisposableEffect(enabled) {
+    DisposableEffect(enabled, refreshKey) {
         if (!enabled) return@DisposableEffect onDispose { }
         val hasLocationPermission = ContextCompat.checkSelfPermission(
             context,
@@ -321,10 +329,13 @@ private fun SkyScreen(
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
     val orientation = rememberOrientation(observer)
     val context = LocalContext.current
-    val catalog = remember { StarCatalog.load(context) }
+    val stars = remember { StarCatalog.load(context) }
+    val deepSkyObjects = remember { DeepSkyCatalog.load(context) }
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
-    val visible = remember(observer, orientation.azimuth, orientation.altitude) {
+    var showDeepSky by remember { mutableStateOf(false) }
+    val visible = remember(observer, orientation.azimuth, orientation.altitude, showDeepSky) {
+        val catalog = if (showDeepSky) stars + deepSkyObjects else stars
         catalog.map {
             VisibleObject(it, AstronomyEngine.horizontalCoordinates(it, observer, Instant.now()))
         }
@@ -361,17 +372,30 @@ private fun SkyScreen(
                 Text(cardinalDirection(orientation.azimuth), color = StarGold, fontWeight = FontWeight.Bold)
                 Text("${orientation.azimuth.toInt()}° · ${orientation.altitude.toInt()}° Höhe", fontSize = 12.sp)
             }
-            Button(
-                onClick = toggleAr,
+            Column(
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (arEnabled) StarGold else NightBlue.copy(alpha = 0.88f),
-                    contentColor = if (arEnabled) Night else Color.White
-                )
+                horizontalAlignment = Alignment.End
             ) {
-                Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null)
-                Spacer(Modifier.width(6.dp))
-                Text(if (arEnabled) "Karte" else "AR")
+                Button(
+                    onClick = toggleAr,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (arEnabled) StarGold else NightBlue.copy(alpha = 0.88f),
+                        contentColor = if (arEnabled) Night else Color.White
+                    )
+                ) {
+                    Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (arEnabled) "Karte" else "AR")
+                }
+                Button(
+                    onClick = { showDeepSky = !showDeepSky },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (showDeepSky) AstraBlue else NightBlue.copy(alpha = 0.88f),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
+                }
             }
             if (!orientation.available) {
                 Text(
@@ -526,15 +550,31 @@ private fun SkyCanvas(
             )
         }
         projected.forEach { (item, point) ->
-            val radius = (7.5f - item.celestial.magnitude.toFloat()).coerceIn(1.4f, 10f)
-            drawCircle(
-                color = starColor(item.celestial.colorIndex),
-                radius = radius,
-                center = point
-            )
-            if (item.celestial.magnitude < 1.5 && !item.celestial.name.startsWith("HIP ")) {
+            val objectData = item.celestial
+            val radius = if (objectData.objectType == CelestialType.STAR) {
+                (7.5f - objectData.magnitude.toFloat()).coerceIn(1.4f, 10f)
+            } else {
+                (6f + (objectData.majorAxisArcMinutes ?: 0.0).toFloat() / 12f).coerceIn(6f, 15f)
+            }
+            if (objectData.objectType == CelestialType.STAR) {
+                drawCircle(starColor(objectData.colorIndex), radius, point)
+            } else {
+                drawCircle(deepSkyColor(objectData.objectType), radius, point, style = Stroke(2.5f))
+                drawLine(
+                    deepSkyColor(objectData.objectType).copy(alpha = 0.7f),
+                    point - Offset(radius * 0.55f, 0f),
+                    point + Offset(radius * 0.55f, 0f),
+                    1.5f
+                )
+            }
+            val shouldLabel = if (objectData.objectType == CelestialType.STAR) {
+                objectData.magnitude < 1.5 && !objectData.name.startsWith("HIP ")
+            } else {
+                objectData.messierId.isNotBlank() || objectData.magnitude < 7.0
+            }
+            if (shouldLabel) {
                 drawContext.canvas.nativeCanvas.drawText(
-                    item.celestial.name,
+                    objectData.name,
                     point.x + 10f,
                     point.y - 8f,
                     android.graphics.Paint().apply {
@@ -583,6 +623,7 @@ private fun project(
 
 @Composable
 private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
+    val objectData = item.celestial
     val path = remember(item.celestial, observer) {
         (0..12).map { hours ->
             val at = Instant.now().plusSeconds(hours * 3600L)
@@ -593,19 +634,51 @@ private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
         Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text(item.celestial.name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Text(item.celestial.catalogId, color = AstraBlue)
+        Text(objectData.name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text(objectData.catalogId, color = AstraBlue)
         Spacer(Modifier.height(18.dp))
-        DetailRow("Koordinaten", "RA ${formatRa(item.celestial.raHours)} · Dec ${formatDec(item.celestial.decDegrees)}")
+        DetailRow("Objekttyp", objectData.objectType.label)
+        DetailRow("Koordinaten J2000", "RA ${formatRa(objectData.raHours)} · Dec ${formatDec(objectData.decDegrees)}")
         DetailRow("Aktuelle Position", "Az ${item.position.azimuth.format(1)}° · Höhe ${item.position.altitude.format(1)}°")
-        DetailRow("Helligkeit", "${item.celestial.magnitude.format(2)} mag")
-        DetailRow(
-            "Entfernung",
-            if (item.celestial.distanceLightYears > 0.0) {
-                "${item.celestial.distanceLightYears.format(1)} Lichtjahre"
-            } else "unbekannt"
+        DetailRow("Sichtbarkeit", if (item.position.altitude >= 0.0) "über dem Horizont" else "unter dem Horizont")
+        DetailRow("Helligkeit", "${objectData.magnitude.format(2)} mag")
+        if (objectData.constellation.isNotBlank()) DetailRow("Sternbild", objectData.constellation)
+        if (objectData.objectType == CelestialType.STAR) {
+            DetailRow(
+                "Entfernung",
+                if (objectData.distanceLightYears > 0.0) {
+                    "${objectData.distanceLightYears.format(1)} Lichtjahre"
+                } else "unbekannt"
+            )
+            DetailRow("Spektralklasse", objectData.spectralClass)
+            objectData.absoluteMagnitude?.let { DetailRow("Absolute Helligkeit", "${it.format(2)} mag") }
+            objectData.luminositySolar?.let { DetailRow("Leuchtkraft", "${it.format(2)} × Sonne") }
+            DetailRow("Farbindex B−V", objectData.colorIndex.format(3))
+            if (objectData.properMotionRa != null || objectData.properMotionDec != null) {
+                DetailRow(
+                    "Eigenbewegung",
+                    "RA ${objectData.properMotionRa?.format(2) ?: "–"} · Dec ${objectData.properMotionDec?.format(2) ?: "–"} mas/Jahr"
+                )
+            }
+            objectData.radialVelocity?.let { DetailRow("Radialgeschwindigkeit", "${it.format(1)} km/s") }
+        } else {
+            objectData.majorAxisArcMinutes?.let { major ->
+                val minor = objectData.minorAxisArcMinutes
+                DetailRow("Winkelausdehnung", if (minor != null) "${major.format(1)}′ × ${minor.format(1)}′" else "${major.format(1)}′")
+            }
+            objectData.positionAngleDegrees?.let { DetailRow("Positionswinkel", "${it.format(0)}°") }
+            objectData.redshift?.let { DetailRow("Rotverschiebung z", it.format(6)) }
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("DSS2-Himmelsaufnahme", fontWeight = FontWeight.Bold)
+        Text(
+            "Echter Himmelsausschnitt an der Objektkoordinate; Sterne erscheinen in Aufnahmen als Lichtpunkte.",
+            color = Color(0xFFAAB8CE),
+            fontSize = 12.sp
         )
-        DetailRow("Spektralklasse", item.celestial.spectralClass)
+        Spacer(Modifier.height(8.dp))
+        SkySurveyImage(objectData)
+        Text("Bild: DSS2 via CDS HiPS2FITS", fontSize = 11.sp, color = Color(0xFFAAB8CE))
         Spacer(Modifier.height(18.dp))
         Text("Bahn in den nächsten 12 Stunden", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
@@ -617,83 +690,150 @@ private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
 }
 
 @Composable
+private fun SkySurveyImage(objectData: CelestialObject) {
+    val context = LocalContext.current
+    val fieldOfView = remember(objectData) {
+        if (objectData.objectType == CelestialType.STAR) 0.35
+        else (((objectData.majorAxisArcMinutes ?: 12.0) / 60.0) * 2.4).coerceIn(0.25, 4.0)
+    }
+    val imageUrl = remember(objectData, fieldOfView) {
+        "https://alasky.u-strasbg.fr/hips-image-services/hips2fits" +
+            "?hips=CDS%2FP%2FDSS2%2Fcolor&width=900&height=520&projection=TAN" +
+            "&fov=$fieldOfView&coordsys=icrs&ra=${objectData.raHours * 15.0}" +
+            "&dec=${objectData.decDegrees}&format=jpg&stretch=asinh"
+    }
+    val webView = remember(context, imageUrl) {
+        WebView(context).apply {
+            webViewClient = WebViewClient()
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            settings.javaScriptEnabled = false
+            settings.builtInZoomControls = true
+            settings.displayZoomControls = false
+            settings.loadWithOverviewMode = true
+            settings.useWideViewPort = true
+            loadUrl(imageUrl)
+        }
+    }
+    DisposableEffect(webView) {
+        onDispose {
+            webView.stopLoading()
+            webView.destroy()
+        }
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth().height(230.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Night)
+    ) {
+        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+    }
+}
+
+@Composable
 private fun DetailRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Color(0xFFAAB8CE))
-        Text(value, fontWeight = FontWeight.Medium)
+        Text(label, color = Color(0xFFAAB8CE), modifier = Modifier.weight(0.42f))
+        Text(value, fontWeight = FontWeight.Medium, textAlign = TextAlign.End, modifier = Modifier.weight(0.58f))
     }
     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WeatherScreen(location: GeoPoint?) {
+private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
     var state by remember { mutableStateOf<WeatherState>(WeatherState.Idle) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    var isRefreshing by remember { mutableStateOf(false) }
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
 
-    LaunchedEffect(observer) {
-        state = WeatherState.Loading
-        WeatherRepository.load(observer) { state = it }
+    fun refresh() {
+        isRefreshing = true
+        refreshKey++
+        refreshLocation()
     }
 
-    Column(
-        Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+    LaunchedEffect(observer, refreshKey) {
+        state = WeatherState.Loading
+        WeatherRepository.load(observer) {
+            state = it
+            isRefreshing = false
+        }
+    }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = ::refresh,
+        modifier = Modifier.fillMaxSize()
     ) {
-        Text("Beobachtungswetter", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(
-            if (location == null) "Demo-Standort Berlin" else "${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
-            color = AstraBlue
-        )
-        when (val value = state) {
-            WeatherState.Idle, WeatherState.Loading -> Text("Aktuelle Daten werden geladen …")
-            is WeatherState.Error -> {
-                Text(value.message, color = StarGold)
-                Button(onClick = {
-                    state = WeatherState.Loading
-                    WeatherRepository.load(observer) { state = it }
-                }) { Text("Erneut versuchen") }
-            }
-            is WeatherState.Ready -> {
-                ObservationScore(value.weather)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    WeatherTile("Temperatur", "${value.weather.temperature.format(1)} °C", Modifier.weight(1f))
-                    WeatherTile("Bewölkung", "${value.weather.cloudCover}%", Modifier.weight(1f))
+        Column(
+            Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Beobachtungswetter", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(
+                if (location == null) "Demo-Standort Berlin" else "${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
+                color = AstraBlue
+            )
+            Text("Zum Aktualisieren nach unten ziehen", color = Color(0xFFAAB8CE), fontSize = 12.sp)
+            when (val value = state) {
+                WeatherState.Idle, WeatherState.Loading -> Text("Aktuelle Daten werden geladen …")
+                is WeatherState.Error -> {
+                    Text(value.message, color = StarGold)
+                    Button(onClick = ::refresh) { Text("Erneut versuchen") }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    WeatherTile("Wind", "${value.weather.windSpeed.format(1)} km/h", Modifier.weight(1f))
-                    WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
+                is WeatherState.Ready -> {
+                    ObservationScore(value.weather)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        WeatherTile("Temperatur", "${value.weather.temperature.format(1)} °C", Modifier.weight(1f))
+                        WeatherTile("Bewölkung", "${value.weather.cloudCover}%", Modifier.weight(1f))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        WeatherTile("Wind", "${value.weather.windSpeed.format(1)} km/h", Modifier.weight(1f))
+                        WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
+                    }
+                    Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
+                    Text("Wolken- und Regenkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
+                        color = Color(0xFFAAB8CE),
+                        fontSize = 13.sp
+                    )
+                    WeatherMap(observer, refreshKey)
                 }
-                Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
-                Text("Wolken- und Regenkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
-                    color = Color(0xFFAAB8CE),
-                    fontSize = 13.sp
-                )
-                WeatherMap(observer)
             }
         }
     }
 }
 
 @Composable
-private fun WeatherMap(observer: GeoPoint) {
+private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
     val context = LocalContext.current
     val webView = remember(context) {
         WebView(context).apply {
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    view.postDelayed({
+                        view.evaluateJavascript("window.astraMap && window.astraMap.invalidateSize(true)", null)
+                        view.invalidate()
+                    }, 500L)
+                }
+            }
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.3"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.4"
         }
     }
 
-    LaunchedEffect(observer) {
+    LaunchedEffect(observer, refreshKey) {
+        val leafletCss = context.assets.open("leaflet-1.9.4.css").bufferedReader().use { it.readText() }
+        val leafletJs = context.assets.open("leaflet-1.9.4.js").bufferedReader().use { it.readText() }
         val html = context.assets.open("weather_map.html").bufferedReader().use { it.readText() }
+            .replace("__LEAFLET_CSS__", leafletCss)
+            .replace("__LEAFLET_JS__", leafletJs)
             .replace("__ASTRA_LAT__", observer.latitude.toString())
             .replace("__ASTRA_LON__", observer.longitude.toString())
         webView.loadDataWithBaseURL(
@@ -713,7 +853,7 @@ private fun WeatherMap(observer: GeoPoint) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().height(520.dp),
+        modifier = Modifier.fillMaxWidth().height(400.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = NightBlue)
     ) {
@@ -762,19 +902,47 @@ private fun AboutScreen() {
         Text("Projekt Astra", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Dein Begleiter für den Nachthimmel", color = AstraBlue)
         Spacer(Modifier.height(24.dp))
-        Text("Die App berechnet die Positionen von 5.070 realen Sternen direkt auf dem Gerät und verbindet sie mit Standort, Kamera und Ausrichtung des Smartphones.")
+        Text("Die App berechnet die Positionen von 5.041 realen Sternen und optional 1.016 Deep-Sky-Objekten direkt auf dem Gerät.")
         Spacer(Modifier.height(18.dp))
         Text("Hinweis", fontWeight = FontWeight.Bold)
         Text("Die Sensoranzeige ist eine Orientierungshilfe. Für präzise Beobachtungen sollte der Kompass kalibriert und magnetische Störquellen vermieden werden.")
         Spacer(Modifier.height(18.dp))
         Text("Sternkatalog: HYG v4.1 · CC BY-SA 4.0", color = Color(0xFFAAB8CE))
+        Text("Deep-Sky-Katalog: OpenNGC · CC BY-SA 4.0", color = Color(0xFFAAB8CE))
+        Text("Himmelsaufnahmen: DSS2 via CDS HiPS2FITS", color = Color(0xFFAAB8CE))
         Text("Wetterkarte: RainViewer, Open-Meteo und OpenStreetMap", color = Color(0xFFAAB8CE))
-        Text("Version 0.3.0 · AR und Wetterkarte", color = Color(0xFFAAB8CE))
+        Text("Version 0.4.0 · Deep Sky, Objektbilder und Aktualisierung", color = Color(0xFFAAB8CE))
     }
 }
 
 internal data class GeoPoint(val latitude: Double, val longitude: Double, val altitudeMeters: Double)
 private data class OrientationState(val azimuth: Float, val altitude: Float, val available: Boolean)
+internal enum class CelestialType(val label: String) {
+    STAR("Stern"),
+    GALAXY("Galaxie"),
+    GALAXY_GROUP("Galaxiengruppe"),
+    OPEN_CLUSTER("Offener Sternhaufen"),
+    GLOBULAR_CLUSTER("Kugelsternhaufen"),
+    NEBULA("Nebel"),
+    PLANETARY_NEBULA("Planetarischer Nebel"),
+    SUPERNOVA_REMNANT("Supernova-Überrest"),
+    STAR_ASSOCIATION("Sternassoziation"),
+    OTHER("Deep-Sky-Objekt");
+
+    companion object {
+        fun fromOpenNgc(code: String): CelestialType = when (code) {
+            "G" -> GALAXY
+            "GPair", "GTrpl", "GGroup" -> GALAXY_GROUP
+            "OCl" -> OPEN_CLUSTER
+            "GCl" -> GLOBULAR_CLUSTER
+            "PN" -> PLANETARY_NEBULA
+            "SNR" -> SUPERNOVA_REMNANT
+            "*Ass" -> STAR_ASSOCIATION
+            "Neb", "HII", "DrkN", "EmN", "RfN", "Cl+N" -> NEBULA
+            else -> OTHER
+        }
+    }
+}
 internal data class CelestialObject(
     val name: String,
     val catalogId: String,
@@ -785,7 +953,18 @@ internal data class CelestialObject(
     val spectralClass: String,
     val hipId: Int? = null,
     val colorIndex: Double = 0.45,
-    val constellation: String = ""
+    val constellation: String = "",
+    val objectType: CelestialType = CelestialType.STAR,
+    val properMotionRa: Double? = null,
+    val properMotionDec: Double? = null,
+    val radialVelocity: Double? = null,
+    val absoluteMagnitude: Double? = null,
+    val luminositySolar: Double? = null,
+    val majorAxisArcMinutes: Double? = null,
+    val minorAxisArcMinutes: Double? = null,
+    val positionAngleDegrees: Double? = null,
+    val redshift: Double? = null,
+    val messierId: String = ""
 )
 internal data class HorizontalCoordinates(val azimuth: Double, val altitude: Double)
 private data class VisibleObject(val celestial: CelestialObject, val position: HorizontalCoordinates)
@@ -826,11 +1005,44 @@ private object StarCatalog {
                         spectralClass = fields[6].ifBlank { "unbekannt" },
                         hipId = hip,
                         colorIndex = fields[7].toDoubleOrNull() ?: 0.45,
-                        constellation = fields[8]
+                        constellation = fields[8],
+                        properMotionRa = fields.getOrNull(9)?.toDoubleOrNull(),
+                        properMotionDec = fields.getOrNull(10)?.toDoubleOrNull(),
+                        radialVelocity = fields.getOrNull(11)?.toDoubleOrNull(),
+                        absoluteMagnitude = fields.getOrNull(12)?.toDoubleOrNull(),
+                        luminositySolar = fields.getOrNull(13)?.toDoubleOrNull()
                     )
                 }.toList()
         }.ifEmpty { fallbackObjects }
     }.getOrDefault(fallbackObjects)
+}
+
+private object DeepSkyCatalog {
+    fun load(context: Context): List<CelestialObject> = runCatching {
+        context.assets.open("openngc_deep_sky.tsv").bufferedReader().useLines { lines ->
+            lines.filterNot { it.startsWith("#") || it.isBlank() }
+                .mapNotNull { line ->
+                    val fields = line.split('\t')
+                    if (fields.size < 7) return@mapNotNull null
+                    CelestialObject(
+                        name = fields[0],
+                        catalogId = fields[1],
+                        raHours = fields[2].toDoubleOrNull() ?: return@mapNotNull null,
+                        decDegrees = fields[3].toDoubleOrNull() ?: return@mapNotNull null,
+                        magnitude = fields[4].toDoubleOrNull() ?: 12.0,
+                        distanceLightYears = 0.0,
+                        spectralClass = "",
+                        constellation = fields[6],
+                        objectType = CelestialType.fromOpenNgc(fields[5]),
+                        majorAxisArcMinutes = fields.getOrNull(7)?.toDoubleOrNull(),
+                        minorAxisArcMinutes = fields.getOrNull(8)?.toDoubleOrNull(),
+                        positionAngleDegrees = fields.getOrNull(9)?.toDoubleOrNull(),
+                        redshift = fields.getOrNull(10)?.toDoubleOrNull(),
+                        messierId = fields.getOrNull(11).orEmpty()
+                    )
+                }.toList()
+        }
+    }.getOrDefault(emptyList())
 }
 
 private object ConstellationLines {
@@ -853,6 +1065,13 @@ private fun starColor(colorIndex: Double): Color = when {
     colorIndex < 0.45 -> Color(0xFFF4F7FF)
     colorIndex < 1.0 -> Color(0xFFFFEDC2)
     else -> Color(0xFFFFBF8A)
+}
+
+private fun deepSkyColor(type: CelestialType): Color = when (type) {
+    CelestialType.GALAXY, CelestialType.GALAXY_GROUP -> Color(0xFFBFA7FF)
+    CelestialType.OPEN_CLUSTER, CelestialType.GLOBULAR_CLUSTER, CelestialType.STAR_ASSOCIATION -> StarGold
+    CelestialType.NEBULA, CelestialType.PLANETARY_NEBULA, CelestialType.SUPERNOVA_REMNANT -> Color(0xFF79E7D2)
+    else -> AstraBlue
 }
 
 internal object AstronomyEngine {

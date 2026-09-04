@@ -9,11 +9,14 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - AR-Modus mit CameraX-Kamerabild und Stern-Overlay
 - Korrektur von magnetisch Nord auf geografisch Nord
 - GPS-Standort mit Berlin als klar gekennzeichnetem Demo-Fallback
-- Offline-Katalog mit 5.070 Sternen bis zur visuellen Helligkeit 6,0 (HYG v4.1)
+- Offline-Katalog mit 5.041 HIP-Sternen bis zur visuellen Helligkeit 6,0 (HYG v4.1)
+- optional zuschaltbarer Offline-Katalog mit 1.016 Deep-Sky-Objekten (OpenNGC)
 - Sternfarben, Horizont und Linien markanter Sternbilder
-- Objektinformationen und berechnete Positionen für die nächsten zwölf Stunden
+- ausführliche Objektinformationen, Eigenbewegung und berechnete Positionen für zwölf Stunden
+- echte DSS2-Himmelsaufnahmen passend zur Koordinate des ausgewählten Objekts
 - Live-Wetter von Open-Meteo ohne API-Schlüssel
-- interaktive Wetterkarte mit Regenradar-Zeitleiste und Bewölkung
+- interaktive Wetterkarte mit lokal gebündeltem Kartenrenderer, Regenradar und Bewölkung
+- Pull-to-Refresh aktualisiert Wetter, Wetterkarte und GPS-Standort
 - Dunkles, für Nachtbeobachtung optimiertes Compose-UI
 
 ## Lokal starten
@@ -27,7 +30,6 @@ Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung be
 
 ## Geplanter nächster Ausbau
 
-- größerer, lizenzierter Stern- und Deep-Sky-Katalog
 - Planeten, Sonne und Mond mit Ephemeriden
 - weitere Sternbilder, Sternbildnamen und Illustrationen
 - Vorhersage-Zeitleiste für die Bewölkungsfläche

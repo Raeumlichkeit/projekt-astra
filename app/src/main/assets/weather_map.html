@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>__LEAFLET_CSS__</style>
   <style>
-    html, body, #map { height: 100%; width: 100%; margin: 0; background: #07101f; }
+    html, body { height: 100%; width: 100%; margin: 0; background: #07101f; overflow: hidden; }
+    #map { position: absolute; inset: 0; min-height: 100vh; min-width: 100vw; }
     body { font-family: system-ui, sans-serif; color: #edf3ff; }
     .leaflet-control-attribution { background: rgba(7,16,31,.82) !important; color: #dbe8ff; }
     .leaflet-control-attribution a { color: #8eb8ff; }
     .base-map { filter: brightness(.64) saturate(.72) hue-rotate(178deg); }
     .panel {
-      position: absolute; z-index: 1000; left: 10px; right: 10px; bottom: 22px;
+      position: fixed; z-index: 10000; left: 55px; right: 10px; top: 10px;
       padding: 10px 12px; border-radius: 14px; background: rgba(7,16,31,.91);
       box-shadow: 0 6px 24px rgba(0,0,0,.38); backdrop-filter: blur(9px);
     }
@@ -41,13 +41,27 @@
   </div>
   <div id="status">Kartendaten werden geladen …</div>
 </div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>__LEAFLET_JS__</script>
 <script>
 (() => {
   const lat = __ASTRA_LAT__;
   const lon = __ASTRA_LON__;
+  const mapElement = document.getElementById('map');
+  function fitViewport() {
+    const width = Math.max(window.innerWidth, 320);
+    const height = Math.max(window.innerHeight, 360);
+    document.documentElement.style.width = width + 'px';
+    document.documentElement.style.height = height + 'px';
+    document.body.style.width = width + 'px';
+    document.body.style.height = height + 'px';
+    mapElement.style.width = width + 'px';
+    mapElement.style.height = height + 'px';
+  }
+  fitViewport();
   const map = L.map('map', { zoomControl: true }).setView([lat, lon], 7);
+  window.astraMap = map;
+  window.addEventListener('resize', () => { fitViewport(); map.invalidateSize(false); });
+  setTimeout(() => map.invalidateSize(false), 350);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     className: 'base-map',
