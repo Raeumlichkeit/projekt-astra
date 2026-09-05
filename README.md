@@ -17,6 +17,10 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - Live-Wetter von Open-Meteo ohne API-Schlüssel
 - interaktive Wetterkarte mit lokal gebündeltem Kartenrenderer, Regenradar und Bewölkung
 - Pull-to-Refresh aktualisiert Wetter, Wetterkarte und GPS-Standort
+- manuell verschiebbare und zoombare Sternkarte; AR bleibt separat sensorgesteuert
+- standortbezogener Himmelskalender für Meteorschauer sowie Sonnen- und Mondfinsternisse
+- lokale Beobachtungseinschätzung aus Radiantenhöhe und ungefährem Mondlicht
+- interaktive NASA-VIIRS-Nachtlichtkarte als Orientierung für Lichtverschmutzung
 - Dunkles, für Nachtbeobachtung optimiertes Compose-UI
 
 ## Lokal starten
@@ -33,12 +37,13 @@ Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung be
 - Planeten, Sonne und Mond mit Ephemeriden
 - weitere Sternbilder, Sternbildnamen und Illustrationen
 - Vorhersage-Zeitleiste für die Bewölkungsfläche
+- online aktualisierbarer Ereigniskatalog und exakte lokale Finsterniskontakte
 - nutzergeführte Kompass- und AR-Feinkalibrierung
 - Tests mit Referenz-Ephemeriden
 
 ## Daten und Datenschutz
 
-Der Standort wird für die Himmelsberechnung lokal verarbeitet und zur Abfrage des standortbezogenen Wetters an Open-Meteo übertragen. Es ist noch kein Tracking oder Benutzerkonto enthalten.
+Der Standort wird für Himmels- und Ereignisberechnungen lokal verarbeitet, in den Karten lokal markiert und zur Abfrage des standortbezogenen Wetters an Open-Meteo übertragen. Es ist kein Tracking oder Benutzerkonto enthalten.
 
 Der abgeleitete Offline-Sternkatalog basiert auf HYG v4.1 und steht unter CC BY-SA 4.0.
 Details stehen in `THIRD_PARTY_NOTICES.md`.

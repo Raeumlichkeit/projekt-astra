@@ -41,3 +41,21 @@ The generated subset remains available under CC BY-SA 4.0.
 - Base map: © OpenStreetMap contributors, used according to the OSM tile usage policy,
   https://operations.osmfoundation.org/policies/tiles/
 - Map renderer: Leaflet 1.9.4, BSD-2-Clause, https://leafletjs.com/
+
+## Astronomy event calendar
+
+- Eclipse dates and global visibility regions: NASA Goddard Space Flight Center eclipse catalogs,
+  https://eclipse.gsfc.nasa.gov/
+- Recurring meteor-shower maxima, radiant coordinates, and ideal zenithal hourly rates:
+  International Meteor Organization meteor-shower calendars, https://www.imo.net/resources/calendar/
+
+The app combines these catalog facts with a local, approximate visibility estimate. Meteor-shower
+maxima can vary and the calculated score is not an official observing forecast.
+
+## Night-light map
+
+- Earth at Night (2012, VIIRS, Suomi NPP) imagery: NASA Global Imagery Browse Services (GIBS),
+  layer `VIIRS_CityLights_2012`, https://earthdata.nasa.gov/gibs
+
+The night-light imagery is used as a visual proxy for artificial light pollution. It is not a
+current measurement or a Bortle-class map.

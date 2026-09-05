@@ -45,9 +45,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MyLocation
@@ -76,6 +78,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,8 +100,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlin.math.PI
@@ -141,7 +148,7 @@ private fun AstraTheme(content: @Composable () -> Unit) {
     )
 }
 
-private enum class AstraTab { SKY, WEATHER, ABOUT }
+private enum class AstraTab { SKY, WEATHER, EVENTS, ABOUT }
 
 @Composable
 private fun AstraApp() {
@@ -199,6 +206,12 @@ private fun AstraApp() {
                     label = { Text("Wetter") }
                 )
                 NavigationBarItem(
+                    selected = tab == AstraTab.EVENTS,
+                    onClick = { tab = AstraTab.EVENTS },
+                    icon = { Icon(Icons.Rounded.CalendarMonth, null) },
+                    label = { Text("Kalender") }
+                )
+                NavigationBarItem(
                     selected = tab == AstraTab.ABOUT,
                     onClick = { tab = AstraTab.ABOUT },
                     icon = { Icon(Icons.Rounded.Info, null) },
@@ -232,6 +245,7 @@ private fun AstraApp() {
                     location = location,
                     refreshLocation = { locationRefreshKey++ }
                 )
+                AstraTab.EVENTS -> EventsScreen(location)
                 AstraTab.ABOUT -> AboutScreen()
             }
         }
@@ -334,6 +348,17 @@ private fun SkyScreen(
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
+    var manualAzimuth by remember { mutableFloatStateOf(180f) }
+    var manualAltitude by remember { mutableFloatStateOf(35f) }
+    var manualFov by remember { mutableFloatStateOf(95f) }
+    LaunchedEffect(arEnabled) {
+        if (!arEnabled) {
+            manualAzimuth = orientation.azimuth
+            manualAltitude = orientation.altitude
+        }
+    }
+    val viewAzimuth = if (arEnabled) orientation.azimuth else manualAzimuth
+    val viewAltitude = if (arEnabled) orientation.altitude else manualAltitude
     val visible = remember(observer, orientation.azimuth, orientation.altitude, showDeepSky) {
         val catalog = if (showDeepSky) stars + deepSkyObjects else stars
         catalog.map {
@@ -362,15 +387,21 @@ private fun SkyScreen(
             if (arEnabled && cameraPermissionGranted) CameraPreview()
             SkyCanvas(
                 objects = visible,
-                viewAzimuth = orientation.azimuth.toDouble(),
-                viewAltitude = orientation.altitude.toDouble(),
-                horizontalFov = if (arEnabled) cameraFov else 95.0,
+                viewAzimuth = viewAzimuth.toDouble(),
+                viewAltitude = viewAltitude.toDouble(),
+                horizontalFov = if (arEnabled) cameraFov else manualFov.toDouble(),
                 arMode = arEnabled,
+                gesturesEnabled = !arEnabled,
+                onViewChange = { azimuth, altitude, fov ->
+                    manualAzimuth = azimuth.toFloat()
+                    manualAltitude = altitude.toFloat()
+                    manualFov = fov.toFloat()
+                },
                 onSelect = { selected = it }
             )
             Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(cardinalDirection(orientation.azimuth), color = StarGold, fontWeight = FontWeight.Bold)
-                Text("${orientation.azimuth.toInt()}° · ${orientation.altitude.toInt()}° Höhe", fontSize = 12.sp)
+                Text(cardinalDirection(viewAzimuth), color = StarGold, fontWeight = FontWeight.Bold)
+                Text("${viewAzimuth.toInt()}° · ${viewAltitude.toInt()}° Höhe", fontSize = 12.sp)
             }
             Column(
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
@@ -396,6 +427,32 @@ private fun SkyScreen(
                 ) {
                     Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
                 }
+                if (!arEnabled) {
+                    Button(
+                        onClick = {
+                            manualAzimuth = orientation.azimuth
+                            manualAltitude = orientation.altitude
+                            manualFov = 95f
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NightBlue.copy(alpha = 0.88f),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(Icons.Rounded.GpsFixed, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Ausrichten")
+                    }
+                }
+            }
+            if (!arEnabled) {
+                Text(
+                    "Wischen zum Bewegen · Zwei Finger zum Zoomen",
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
+                        .background(Night.copy(alpha = 0.78f), RoundedCornerShape(12.dp)).padding(9.dp),
+                    color = Color(0xFFD8E4F7),
+                    fontSize = 12.sp
+                )
             }
             if (!orientation.available) {
                 Text(
@@ -496,9 +553,14 @@ private fun SkyCanvas(
     viewAltitude: Double,
     horizontalFov: Double,
     arMode: Boolean,
+    gesturesEnabled: Boolean,
+    onViewChange: (azimuth: Double, altitude: Double, fov: Double) -> Unit,
     onSelect: (VisibleObject) -> Unit
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    val latestAzimuth by rememberUpdatedState(viewAzimuth)
+    val latestAltitude by rememberUpdatedState(viewAltitude)
+    val latestFov by rememberUpdatedState(horizontalFov)
     Canvas(
         Modifier.fillMaxSize()
             .onSizeChanged { canvasSize = it }
@@ -515,6 +577,21 @@ private fun SkyCanvas(
                         )?.let { point -> item to hypot((point.x - tap.x).toDouble(), (point.y - tap.y).toDouble()) }
                     }.minByOrNull { it.second }
                     if (closest != null && closest.second <= 42.0) onSelect(closest.first)
+                }
+            }
+            .pointerInput(gesturesEnabled, canvasSize) {
+                if (!gesturesEnabled) return@pointerInput
+                detectTransformGestures { _, pan, zoom, _ ->
+                    if (canvasSize.width <= 0 || canvasSize.height <= 0) return@detectTransformGestures
+                    val verticalFov = latestFov * canvasSize.height / canvasSize.width
+                    val nextAzimuth = normalizeDegrees(
+                        latestAzimuth - pan.x / canvasSize.width * latestFov
+                    )
+                    val nextAltitude = (
+                        latestAltitude + pan.y / canvasSize.height * verticalFov
+                    ).coerceIn(-90.0, 90.0)
+                    val nextFov = (latestFov / zoom).coerceIn(25.0, 150.0)
+                    onViewChange(nextAzimuth, nextAltitude, nextFov)
                 }
             }
             .then(
@@ -824,7 +901,7 @@ private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.4"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.5"
         }
     }
 
@@ -843,6 +920,281 @@ private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
             "UTF-8",
             null
         )
+    }
+
+    DisposableEffect(webView) {
+        onDispose {
+            webView.stopLoading()
+            webView.destroy()
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().height(400.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = NightBlue)
+    ) {
+        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+    }
+}
+
+private enum class SkyEventKind(val label: String) {
+    METEOR("Sternschnuppen"),
+    SOLAR_ECLIPSE("Sonnenfinsternis"),
+    LUNAR_ECLIPSE("Mondfinsternis")
+}
+
+private data class MeteorDefinition(
+    val name: String,
+    val month: Int,
+    val day: Int,
+    val radiantRaHours: Double,
+    val radiantDecDegrees: Double,
+    val zhr: Int
+)
+
+private data class SkyEvent(
+    val title: String,
+    val kind: SkyEventKind,
+    val instant: Instant,
+    val timeIsApproximate: Boolean,
+    val status: String,
+    val statusColor: Color,
+    val facts: String,
+    val description: String
+)
+
+private val meteorShowers = listOf(
+    MeteorDefinition("Quadrantiden", 1, 3, 15.33, 49.0, 80),
+    MeteorDefinition("Lyriden", 4, 22, 18.12, 34.0, 18),
+    MeteorDefinition("Eta-Aquariiden", 5, 6, 22.53, -1.0, 50),
+    MeteorDefinition("Südliche Delta-Aquariiden", 7, 30, 22.67, -16.0, 25),
+    MeteorDefinition("Perseiden", 8, 12, 3.13, 58.0, 100),
+    MeteorDefinition("September-Epsilon-Perseiden", 9, 9, 3.20, 40.0, 8),
+    MeteorDefinition("Draconiden", 10, 8, 17.47, 54.0, 10),
+    MeteorDefinition("Orioniden", 10, 21, 6.35, 16.0, 20),
+    MeteorDefinition("Leoniden", 11, 17, 10.13, 22.0, 15),
+    MeteorDefinition("Geminiden", 12, 14, 7.47, 33.0, 150),
+    MeteorDefinition("Ursiden", 12, 22, 14.47, 76.0, 10)
+)
+
+@Composable
+private fun EventsScreen(location: GeoPoint?) {
+    val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
+    val events = remember(observer) { buildUpcomingEvents(observer) }
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Spacer(Modifier.height(4.dp))
+        Text("Himmelskalender", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (location == null) "Berechnet für Demo-Standort Berlin"
+            else "Für ${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
+            color = AstraBlue
+        )
+        Text(
+            "Die Einschätzung berücksichtigt Standort, Radiantenhöhe und ungefähres Mondlicht. " +
+                "Das Maximum eines Meteorschauers kann sich leicht verschieben.",
+            color = Color(0xFFAAB8CE),
+            fontSize = 13.sp
+        )
+
+        Text("Lichtverschmutzung", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Helle Flächen zeigen starkes künstliches Nachtlicht. Verschiebe und zoome die Karte, " +
+                "um einen dunkleren Beobachtungsplatz in deiner Nähe zu finden.",
+            color = Color(0xFFAAB8CE),
+            fontSize = 13.sp
+        )
+        LightPollutionMap(observer)
+        Text(
+            "NASA-VIIRS-Nachtlichtaufnahme (2012). Sie ist eine Orientierungshilfe für " +
+                "Lichtverschmutzung, keine aktuelle Bortle-Messung.",
+            color = Color(0xFFAAB8CE),
+            fontSize = 11.sp
+        )
+
+        Text("Kommende Ereignisse", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        events.forEach { EventCard(it) }
+        Text(
+            "Quellen: NASA/GSFC Eclipse Catalog · International Meteor Organization (IMO)",
+            color = Color(0xFFAAB8CE),
+            fontSize = 11.sp
+        )
+        Spacer(Modifier.height(14.dp))
+    }
+}
+
+@Composable
+private fun EventCard(event: SkyEvent) {
+    val zone = ZoneId.systemDefault()
+    val dateFormat = DateTimeFormatter.ofPattern("EEE, d. MMM yyyy", Locale.GERMAN).withZone(zone)
+    val timeFormat = DateTimeFormatter.ofPattern("HH:mm 'Uhr'", Locale.GERMAN).withZone(zone)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = NightBlue),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(event.kind.label.uppercase(Locale.GERMAN), color = AstraBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (event.timeIsApproximate) "Maximum-Nacht" else timeFormat.format(event.instant),
+                    color = StarGold,
+                    fontSize = 12.sp
+                )
+            }
+            Text(event.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(dateFormat.format(event.instant), color = Color(0xFFD8E4F7))
+            Text(event.status, color = event.statusColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(event.facts, color = StarGold, fontSize = 13.sp)
+            Text(event.description, color = Color(0xFFAAB8CE), fontSize = 13.sp)
+        }
+    }
+}
+
+private fun buildUpcomingEvents(observer: GeoPoint): List<SkyEvent> {
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    val meteorEvents = (today.year..today.year + 1).flatMap { year ->
+        meteorShowers.map { shower ->
+            val localPeak = ZonedDateTime.of(LocalDate.of(year, shower.month, shower.day), LocalTime.of(2, 0), zone)
+            val instant = localPeak.toInstant()
+            val radiant = CelestialObject(
+                name = shower.name,
+                catalogId = "IMO-Radiant",
+                raHours = shower.radiantRaHours,
+                decDegrees = shower.radiantDecDegrees,
+                magnitude = 0.0,
+                distanceLightYears = 0.0,
+                spectralClass = ""
+            )
+            val altitude = AstronomyEngine.horizontalCoordinates(radiant, observer, instant).altitude
+            val moon = moonIlluminationPercent(instant)
+            val quality = when {
+                altitude < 0.0 -> Triple("Radiant gegen 02:00 unter dem Horizont", StarGold, "Beobachtung zu einer anderen Uhrzeit prüfen.")
+                altitude >= 40.0 && moon < 45.0 -> Triple("Gute Bedingungen am Standort", Color(0xFF76E0A0), "Hoher Radiant und wenig Mondlicht.")
+                altitude >= 20.0 && moon < 75.0 -> Triple("Brauchbare Bedingungen am Standort", AstraBlue, "Radiant sichtbar; Mondlicht kann etwas stören.")
+                else -> Triple("Eingeschränkte Bedingungen am Standort", StarGold, "Niedriger Radiant oder deutliches Mondlicht.")
+            }
+            SkyEvent(
+                title = shower.name,
+                kind = SkyEventKind.METEOR,
+                instant = instant,
+                timeIsApproximate = true,
+                status = quality.first,
+                statusColor = quality.second,
+                facts = "Radiant ca. ${altitude.format(0)}° hoch · Mond ca. ${moon.format(0)} % · ZHR ${shower.zhr}",
+                description = "${quality.third} Die ZHR gilt nur unter ideal dunklem Himmel."
+            )
+        }
+    }
+
+    val eclipseEvents = listOf(
+        eclipseEvent(
+            "Ringförmige Sonnenfinsternis", SkyEventKind.SOLAR_ECLIPSE,
+            "2027-02-06T16:00:48Z", observer,
+            isRegionVisible = observer.isInSouthAmerica() || observer.isInAfrica(),
+            visibilityArea = "Südamerika und Afrika",
+            description = "Ringförmige Phase; außerhalb des Kerngebiets nur partiell oder nicht sichtbar."
+        ),
+        eclipseEvent(
+            "Halbschatten-Mondfinsternis", SkyEventKind.LUNAR_ECLIPSE,
+            "2027-02-20T23:12:51Z", observer,
+            isRegionVisible = observer.longitude in -110.0..115.0,
+            visibilityArea = "Amerika, Europa, Afrika und Asien",
+            description = "Der Mond wird im Halbschatten der Erde subtil dunkler."
+        ),
+        eclipseEvent(
+            "Totale Sonnenfinsternis", SkyEventKind.SOLAR_ECLIPSE,
+            "2027-08-02T10:07:50Z", observer,
+            isRegionVisible = observer.isInEurope() || observer.isInAfrica() || observer.isInMiddleEast(),
+            visibilityArea = "Europa, Nordafrika und Naher Osten",
+            description = "Totalität in Südspanien und Nordafrika; in großen Teilen Europas partiell."
+        ),
+        eclipseEvent(
+            "Halbschatten-Mondfinsternis", SkyEventKind.LUNAR_ECLIPSE,
+            "2027-08-17T07:13:43Z", observer,
+            isRegionVisible = observer.longitude !in -10.0..70.0,
+            visibilityArea = "vor allem Amerika, Pazifik und Australien",
+            description = "Schwache Halbschattenfinsternis; in Mitteleuropa steht der Mond zum Maximum unter dem Horizont."
+        )
+    )
+
+    val now = Instant.now().minus(1, ChronoUnit.DAYS)
+    return (meteorEvents + eclipseEvents)
+        .filter { it.instant.isAfter(now) }
+        .sortedBy { it.instant }
+        .take(14)
+}
+
+private fun eclipseEvent(
+    title: String,
+    kind: SkyEventKind,
+    isoInstant: String,
+    observer: GeoPoint,
+    isRegionVisible: Boolean,
+    visibilityArea: String,
+    description: String
+): SkyEvent {
+    val visible = isRegionVisible
+    return SkyEvent(
+        title = title,
+        kind = kind,
+        instant = Instant.parse(isoInstant),
+        timeIsApproximate = false,
+        status = if (visible) "Sichtbarkeitsgebiet umfasst deinen Standort" else "Von deinem Standort voraussichtlich nicht sichtbar",
+        statusColor = if (visible) Color(0xFF76E0A0) else StarGold,
+        facts = "NASA-Sichtbarkeitsgebiet: $visibilityArea",
+        description = description + if (observer.altitudeMeters > 0) " Zeiten werden lokal angezeigt." else ""
+    )
+}
+
+private fun moonIlluminationPercent(instant: Instant): Double {
+    val julianDate = instant.epochSecond / 86400.0 + 2440587.5
+    val cycles = (julianDate - 2451550.1) / 29.53058867
+    val phase = cycles - floor(cycles)
+    return (1.0 - cos(2.0 * PI * phase)) * 50.0
+}
+
+private fun GeoPoint.isInEurope() = latitude in 34.0..72.0 && longitude in -25.0..45.0
+private fun GeoPoint.isInAfrica() = latitude in -36.0..38.0 && longitude in -20.0..55.0
+private fun GeoPoint.isInSouthAmerica() = latitude in -60.0..15.0 && longitude in -90.0..-30.0
+private fun GeoPoint.isInMiddleEast() = latitude in 12.0..42.0 && longitude in 30.0..65.0
+
+@Composable
+private fun LightPollutionMap(observer: GeoPoint) {
+    val context = LocalContext.current
+    val webView = remember(context) {
+        WebView(context).apply {
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    view.postDelayed({
+                        view.evaluateJavascript("window.astraMap && window.astraMap.invalidateSize(true)", null)
+                        view.invalidate()
+                    }, 500L)
+                }
+            }
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.5"
+        }
+    }
+
+    LaunchedEffect(observer) {
+        val leafletCss = context.assets.open("leaflet-1.9.4.css").bufferedReader().use { it.readText() }
+        val leafletJs = context.assets.open("leaflet-1.9.4.js").bufferedReader().use { it.readText() }
+        val html = context.assets.open("light_pollution_map.html").bufferedReader().use { it.readText() }
+            .replace("__LEAFLET_CSS__", leafletCss)
+            .replace("__LEAFLET_JS__", leafletJs)
+            .replace("__ASTRA_LAT__", observer.latitude.toString())
+            .replace("__ASTRA_LON__", observer.longitude.toString())
+        webView.loadDataWithBaseURL("https://projekt-astra.local/", html, "text/html", "UTF-8", null)
     }
 
     DisposableEffect(webView) {
@@ -911,7 +1263,9 @@ private fun AboutScreen() {
         Text("Deep-Sky-Katalog: OpenNGC · CC BY-SA 4.0", color = Color(0xFFAAB8CE))
         Text("Himmelsaufnahmen: DSS2 via CDS HiPS2FITS", color = Color(0xFFAAB8CE))
         Text("Wetterkarte: RainViewer, Open-Meteo und OpenStreetMap", color = Color(0xFFAAB8CE))
-        Text("Version 0.4.0 · Deep Sky, Objektbilder und Aktualisierung", color = Color(0xFFAAB8CE))
+        Text("Ereignisse: NASA/GSFC und International Meteor Organization", color = Color(0xFFAAB8CE))
+        Text("Nachtlichtkarte: NASA GIBS / VIIRS", color = Color(0xFFAAB8CE))
+        Text("Version 0.5.0 · Kalender, Lichtkarte und manuelle Navigation", color = Color(0xFFAAB8CE))
     }
 }
 
