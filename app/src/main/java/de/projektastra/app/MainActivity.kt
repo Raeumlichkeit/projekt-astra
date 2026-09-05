@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MyLocation
@@ -99,6 +101,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.cosinekitty.astronomy.Aberration
+import io.github.cosinekitty.astronomy.Body
+import io.github.cosinekitty.astronomy.EclipseKind
+import io.github.cosinekitty.astronomy.EquatorEpoch
+import io.github.cosinekitty.astronomy.Observer
+import io.github.cosinekitty.astronomy.Refraction
+import io.github.cosinekitty.astronomy.Time as AstroTime
+import io.github.cosinekitty.astronomy.constellation
+import io.github.cosinekitty.astronomy.equator
+import io.github.cosinekitty.astronomy.horizon
+import io.github.cosinekitty.astronomy.illumination
+import io.github.cosinekitty.astronomy.localSolarEclipsesAfter
+import io.github.cosinekitty.astronomy.lunarEclipsesAfter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -286,6 +301,7 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
     var azimuth by remember { mutableFloatStateOf(180f) }
     var pitch by remember { mutableFloatStateOf(35f) }
     var available by remember { mutableStateOf(false) }
+    var accuracy by remember { mutableIntStateOf(SensorManager.SENSOR_STATUS_UNRELIABLE) }
 
     val magneticDeclination = remember(observer) {
         GeomagneticField(
@@ -322,12 +338,14 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
                 pitch += (targetPitch - pitch) * 0.18f
             }
 
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            override fun onAccuracyChanged(sensor: Sensor?, value: Int) {
+                accuracy = value
+            }
         }
         sensor?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI) }
         onDispose { manager.unregisterListener(listener) }
     }
-    return OrientationState(azimuth, pitch, available)
+    return OrientationState(azimuth, pitch, available, accuracy)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -348,6 +366,7 @@ private fun SkyScreen(
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
+    var showCalibration by remember { mutableStateOf(false) }
     var manualAzimuth by remember { mutableFloatStateOf(180f) }
     var manualAltitude by remember { mutableFloatStateOf(35f) }
     var manualFov by remember { mutableFloatStateOf(95f) }
@@ -360,9 +379,10 @@ private fun SkyScreen(
     val viewAzimuth = if (arEnabled) orientation.azimuth else manualAzimuth
     val viewAltitude = if (arEnabled) orientation.altitude else manualAltitude
     val visible = remember(observer, orientation.azimuth, orientation.altitude, showDeepSky) {
-        val catalog = if (showDeepSky) stars + deepSkyObjects else stars
+        val solarSystem = SolarSystemCatalog.at(observer, Instant.now())
+        val catalog = if (showDeepSky) stars + solarSystem + deepSkyObjects else stars + solarSystem
         catalog.map {
-            VisibleObject(it, AstronomyEngine.horizontalCoordinates(it, observer, Instant.now()))
+            VisibleObject(it, coordinatesAt(it, observer, Instant.now()))
         }
     }
 
@@ -444,6 +464,17 @@ private fun SkyScreen(
                         Text("Ausrichten")
                     }
                 }
+                Button(
+                    onClick = { showCalibration = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NightBlue.copy(alpha = 0.88f),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Rounded.Explore, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Kalibrieren")
+                }
             }
             if (!arEnabled) {
                 Text(
@@ -481,6 +512,51 @@ private fun SkyScreen(
         ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = NightBlue) {
             ObjectDetails(item, observer)
         }
+    }
+    if (showCalibration) {
+        ModalBottomSheet(onDismissRequest = { showCalibration = false }, containerColor = NightBlue) {
+            CalibrationGuide(orientation) { showCalibration = false }
+        }
+    }
+}
+
+@Composable
+private fun CalibrationGuide(orientation: OrientationState, close: () -> Unit) {
+    val (quality, qualityColor) = when (orientation.accuracy) {
+        SensorManager.SENSOR_STATUS_ACCURACY_HIGH -> "Sehr gut" to Color(0xFF76E0A0)
+        SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM -> "Brauchbar" to AstraBlue
+        SensorManager.SENSOR_STATUS_ACCURACY_LOW -> "Niedrig" to StarGold
+        else -> "Noch unzuverlässig" to Color(0xFFFF9C8F)
+    }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("Kompass & AR kalibrieren", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Sensorqualität: $quality", color = qualityColor, fontWeight = FontWeight.Bold)
+        CalibrationStep("1", "Entferne das Handy von Magneten, Lautsprechern, Metallflächen und Stromkabeln.")
+        CalibrationStep("2", "Bewege das Handy mehrmals langsam in einer großen Acht – jeweils um alle drei Achsen.")
+        CalibrationStep("3", "Halte es anschließend aufrecht und drehe dich einmal langsam um 360°.")
+        CalibrationStep("4", "Vergleiche Norden mit einer bekannten Richtung. Wiederhole die Acht, falls die Anzeige springt.")
+        Text(
+            "Die Genauigkeitsanzeige stammt direkt vom Android-Richtungssensor. GPS allein bestimmt keine Blickrichtung.",
+            color = Color(0xFFAAB8CE),
+            fontSize = 13.sp
+        )
+        Button(onClick = close, modifier = Modifier.fillMaxWidth()) { Text("Fertig") }
+    }
+}
+
+@Composable
+private fun CalibrationStep(number: String, text: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier.size(34.dp).background(AstraBlue.copy(alpha = 0.18f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) { Text(number, color = AstraBlue, fontWeight = FontWeight.Bold) }
+        Spacer(Modifier.width(12.dp))
+        Text(text, modifier = Modifier.weight(1f), color = Color(0xFFD8E4F7))
     }
 }
 
@@ -611,6 +687,20 @@ private fun SkyCanvas(
                 drawLine(AstraBlue.copy(alpha = if (arMode) 0.75f else 0.42f), start, end, 2f)
             }
         }
+        ConstellationLines.labels.forEach { label ->
+            byHip[label.anchorHip]?.let { point ->
+                drawContext.canvas.nativeCanvas.drawText(
+                    label.name.uppercase(Locale.GERMAN),
+                    point.x + 14f,
+                    point.y + 34f,
+                    android.graphics.Paint().apply {
+                        color = android.graphics.Color.rgb(109, 168, 255)
+                        textSize = 24f
+                        alpha = if (arMode) 205 else 135
+                    }
+                )
+            }
+        }
         val verticalFov = horizontalFov * size.height / size.width
         val horizonY = (size.height * (0.5 - (0.0 - viewAltitude) / verticalFov)).toFloat()
         if (horizonY in 0f..size.height) {
@@ -628,26 +718,33 @@ private fun SkyCanvas(
         }
         projected.forEach { (item, point) ->
             val objectData = item.celestial
-            val radius = if (objectData.objectType == CelestialType.STAR) {
-                (7.5f - objectData.magnitude.toFloat()).coerceIn(1.4f, 10f)
-            } else {
-                (6f + (objectData.majorAxisArcMinutes ?: 0.0).toFloat() / 12f).coerceIn(6f, 15f)
+            val radius = when (objectData.objectType) {
+                CelestialType.SUN -> 14f
+                CelestialType.MOON -> 13f
+                CelestialType.PLANET -> (10f - objectData.magnitude.toFloat() * 0.45f).coerceIn(5f, 12f)
+                CelestialType.STAR -> (7.5f - objectData.magnitude.toFloat()).coerceIn(1.4f, 10f)
+                else -> (6f + (objectData.majorAxisArcMinutes ?: 0.0).toFloat() / 12f).coerceIn(6f, 15f)
             }
-            if (objectData.objectType == CelestialType.STAR) {
-                drawCircle(starColor(objectData.colorIndex), radius, point)
-            } else {
-                drawCircle(deepSkyColor(objectData.objectType), radius, point, style = Stroke(2.5f))
-                drawLine(
-                    deepSkyColor(objectData.objectType).copy(alpha = 0.7f),
-                    point - Offset(radius * 0.55f, 0f),
-                    point + Offset(radius * 0.55f, 0f),
-                    1.5f
-                )
+            when (objectData.objectType) {
+                CelestialType.STAR -> drawCircle(starColor(objectData.colorIndex), radius, point)
+                CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> {
+                    drawCircle(solarSystemColor(objectData.solarBody), radius * 1.8f, point, alpha = 0.18f)
+                    drawCircle(solarSystemColor(objectData.solarBody), radius, point)
+                }
+                else -> {
+                    drawCircle(deepSkyColor(objectData.objectType), radius, point, style = Stroke(2.5f))
+                    drawLine(
+                        deepSkyColor(objectData.objectType).copy(alpha = 0.7f),
+                        point - Offset(radius * 0.55f, 0f),
+                        point + Offset(radius * 0.55f, 0f),
+                        1.5f
+                    )
+                }
             }
-            val shouldLabel = if (objectData.objectType == CelestialType.STAR) {
-                objectData.magnitude < 1.5 && !objectData.name.startsWith("HIP ")
-            } else {
-                objectData.messierId.isNotBlank() || objectData.magnitude < 7.0
+            val shouldLabel = when (objectData.objectType) {
+                CelestialType.STAR -> objectData.magnitude < 1.5 && !objectData.name.startsWith("HIP ")
+                CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> true
+                else -> objectData.messierId.isNotBlank() || objectData.magnitude < 7.0
             }
             if (shouldLabel) {
                 drawContext.canvas.nativeCanvas.drawText(
@@ -704,7 +801,7 @@ private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
     val path = remember(item.celestial, observer) {
         (0..12).map { hours ->
             val at = Instant.now().plusSeconds(hours * 3600L)
-            at to AstronomyEngine.horizontalCoordinates(item.celestial, observer, at)
+            at to coordinatesAt(item.celestial, observer, at)
         }
     }
     Column(
@@ -715,12 +812,28 @@ private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
         Text(objectData.catalogId, color = AstraBlue)
         Spacer(Modifier.height(18.dp))
         DetailRow("Objekttyp", objectData.objectType.label)
-        DetailRow("Koordinaten J2000", "RA ${formatRa(objectData.raHours)} · Dec ${formatDec(objectData.decDegrees)}")
+        DetailRow(
+            if (objectData.solarBody == null) "Koordinaten J2000" else "Aktuelle Koordinaten",
+            "RA ${formatRa(objectData.raHours)} · Dec ${formatDec(objectData.decDegrees)}"
+        )
         DetailRow("Aktuelle Position", "Az ${item.position.azimuth.format(1)}° · Höhe ${item.position.altitude.format(1)}°")
         DetailRow("Sichtbarkeit", if (item.position.altitude >= 0.0) "über dem Horizont" else "unter dem Horizont")
         DetailRow("Helligkeit", "${objectData.magnitude.format(2)} mag")
         if (objectData.constellation.isNotBlank()) DetailRow("Sternbild", objectData.constellation)
-        if (objectData.objectType == CelestialType.STAR) {
+        if (objectData.solarBody != null) {
+            objectData.distanceAu?.let { distance ->
+                DetailRow(
+                    "Entfernung",
+                    if (objectData.solarBody == Body.Moon) "${(distance * 149_597_870.7).format(0)} km"
+                    else "${distance.format(3)} AE"
+                )
+            }
+            objectData.phaseFraction?.let { DetailRow("Beleuchtete Fläche", "${(it * 100.0).format(0)} %") }
+            if (objectData.astronomyDescription.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Text(objectData.astronomyDescription, color = Color(0xFFAAB8CE))
+            }
+        } else if (objectData.objectType == CelestialType.STAR) {
             DetailRow(
                 "Entfernung",
                 if (objectData.distanceLightYears > 0.0) {
@@ -746,16 +859,18 @@ private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
             objectData.positionAngleDegrees?.let { DetailRow("Positionswinkel", "${it.format(0)}°") }
             objectData.redshift?.let { DetailRow("Rotverschiebung z", it.format(6)) }
         }
-        Spacer(Modifier.height(18.dp))
-        Text("DSS2-Himmelsaufnahme", fontWeight = FontWeight.Bold)
-        Text(
-            "Echter Himmelsausschnitt an der Objektkoordinate; Sterne erscheinen in Aufnahmen als Lichtpunkte.",
-            color = Color(0xFFAAB8CE),
-            fontSize = 12.sp
-        )
-        Spacer(Modifier.height(8.dp))
-        SkySurveyImage(objectData)
-        Text("Bild: DSS2 via CDS HiPS2FITS", fontSize = 11.sp, color = Color(0xFFAAB8CE))
+        if (objectData.solarBody == null) {
+            Spacer(Modifier.height(18.dp))
+            Text("DSS2-Himmelsaufnahme", fontWeight = FontWeight.Bold)
+            Text(
+                "Echter Himmelsausschnitt an der Objektkoordinate; Sterne erscheinen in Aufnahmen als Lichtpunkte.",
+                color = Color(0xFFAAB8CE),
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            SkySurveyImage(objectData)
+            Text("Bild: DSS2 via CDS HiPS2FITS", fontSize = 11.sp, color = Color(0xFFAAB8CE))
+        }
         Spacer(Modifier.height(18.dp))
         Text("Bahn in den nächsten 12 Stunden", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
@@ -869,6 +984,8 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                         WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
                     }
                     Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
+                    Text("24-Stunden-Ausblick", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    ForecastTimeline(value.weather.forecast)
                     Text("Wolken- und Regenkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
@@ -876,6 +993,31 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                         fontSize = 13.sp
                     )
                     WeatherMap(observer, refreshKey)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForecastTimeline(forecast: List<HourlyForecast>) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        forecast.forEach { hour ->
+            val score = (100 - hour.cloudCover - min(20.0, hour.windSpeed)).toInt().coerceIn(0, 100)
+            Card(
+                modifier = Modifier.width(126.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF10243F)),
+                shape = RoundedCornerShape(15.dp)
+            ) {
+                Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(hour.time, color = StarGold, fontWeight = FontWeight.Bold)
+                    Text("☁ ${hour.cloudCover} %", fontSize = 13.sp)
+                    Text("Regen ${hour.rainProbability} %", fontSize = 12.sp, color = Color(0xFFAAB8CE))
+                    Text("Wind ${hour.windSpeed.format(0)} km/h", fontSize = 12.sp, color = Color(0xFFAAB8CE))
+                    Text("Sicht $score/100", color = if (score >= 60) Color(0xFF76E0A0) else AstraBlue, fontSize = 12.sp)
                 }
             }
         }
@@ -901,7 +1043,7 @@ private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.5"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.6"
         }
     }
 
@@ -1091,36 +1233,7 @@ private fun buildUpcomingEvents(observer: GeoPoint): List<SkyEvent> {
         }
     }
 
-    val eclipseEvents = listOf(
-        eclipseEvent(
-            "Ringförmige Sonnenfinsternis", SkyEventKind.SOLAR_ECLIPSE,
-            "2027-02-06T16:00:48Z", observer,
-            isRegionVisible = observer.isInSouthAmerica() || observer.isInAfrica(),
-            visibilityArea = "Südamerika und Afrika",
-            description = "Ringförmige Phase; außerhalb des Kerngebiets nur partiell oder nicht sichtbar."
-        ),
-        eclipseEvent(
-            "Halbschatten-Mondfinsternis", SkyEventKind.LUNAR_ECLIPSE,
-            "2027-02-20T23:12:51Z", observer,
-            isRegionVisible = observer.longitude in -110.0..115.0,
-            visibilityArea = "Amerika, Europa, Afrika und Asien",
-            description = "Der Mond wird im Halbschatten der Erde subtil dunkler."
-        ),
-        eclipseEvent(
-            "Totale Sonnenfinsternis", SkyEventKind.SOLAR_ECLIPSE,
-            "2027-08-02T10:07:50Z", observer,
-            isRegionVisible = observer.isInEurope() || observer.isInAfrica() || observer.isInMiddleEast(),
-            visibilityArea = "Europa, Nordafrika und Naher Osten",
-            description = "Totalität in Südspanien und Nordafrika; in großen Teilen Europas partiell."
-        ),
-        eclipseEvent(
-            "Halbschatten-Mondfinsternis", SkyEventKind.LUNAR_ECLIPSE,
-            "2027-08-17T07:13:43Z", observer,
-            isRegionVisible = observer.longitude !in -10.0..70.0,
-            visibilityArea = "vor allem Amerika, Pazifik und Australien",
-            description = "Schwache Halbschattenfinsternis; in Mitteleuropa steht der Mond zum Maximum unter dem Horizont."
-        )
-    )
+    val eclipseEvents = exactLocalEclipseEvents(observer)
 
     val now = Instant.now().minus(1, ChronoUnit.DAYS)
     return (meteorEvents + eclipseEvents)
@@ -1129,27 +1242,63 @@ private fun buildUpcomingEvents(observer: GeoPoint): List<SkyEvent> {
         .take(14)
 }
 
-private fun eclipseEvent(
-    title: String,
-    kind: SkyEventKind,
-    isoInstant: String,
-    observer: GeoPoint,
-    isRegionVisible: Boolean,
-    visibilityArea: String,
-    description: String
-): SkyEvent {
-    val visible = isRegionVisible
-    return SkyEvent(
-        title = title,
-        kind = kind,
-        instant = Instant.parse(isoInstant),
-        timeIsApproximate = false,
-        status = if (visible) "Sichtbarkeitsgebiet umfasst deinen Standort" else "Von deinem Standort voraussichtlich nicht sichtbar",
-        statusColor = if (visible) Color(0xFF76E0A0) else StarGold,
-        facts = "NASA-Sichtbarkeitsgebiet: $visibilityArea",
-        description = description + if (observer.altitudeMeters > 0) " Zeiten werden lokal angezeigt." else ""
-    )
+private fun exactLocalEclipseEvents(observer: GeoPoint): List<SkyEvent> {
+    val start = Instant.now().toAstroTime()
+    val place = observer.toAstroObserver()
+    val solar = localSolarEclipsesAfter(start, place).take(2).map { eclipse ->
+        val maximum = eclipse.peak.time.toInstant()
+        val totalBegin = eclipse.totalBegin
+        val totalEnd = eclipse.totalEnd
+        val corePhase = if (totalBegin != null && totalEnd != null) {
+            " · Kernphase ${formatEventTime(totalBegin.time.toInstant())}–${formatEventTime(totalEnd.time.toInstant())}"
+        } else ""
+        SkyEvent(
+            title = eclipse.kind.germanEclipseTitle("Sonnenfinsternis"),
+            kind = SkyEventKind.SOLAR_ECLIPSE,
+            instant = maximum,
+            timeIsApproximate = false,
+            status = "An deinem Standort sichtbar",
+            statusColor = Color(0xFF76E0A0),
+            facts = "Bedeckung ${(eclipse.obscuration * 100.0).format(1)} % · Sonne ${eclipse.peak.altitude.format(0)}° hoch",
+            description = "Kontakt ${formatEventTime(eclipse.partialBegin.time.toInstant())} · Maximum ${formatEventTime(maximum)} · Ende ${formatEventTime(eclipse.partialEnd.time.toInstant())}$corePhase"
+        )
+    }
+    val lunar = lunarEclipsesAfter(start).take(5).mapNotNull { eclipse ->
+        val maximum = eclipse.peak.toInstant()
+        val altitude = SolarSystemCatalog.horizontal(Body.Moon, observer, maximum).altitude
+        if (altitude <= -1.0) return@mapNotNull null
+        val penumbralStart = maximum.minusSeconds((eclipse.sdPenum * 60.0).toLong())
+        val penumbralEnd = maximum.plusSeconds((eclipse.sdPenum * 60.0).toLong())
+        val obscurationText = if (eclipse.kind == EclipseKind.Penumbral) {
+            "nur Halbschatten"
+        } else {
+            "${(eclipse.obscuration * 100.0).format(1)} % im Kernschatten"
+        }
+        SkyEvent(
+            title = eclipse.kind.germanEclipseTitle("Mondfinsternis"),
+            kind = SkyEventKind.LUNAR_ECLIPSE,
+            instant = maximum,
+            timeIsApproximate = false,
+            status = "Zum Maximum an deinem Standort sichtbar",
+            statusColor = Color(0xFF76E0A0),
+            facts = "$obscurationText · Mond ${altitude.format(0)}° hoch",
+            description = "Halbschatten ab ${formatEventTime(penumbralStart)} · Maximum ${formatEventTime(maximum)} · Ende ${formatEventTime(penumbralEnd)}"
+        )
+    }
+    return (solar + lunar).toList()
 }
+
+private fun EclipseKind.germanEclipseTitle(noun: String): String = when (this) {
+    EclipseKind.Penumbral -> "Halbschatten-$noun"
+    EclipseKind.Partial -> "Partielle $noun"
+    EclipseKind.Annular -> "Ringförmige $noun"
+    EclipseKind.Total -> "Totale $noun"
+}
+
+private fun formatEventTime(instant: Instant): String = DateTimeFormatter.ofPattern("HH:mm")
+    .withZone(ZoneId.systemDefault()).format(instant)
+
+private fun AstroTime.toInstant(): Instant = Instant.ofEpochMilli(toMillisecondsSince1970())
 
 private fun moonIlluminationPercent(instant: Instant): Double {
     val julianDate = instant.epochSecond / 86400.0 + 2440587.5
@@ -1157,11 +1306,6 @@ private fun moonIlluminationPercent(instant: Instant): Double {
     val phase = cycles - floor(cycles)
     return (1.0 - cos(2.0 * PI * phase)) * 50.0
 }
-
-private fun GeoPoint.isInEurope() = latitude in 34.0..72.0 && longitude in -25.0..45.0
-private fun GeoPoint.isInAfrica() = latitude in -36.0..38.0 && longitude in -20.0..55.0
-private fun GeoPoint.isInSouthAmerica() = latitude in -60.0..15.0 && longitude in -90.0..-30.0
-private fun GeoPoint.isInMiddleEast() = latitude in 12.0..42.0 && longitude in 30.0..65.0
 
 @Composable
 private fun LightPollutionMap(observer: GeoPoint) {
@@ -1182,7 +1326,7 @@ private fun LightPollutionMap(observer: GeoPoint) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.5"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.6"
         }
     }
 
@@ -1254,7 +1398,7 @@ private fun AboutScreen() {
         Text("Projekt Astra", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Dein Begleiter für den Nachthimmel", color = AstraBlue)
         Spacer(Modifier.height(24.dp))
-        Text("Die App berechnet die Positionen von 5.041 realen Sternen und optional 1.016 Deep-Sky-Objekten direkt auf dem Gerät.")
+        Text("Die App berechnet 5.041 reale Sterne, Sonne, Mond, Planeten und optional 1.016 Deep-Sky-Objekte direkt für deinen Standort.")
         Spacer(Modifier.height(18.dp))
         Text("Hinweis", fontWeight = FontWeight.Bold)
         Text("Die Sensoranzeige ist eine Orientierungshilfe. Für präzise Beobachtungen sollte der Kompass kalibriert und magnetische Störquellen vermieden werden.")
@@ -1265,14 +1409,23 @@ private fun AboutScreen() {
         Text("Wetterkarte: RainViewer, Open-Meteo und OpenStreetMap", color = Color(0xFFAAB8CE))
         Text("Ereignisse: NASA/GSFC und International Meteor Organization", color = Color(0xFFAAB8CE))
         Text("Nachtlichtkarte: NASA GIBS / VIIRS", color = Color(0xFFAAB8CE))
-        Text("Version 0.5.0 · Kalender, Lichtkarte und manuelle Navigation", color = Color(0xFFAAB8CE))
+        Text("Ephemeriden: Astronomy Engine 2.1.19 · MIT", color = Color(0xFFAAB8CE))
+        Text("Version 0.6.0 · Sonnensystem, Vorhersage und Kalibrierung", color = Color(0xFFAAB8CE))
     }
 }
 
 internal data class GeoPoint(val latitude: Double, val longitude: Double, val altitudeMeters: Double)
-private data class OrientationState(val azimuth: Float, val altitude: Float, val available: Boolean)
+private data class OrientationState(
+    val azimuth: Float,
+    val altitude: Float,
+    val available: Boolean,
+    val accuracy: Int
+)
 internal enum class CelestialType(val label: String) {
     STAR("Stern"),
+    SUN("Sonne"),
+    MOON("Mond"),
+    PLANET("Planet"),
     GALAXY("Galaxie"),
     GALAXY_GROUP("Galaxiengruppe"),
     OPEN_CLUSTER("Offener Sternhaufen"),
@@ -1318,7 +1471,11 @@ internal data class CelestialObject(
     val minorAxisArcMinutes: Double? = null,
     val positionAngleDegrees: Double? = null,
     val redshift: Double? = null,
-    val messierId: String = ""
+    val messierId: String = "",
+    val solarBody: Body? = null,
+    val distanceAu: Double? = null,
+    val phaseFraction: Double? = null,
+    val astronomyDescription: String = ""
 )
 internal data class HorizontalCoordinates(val azimuth: Double, val altitude: Double)
 private data class VisibleObject(val celestial: CelestialObject, val position: HorizontalCoordinates)
@@ -1400,6 +1557,8 @@ private object DeepSkyCatalog {
 }
 
 private object ConstellationLines {
+    data class Label(val name: String, val anchorHip: Int)
+
     val connections = listOf(
         // Großer Wagen
         54061 to 53910, 53910 to 58001, 58001 to 59774, 59774 to 54061,
@@ -1410,7 +1569,36 @@ private object ConstellationLines {
         // Kassiopeia
         746 to 3179, 3179 to 4427, 4427 to 6686, 6686 to 8886,
         // Sommerdreieck
-        91262 to 102098, 102098 to 97649, 97649 to 91262
+        91262 to 102098, 102098 to 97649, 97649 to 91262,
+        // Schwan
+        102098 to 100453, 100453 to 95947, 100453 to 97165, 100453 to 102488,
+        // Leier
+        91262 to 91971, 91971 to 92420, 92420 to 93194, 93194 to 92791, 92791 to 91971,
+        // Adler
+        97278 to 97649, 97649 to 98036,
+        // Löwe
+        49669 to 50583, 50583 to 54879, 54879 to 57632, 57632 to 54872, 54872 to 50583,
+        // Zwillinge
+        36850 to 37826, 36850 to 32246, 32246 to 30343, 37826 to 35550, 35550 to 31681,
+        // Pegasus und Andromeda
+        677 to 113881, 113881 to 113963, 113963 to 1067, 1067 to 677,
+        677 to 5447, 5447 to 9640,
+        // Perseus
+        15863 to 14576, 15863 to 17358, 15863 to 14328
+    )
+
+    val labels = listOf(
+        Label("Großer Wagen", 58001),
+        Label("Orion", 25930),
+        Label("Kassiopeia", 4427),
+        Label("Schwan", 100453),
+        Label("Leier", 91262),
+        Label("Adler", 97649),
+        Label("Löwe", 50583),
+        Label("Zwillinge", 36850),
+        Label("Pegasus", 113881),
+        Label("Andromeda", 5447),
+        Label("Perseus", 15863)
     )
 }
 
@@ -1427,6 +1615,87 @@ private fun deepSkyColor(type: CelestialType): Color = when (type) {
     CelestialType.NEBULA, CelestialType.PLANETARY_NEBULA, CelestialType.SUPERNOVA_REMNANT -> Color(0xFF79E7D2)
     else -> AstraBlue
 }
+
+private fun solarSystemColor(body: Body?): Color = when (body) {
+    Body.Sun -> Color(0xFFFFD45E)
+    Body.Moon -> Color(0xFFE9EEF7)
+    Body.Mercury -> Color(0xFFB8B1A9)
+    Body.Venus -> Color(0xFFFFE0A0)
+    Body.Mars -> Color(0xFFFF8666)
+    Body.Jupiter -> Color(0xFFFFC18A)
+    Body.Saturn -> Color(0xFFFFDEA0)
+    Body.Uranus -> Color(0xFF99E9ED)
+    Body.Neptune -> Color(0xFF7398FF)
+    else -> AstraBlue
+}
+
+internal object SolarSystemCatalog {
+    private data class Definition(
+        val body: Body,
+        val name: String,
+        val type: CelestialType,
+        val fallbackMagnitude: Double,
+        val description: String
+    )
+
+    private val definitions = listOf(
+        Definition(Body.Sun, "Sonne", CelestialType.SUN, -26.74, "Unser Zentralstern. Nicht ohne geeigneten Sonnenfilter beobachten."),
+        Definition(Body.Moon, "Mond", CelestialType.MOON, -12.7, "Der natürliche Satellit der Erde; seine scheinbare Position enthält die örtliche Parallaxe."),
+        Definition(Body.Mercury, "Merkur", CelestialType.PLANET, -0.4, "Sonnennächster Planet; meist nur kurz in der Morgen- oder Abenddämmerung sichtbar."),
+        Definition(Body.Venus, "Venus", CelestialType.PLANET, -4.2, "Sehr heller innerer Planet mit deutlich wechselnder Phase."),
+        Definition(Body.Mars, "Mars", CelestialType.PLANET, 0.5, "Der rote Planet; Helligkeit und scheinbare Größe ändern sich stark mit seiner Erdentfernung."),
+        Definition(Body.Jupiter, "Jupiter", CelestialType.PLANET, -2.2, "Größter Planet des Sonnensystems; schon im Fernglas sind seine vier hellsten Monde interessant."),
+        Definition(Body.Saturn, "Saturn", CelestialType.PLANET, 0.7, "Gasriese mit einem ausgeprägten Ringsystem."),
+        Definition(Body.Uranus, "Uranus", CelestialType.PLANET, 5.7, "Äußerer Eisriese nahe der Sichtbarkeitsgrenze des bloßen Auges."),
+        Definition(Body.Neptune, "Neptun", CelestialType.PLANET, 7.8, "Äußerster Planet; für die Beobachtung ist mindestens ein Fernglas oder Teleskop nötig.")
+    )
+
+    fun at(observer: GeoPoint, instant: Instant): List<CelestialObject> {
+        val time = instant.toAstroTime()
+        val place = observer.toAstroObserver()
+        return definitions.mapNotNull { definition ->
+            runCatching {
+                val current = equator(definition.body, time, place, EquatorEpoch.OfDate, Aberration.Corrected)
+                val j2000 = equator(definition.body, time, place, EquatorEpoch.J2000, Aberration.Corrected)
+                val light = if (definition.body == Body.Sun) null else illumination(definition.body, time)
+                CelestialObject(
+                    name = definition.name,
+                    catalogId = "Astronomy Engine · ${definition.body}",
+                    raHours = current.ra,
+                    decDegrees = current.dec,
+                    magnitude = light?.mag ?: definition.fallbackMagnitude,
+                    distanceLightYears = 0.0,
+                    spectralClass = "",
+                    constellation = constellation(j2000.ra, j2000.dec).name,
+                    objectType = definition.type,
+                    solarBody = definition.body,
+                    distanceAu = current.dist,
+                    phaseFraction = light?.phaseFraction,
+                    astronomyDescription = definition.description
+                )
+            }.getOrNull()
+        }
+    }
+
+    fun horizontal(body: Body, observer: GeoPoint, instant: Instant): HorizontalCoordinates {
+        val time = instant.toAstroTime()
+        val place = observer.toAstroObserver()
+        val current = equator(body, time, place, EquatorEpoch.OfDate, Aberration.Corrected)
+        val topocentric = horizon(time, place, current.ra, current.dec, Refraction.Normal)
+        return HorizontalCoordinates(topocentric.azimuth, topocentric.altitude)
+    }
+}
+
+internal fun coordinatesAt(
+    objectData: CelestialObject,
+    observer: GeoPoint,
+    instant: Instant
+): HorizontalCoordinates = objectData.solarBody?.let {
+    SolarSystemCatalog.horizontal(it, observer, instant)
+} ?: AstronomyEngine.horizontalCoordinates(objectData, observer, instant)
+
+private fun Instant.toAstroTime(): AstroTime = AstroTime.fromMillisecondsSince1970(toEpochMilli())
+private fun GeoPoint.toAstroObserver(): Observer = Observer(latitude, longitude, altitudeMeters)
 
 internal object AstronomyEngine {
     fun horizontalCoordinates(
@@ -1455,12 +1724,20 @@ internal object AstronomyEngine {
     }
 }
 
+private data class HourlyForecast(
+    val time: String,
+    val cloudCover: Int,
+    val rainProbability: Int,
+    val windSpeed: Double
+)
+
 private data class WeatherSnapshot(
     val temperature: Double,
     val cloudCover: Int,
     val windSpeed: Double,
     val visibility: Double,
-    val updatedAt: String
+    val updatedAt: String,
+    val forecast: List<HourlyForecast>
 )
 
 private sealed interface WeatherState {
@@ -1478,7 +1755,8 @@ private object WeatherRepository {
                     "https://api.open-meteo.com/v1/forecast?latitude=${point.latitude}" +
                         "&longitude=${point.longitude}" +
                         "&current=temperature_2m,cloud_cover,wind_speed_10m" +
-                        "&hourly=visibility&forecast_days=1&timezone=auto"
+                        "&hourly=visibility,cloud_cover,precipitation_probability,wind_speed_10m" +
+                        "&forecast_days=2&timezone=auto"
                 )
                 val connection = (url.openConnection() as java.net.HttpURLConnection).apply {
                     connectTimeout = 8_000
@@ -1492,17 +1770,29 @@ private object WeatherRepository {
                     val hourly = json.getJSONObject("hourly")
                     val times = hourly.getJSONArray("time")
                     val visibilities = hourly.getJSONArray("visibility")
+                    val cloudCover = hourly.getJSONArray("cloud_cover")
+                    val rainProbability = hourly.getJSONArray("precipitation_probability")
+                    val hourlyWind = hourly.getJSONArray("wind_speed_10m")
                     val currentHour = current.getString("time").take(13)
                     var index = 0
                     for (i in 0 until times.length()) {
                         if (times.getString(i).startsWith(currentHour)) { index = i; break }
+                    }
+                    val forecast = (index until min(index + 25, times.length()) step 3).map { i ->
+                        HourlyForecast(
+                            time = times.getString(i).takeLast(5),
+                            cloudCover = cloudCover.optInt(i, 0),
+                            rainProbability = rainProbability.optInt(i, 0),
+                            windSpeed = hourlyWind.optDouble(i, 0.0)
+                        )
                     }
                     WeatherSnapshot(
                         temperature = current.getDouble("temperature_2m"),
                         cloudCover = current.getInt("cloud_cover"),
                         windSpeed = current.getDouble("wind_speed_10m"),
                         visibility = visibilities.optDouble(index, 10_000.0),
-                        updatedAt = current.getString("time").takeLast(5)
+                        updatedAt = current.getString("time").takeLast(5),
+                        forecast = forecast
                     )
                 } finally {
                     connection.disconnect()

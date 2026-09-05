@@ -49,8 +49,16 @@ The generated subset remains available under CC BY-SA 4.0.
 - Recurring meteor-shower maxima, radiant coordinates, and ideal zenithal hourly rates:
   International Meteor Organization meteor-shower calendars, https://www.imo.net/resources/calendar/
 
-The app combines these catalog facts with a local, approximate visibility estimate. Meteor-shower
-maxima can vary and the calculated score is not an official observing forecast.
+Solar-system positions and exact local eclipse circumstances are calculated with Astronomy Engine.
+Meteor-shower maxima can vary and the calculated score is not an official observing forecast.
+
+## Astronomy Engine 2.1.19
+
+- Source: https://github.com/cosinekitty/astronomy
+- License: MIT
+- Used for topocentric Sun, Moon and planet positions, illumination, constellation lookup,
+  and local solar/lunar eclipse calculations.
+- Full license text: `LICENSES/Astronomy-Engine-MIT.txt`
 
 ## Night-light map
 

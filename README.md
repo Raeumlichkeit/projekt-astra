@@ -11,16 +11,23 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - GPS-Standort mit Berlin als klar gekennzeichnetem Demo-Fallback
 - Offline-Katalog mit 5.041 HIP-Sternen bis zur visuellen Helligkeit 6,0 (HYG v4.1)
 - optional zuschaltbarer Offline-Katalog mit 1.016 Deep-Sky-Objekten (OpenNGC)
-- Sternfarben, Horizont und Linien markanter Sternbilder
+- Sternfarben, Horizont sowie erweiterte Linien und Namen markanter Sternbilder
+- Sonne, Mond und alle sieben von der Erde sichtbaren Planeten mit topozentrischen Ephemeriden
+- aktuelle Planetenhelligkeit, Phase, Entfernung und berechnete zwölfstündige Bahn
 - ausführliche Objektinformationen, Eigenbewegung und berechnete Positionen für zwölf Stunden
 - echte DSS2-Himmelsaufnahmen passend zur Koordinate des ausgewählten Objekts
 - Live-Wetter von Open-Meteo ohne API-Schlüssel
 - interaktive Wetterkarte mit lokal gebündeltem Kartenrenderer, Regenradar und Bewölkung
 - Pull-to-Refresh aktualisiert Wetter, Wetterkarte und GPS-Standort
+- stündliche 24-Stunden-Zeitleiste für Wolken, Regenwahrscheinlichkeit, Wind und Beobachtungssicht
 - manuell verschiebbare und zoombare Sternkarte; AR bleibt separat sensorgesteuert
 - standortbezogener Himmelskalender für Meteorschauer sowie Sonnen- und Mondfinsternisse
+- exakt berechnete lokale Sonnenfinsterniskontakte, Bedeckung und Sonnenhöhe
+- lokale Mondfinsternisfilterung mit Kontaktzeiten und Mondhöhe
 - lokale Beobachtungseinschätzung aus Radiantenhöhe und ungefährem Mondlicht
 - interaktive NASA-VIIRS-Nachtlichtkarte als Orientierung für Lichtverschmutzung
+- geführte Kompass-/AR-Kalibrierung mit Android-Sensorgenauigkeit
+- Referenztests für Ephemeriden und die lokale Sonnenfinsternis vom 2. August 2027
 - Dunkles, für Nachtbeobachtung optimiertes Compose-UI
 
 ## Lokal starten
@@ -32,14 +39,12 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 
 Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung benötigt jedoch simulierte Sensorwerte oder ein echtes Gerät.
 
-## Geplanter nächster Ausbau
+## Möglicher weiterer Ausbau
 
-- Planeten, Sonne und Mond mit Ephemeriden
-- weitere Sternbilder, Sternbildnamen und Illustrationen
-- Vorhersage-Zeitleiste für die Bewölkungsfläche
-- online aktualisierbarer Ereigniskatalog und exakte lokale Finsterniskontakte
-- nutzergeführte Kompass- und AR-Feinkalibrierung
-- Tests mit Referenz-Ephemeriden
+- vollständige IAU-Sternbildgrenzen und optionale Illustrationen
+- automatische Online-Aktualisierung der jährlichen IMO-Meteorschauer-Maxima
+- lokales Geländeprofil für einen realistischeren Horizont
+- Favoriten, Beobachtungslisten und rechtzeitige Ereignisbenachrichtigungen
 
 ## Daten und Datenschutz
 
