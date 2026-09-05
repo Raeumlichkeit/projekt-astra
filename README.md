@@ -30,6 +30,10 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - lokale Beobachtungseinschätzung aus Radiantenhöhe und ungefährem Mondlicht
 - interaktive NASA-VIIRS-Nachtlichtkarte als Orientierung für Lichtverschmutzung
 - geführte Kompass-/AR-Kalibrierung mit Android-Sensorgenauigkeit
+- globaler, dauerhaft gespeicherter Rotlichtmodus mit Schnellschalter in der Sternkarte
+- adaptives und monochromes App-Icon sowie Android-12+-Startbildschirm
+- Android-17-konformer Location Button für freiwilligen, sitzungsbasierten Standortzugriff
+- für Google Play vorbereiteter Release-Build, Store-Texte, Grafiken und Datenschutzunterlagen
 - Referenztests für Ephemeriden und die lokale Sonnenfinsternis vom 2. August 2027
 - Dunkles, für Nachtbeobachtung optimiertes Compose-UI
 
@@ -41,6 +45,10 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 4. Die App auf einem Android-Gerät mit Standort- und Bewegungssensoren starten.
 
 Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung benötigt jedoch simulierte Sensorwerte oder ein echtes Gerät.
+
+## Google-Play-Release
+
+Die vorbereiteten Store-Texte, Grafiken, Datenschutzangaben und die vollständige Veröffentlichungsliste liegen unter `play-store/`. Ein Release-Bundle lässt sich auch ohne Schlüssel zur technischen Prüfung mit `gradlew bundleRelease` erstellen. Für den Upload muss einmalig ein privater Upload-Key eingerichtet werden; die Anleitung steht in `play-store/release-checklist.md`.
 
 ## Möglicher weiterer Ausbau
 

@@ -1,5 +1,6 @@
 package de.projektastra.app
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -25,6 +26,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -54,8 +56,8 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,18 +66,24 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -86,11 +94,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -101,6 +112,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
+import androidx.core.locationbutton.compose.LocationButton
+import androidx.core.locationbutton.compose.LocationButtonTextType
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.cosinekitty.astronomy.Aberration
 import io.github.cosinekitty.astronomy.Body
@@ -143,26 +159,77 @@ import kotlin.math.sin
 
 private val Night = Color(0xFF07101F)
 private val NightBlue = Color(0xFF0D1C34)
+private val AstraSurface = Color(0xFF10243F)
+private val AstraSurfaceHigh = Color(0xFF163252)
 private val AstraBlue = Color(0xFF6DA8FF)
 private val StarGold = Color(0xFFFFD98A)
+private val AstraTextMuted = Color(0xFFAAB8CE)
+private val AstraOutline = Color(0xFF294466)
+private val AstraSuccess = Color(0xFF76E0A0)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AstraTheme { AstraApp() } }
+        setContent { AstraRoot() }
     }
 }
 
 @Composable
-private fun AstraTheme(content: @Composable () -> Unit) {
+private fun AstraRoot() {
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE) }
+    var redLightMode by remember { mutableStateOf(preferences.getBoolean("red_light_mode", false)) }
+    val setRedLightMode: (Boolean) -> Unit = {
+        redLightMode = it
+        preferences.edit { putBoolean("red_light_mode", it) }
+    }
+    SideEffect {
+        (context as? android.app.Activity)?.window?.let { window ->
+            val systemBarColor = if (redLightMode) android.graphics.Color.rgb(24, 0, 0)
+            else android.graphics.Color.rgb(7, 16, 31)
+            @Suppress("DEPRECATION")
+            window.statusBarColor = systemBarColor
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = systemBarColor
+            WindowCompat.getInsetsController(window, window.decorView).let { controller ->
+                if (redLightMode) controller.hide(WindowInsetsCompat.Type.systemBars())
+                else controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+    AstraTheme(redLightMode) {
+        Box(
+            Modifier.fillMaxSize().drawWithContent {
+                drawContent()
+                if (redLightMode) {
+                    drawRect(Color(0xFFC40000), blendMode = BlendMode.Multiply)
+                }
+            }
+        ) {
+            AstraApp(redLightMode, setRedLightMode)
+        }
+    }
+}
+
+@Composable
+private fun AstraTheme(redLightMode: Boolean, content: @Composable () -> Unit) {
+    val primary = if (redLightMode) Color(0xFFD35A4A) else AstraBlue
+    val secondary = if (redLightMode) Color(0xFFFF725C) else StarGold
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = AstraBlue,
-            secondary = StarGold,
+            primary = primary,
+            secondary = secondary,
             background = Night,
             surface = NightBlue,
+            surfaceVariant = AstraSurface,
+            outline = AstraOutline,
             onBackground = Color(0xFFEAF1FF),
             onSurface = Color(0xFFEAF1FF)
+        ),
+        shapes = Shapes(
+            small = RoundedCornerShape(10.dp),
+            medium = RoundedCornerShape(18.dp),
+            large = RoundedCornerShape(26.dp)
         ),
         content = content
     )
@@ -171,7 +238,7 @@ private fun AstraTheme(content: @Composable () -> Unit) {
 private enum class AstraTab { SKY, WEATHER, EVENTS, ABOUT }
 
 @Composable
-private fun AstraApp() {
+private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) {
     var tab by remember { mutableStateOf(AstraTab.SKY) }
     var location by remember { mutableStateOf<GeoPoint?>(null) }
     var permissionGranted by remember { mutableStateOf(false) }
@@ -179,12 +246,6 @@ private fun AstraApp() {
     var arEnabled by remember { mutableStateOf(false) }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        permissionGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-    }
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -197,14 +258,6 @@ private fun AstraApp() {
             PackageManager.PERMISSION_GRANTED
         cameraGranted = context.checkSelfPermission(Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
-        if (!permissionGranted) {
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                )
-            )
-        }
     }
 
     LocationEffect(permissionGranted, locationRefreshKey) { location = it }
@@ -212,61 +265,69 @@ private fun AstraApp() {
     Scaffold(
         containerColor = Night,
         bottomBar = {
-            NavigationBar(containerColor = Color(0xFF091426)) {
+            val navigationColors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Night,
+                selectedTextColor = StarGold,
+                indicatorColor = StarGold,
+                unselectedIconColor = AstraTextMuted,
+                unselectedTextColor = AstraTextMuted
+            )
+            NavigationBar(containerColor = Color(0xFF091426), tonalElevation = 0.dp) {
                 NavigationBarItem(
                     selected = tab == AstraTab.SKY,
                     onClick = { tab = AstraTab.SKY },
                     icon = { Icon(Icons.Rounded.Public, null) },
-                    label = { Text("Sternkarte") }
+                    label = { Text("Sternkarte") },
+                    colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.WEATHER,
                     onClick = { tab = AstraTab.WEATHER },
                     icon = { Icon(Icons.Rounded.Cloud, null) },
-                    label = { Text("Wetter") }
+                    label = { Text("Wetter") },
+                    colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.EVENTS,
                     onClick = { tab = AstraTab.EVENTS },
                     icon = { Icon(Icons.Rounded.CalendarMonth, null) },
-                    label = { Text("Kalender") }
+                    label = { Text("Kalender") },
+                    colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.ABOUT,
                     onClick = { tab = AstraTab.ABOUT },
                     icon = { Icon(Icons.Rounded.Info, null) },
-                    label = { Text("Info") }
+                    label = { Text("Info") },
+                    colors = navigationColors
                 )
             }
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            when (tab) {
-                AstraTab.SKY -> SkyScreen(
+            key(tab) {
+                when (tab) {
+                    AstraTab.SKY -> SkyScreen(
                     location = location,
                     locationPermissionGranted = permissionGranted,
                     cameraPermissionGranted = cameraGranted,
                     arEnabled = arEnabled,
-                    requestLocationPermission = {
-                        permissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                                Manifest.permission.ACCESS_FINE_LOCATION
-                            )
-                        )
-                    },
+                    redLightMode = redLightMode,
+                    toggleRedLightMode = { setRedLightMode(!redLightMode) },
+                    onLocationPermissionResult = { permissionGranted = it },
                     toggleAr = {
                         if (arEnabled) arEnabled = false
                         else if (cameraGranted) arEnabled = true
                         else cameraLauncher.launch(Manifest.permission.CAMERA)
                     }
                 )
-                AstraTab.WEATHER -> WeatherScreen(
-                    location = location,
-                    refreshLocation = { locationRefreshKey++ }
-                )
-                AstraTab.EVENTS -> EventsScreen(location)
-                AstraTab.ABOUT -> AboutScreen()
+                    AstraTab.WEATHER -> WeatherScreen(
+                        location = location,
+                        refreshLocation = { locationRefreshKey++ }
+                    )
+                    AstraTab.EVENTS -> EventsScreen(location)
+                    AstraTab.ABOUT -> AboutScreen(redLightMode, setRedLightMode)
+                }
             }
         }
     }
@@ -360,7 +421,9 @@ private fun SkyScreen(
     locationPermissionGranted: Boolean,
     cameraPermissionGranted: Boolean,
     arEnabled: Boolean,
-    requestLocationPermission: () -> Unit,
+    redLightMode: Boolean,
+    toggleRedLightMode: () -> Unit,
+    onLocationPermissionResult: (Boolean) -> Unit,
     toggleAr: () -> Unit
 ) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
@@ -413,6 +476,13 @@ private fun SkyScreen(
                 Text("Live-Himmel", fontSize = 26.sp, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = toggleRedLightMode) {
+                    Icon(
+                        Icons.Rounded.DarkMode,
+                        contentDescription = if (redLightMode) "Rotlicht ausschalten" else "Rotlicht einschalten",
+                        tint = if (redLightMode) StarGold else AstraTextMuted
+                    )
+                }
                 Icon(Icons.Rounded.GpsFixed, null, tint = if (location != null) Color(0xFF76E0A0) else StarGold)
                 Spacer(Modifier.width(6.dp))
                 Text(if (location != null) "GPS" else "Berlin Demo", fontSize = 12.sp)
@@ -525,14 +595,25 @@ private fun SkyScreen(
         }
 
         if (!locationPermissionGranted) {
-            Button(
-                onClick = requestLocationPermission,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AstraBlue)
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Rounded.MyLocation, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Standort für meinen Himmel verwenden")
+                Text(
+                    "Dein Standort richtet Himmel, Wetter und Ereignisse lokal aus. Ohne Freigabe bleibt Berlin als Demo aktiv.",
+                    color = Color(0xFFAAB8CE),
+                    fontSize = 12.sp
+                )
+                LocationButton(
+                    onPermissionResult = onLocationPermissionResult,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    textType = LocationButtonTextType.UsePreciseLocation,
+                    backgroundColor = if (redLightMode) Color(0xFF5A0000) else AstraBlue,
+                    textColor = if (redLightMode) Color(0xFFFF7868) else Night,
+                    iconTint = if (redLightMode) Color(0xFFFF7868) else Night,
+                    cornerRadius = 20.dp,
+                    pressedCornerRadius = 12.dp
+                )
             }
         }
     }
@@ -1025,6 +1106,51 @@ private fun DetailRow(label: String, value: String) {
     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 }
 
+@Composable
+private fun AstraScreenHeader(
+    eyebrow: String,
+    title: String,
+    subtitle: String,
+    icon: ImageVector
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = AstraSurface),
+        border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.75f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().background(
+                Brush.horizontalGradient(
+                    listOf(AstraBlue.copy(alpha = 0.13f), Color.Transparent, StarGold.copy(alpha = 0.06f))
+                )
+            ).padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(52.dp).background(AstraBlue.copy(alpha = 0.16f), RoundedCornerShape(17.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = StarGold, modifier = Modifier.size(28.dp))
+            }
+            Spacer(Modifier.width(15.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(eyebrow, color = AstraBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(title, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = AstraTextMuted, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AstraSectionTitle(title: String, subtitle: String? = null) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        subtitle?.let { Text(it, color = AstraTextMuted, fontSize = 12.sp) }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
@@ -1050,18 +1176,22 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = ::refresh,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
+        )
     ) {
         Column(
             Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text("Beobachtungswetter", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text(
-                if (location == null) "Demo-Standort Berlin" else "${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
-                color = AstraBlue
+            AstraScreenHeader(
+                eyebrow = "ASTRA FORECAST",
+                title = "Beobachtungswetter",
+                subtitle = if (location == null) "Demo-Standort Berlin"
+                else "Standort ${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
+                icon = Icons.Rounded.Cloud
             )
-            Text("Zum Aktualisieren nach unten ziehen", color = Color(0xFFAAB8CE), fontSize = 12.sp)
+            Text("Nach unten ziehen zum Aktualisieren", color = AstraTextMuted, fontSize = 12.sp)
             when (val value = state) {
                 WeatherState.Idle, WeatherState.Loading -> Text("Aktuelle Daten werden geladen …")
                 is WeatherState.Error -> {
@@ -1079,9 +1209,9 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                         WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
                     }
                     Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
-                    Text("24-Stunden-Ausblick", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    AstraSectionTitle("24-Stunden-Ausblick", "Stündliche Bedingungen am aktuellen Standort")
                     ForecastTimeline(value.weather.forecast, observer)
-                    Text("Wolken- und Regenkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    AstraSectionTitle("Wolken- und Regenkarte", "Radar, Niederschlag und Bewölkung")
                     Text(
                         "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
                         color = Color(0xFFAAB8CE),
@@ -1112,16 +1242,26 @@ private fun ForecastTimeline(forecast: List<HourlyForecast>, observer: GeoPoint)
                 ).score
             }
             Card(
-                modifier = Modifier.width(126.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF10243F)),
-                shape = RoundedCornerShape(15.dp)
+                modifier = Modifier.width(132.dp),
+                colors = CardDefaults.cardColors(containerColor = AstraSurface),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(
+                    1.dp,
+                    (if (score >= 70) AstraSuccess else if (score >= 45) AstraBlue else StarGold).copy(alpha = 0.30f)
+                )
             ) {
-                Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(hour.time, color = StarGold, fontWeight = FontWeight.Bold)
                     Text("☁ ${hour.cloudCover} %", fontSize = 13.sp)
                     Text("Regen ${hour.rainProbability} %", fontSize = 12.sp, color = Color(0xFFAAB8CE))
                     Text("Wind ${hour.windSpeed.format(0)} km/h", fontSize = 12.sp, color = Color(0xFFAAB8CE))
-                    Text("Astra $score/100", color = if (score >= 60) Color(0xFF76E0A0) else AstraBlue, fontSize = 12.sp)
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    Text(
+                        "Astra $score/100",
+                        color = if (score >= 70) AstraSuccess else if (score >= 45) AstraBlue else StarGold,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
@@ -1129,6 +1269,7 @@ private fun ForecastTimeline(forecast: List<HourlyForecast>, observer: GeoPoint)
 }
 
 @Composable
+@SuppressLint("SetJavaScriptEnabled")
 private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
     val context = LocalContext.current
     val webView = remember(context) {
@@ -1147,7 +1288,7 @@ private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.7"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/1.0"
         }
     }
 
@@ -1229,15 +1370,18 @@ private fun EventsScreen(location: GeoPoint?) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
     val events = remember(observer) { buildUpcomingEvents(observer) }
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
+        ).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Spacer(Modifier.height(4.dp))
-        Text("Himmelskalender", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(
-            if (location == null) "Berechnet für Demo-Standort Berlin"
+        Spacer(Modifier.height(6.dp))
+        AstraScreenHeader(
+            eyebrow = "ASTRA EVENTS",
+            title = "Himmelskalender",
+            subtitle = if (location == null) "Berechnet für Demo-Standort Berlin"
             else "Für ${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
-            color = AstraBlue
+            icon = Icons.Rounded.CalendarMonth
         )
         Text(
             "Die Einschätzung berücksichtigt Standort, Radiantenhöhe und ungefähres Mondlicht. " +
@@ -1246,7 +1390,7 @@ private fun EventsScreen(location: GeoPoint?) {
             fontSize = 13.sp
         )
 
-        Text("Lichtverschmutzung", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        AstraSectionTitle("Lichtverschmutzung", "Dunkle Beobachtungsplätze in deiner Umgebung finden")
         Text(
             "Helle Flächen zeigen starkes künstliches Nachtlicht. Verschiebe und zoome die Karte, " +
                 "um einen dunkleren Beobachtungsplatz in deiner Nähe zu finden.",
@@ -1261,7 +1405,7 @@ private fun EventsScreen(location: GeoPoint?) {
             fontSize = 11.sp
         )
 
-        Text("Kommende Ereignisse", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        AstraSectionTitle("Kommende Ereignisse", "Finsternisse und Meteorschauer chronologisch sortiert")
         events.forEach { EventCard(it) }
         Text(
             "Quellen: NASA/GSFC Eclipse Catalog · International Meteor Organization (IMO)",
@@ -1279,8 +1423,9 @@ private fun EventCard(event: SkyEvent) {
     val timeFormat = DateTimeFormatter.ofPattern("HH:mm 'Uhr'", Locale.GERMAN).withZone(zone)
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = NightBlue),
-        shape = RoundedCornerShape(18.dp)
+        colors = CardDefaults.cardColors(containerColor = AstraSurface),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, event.statusColor.copy(alpha = 0.28f))
     ) {
         Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1412,6 +1557,7 @@ private fun moonIlluminationPercent(instant: Instant): Double {
 }
 
 @Composable
+@SuppressLint("SetJavaScriptEnabled")
 private fun LightPollutionMap(observer: GeoPoint) {
     val context = LocalContext.current
     val webView = remember(context) {
@@ -1430,7 +1576,7 @@ private fun LightPollutionMap(observer: GeoPoint) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.7"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/1.0"
         }
     }
 
@@ -1546,7 +1692,11 @@ private fun ObservationScore(weather: WeatherSnapshot, observer: GeoPoint) {
         score >= 25 -> "Eingeschränkt"
         else -> "Ungünstig"
     }
-    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF122A49))) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF122A49)),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, AstraBlue.copy(alpha = 0.28f))
+    ) {
         Column {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -1602,7 +1752,12 @@ private fun ObservationScore(weather: WeatherSnapshot, observer: GeoPoint) {
 
 @Composable
 private fun WeatherTile(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = NightBlue)) {
+    Card(
+        modifier,
+        colors = CardDefaults.cardColors(containerColor = AstraSurface),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.65f))
+    ) {
         Column(Modifier.padding(18.dp)) {
             Text(label, color = Color(0xFFAAB8CE), fontSize = 13.sp)
             Spacer(Modifier.height(5.dp))
@@ -1612,25 +1767,100 @@ private fun WeatherTile(label: String, value: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun AboutScreen() {
-    Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
-        Text("Projekt Astra", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        Text("Dein Begleiter für den Nachthimmel", color = AstraBlue)
-        Spacer(Modifier.height(24.dp))
-        Text("Die App berechnet 5.041 reale Sterne, Sonne, Mond, Planeten, die galaktische Ebene der Milchstraße und optional 1.016 Deep-Sky-Objekte direkt für deinen Standort.")
+private fun AboutScreen(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) {
+    Column(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
+        ).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Spacer(Modifier.height(6.dp))
+        AstraScreenHeader(
+            eyebrow = "VERSION ${BuildConfig.VERSION_NAME}",
+            title = "Projekt Astra",
+            subtitle = "Dein Begleiter für einen klaren Blick in den Nachthimmel",
+            icon = Icons.Rounded.Explore
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = AstraSurfaceHigh),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, StarGold.copy(alpha = 0.30f))
+        ) {
+            Row(
+                Modifier.fillMaxWidth().clickable { setRedLightMode(!redLightMode) }.padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.DarkMode, contentDescription = null, tint = StarGold)
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Rotlichtmodus", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text("Schont die Dunkeladaption bei der Beobachtung", color = AstraTextMuted, fontSize = 12.sp)
+                }
+                Switch(checked = redLightMode, onCheckedChange = setRedLightMode)
+            }
+        }
+        AboutInfoCard(
+            title = "Für die Nacht gebaut",
+            icon = Icons.Rounded.Public,
+            body = "5.041 reale Sterne, Sonne, Mond, Planeten, die Milchstraße und optional 1.016 Deep-Sky-Objekte werden passend zu Standort und Uhrzeit berechnet. Wetter, Ereigniskalender und Nachtlichtkarte helfen bei der Planung."
+        )
+        AboutInfoCard(
+            title = "Datenschutz",
+            icon = Icons.Rounded.GpsFixed,
+            body = "Standortzugriff erfolgt erst nach deiner bewussten Freigabe und nur während der Nutzung. Koordinaten werden verschlüsselt an Open-Meteo übertragen, um Wetter und Geländehöhen abzurufen. Kamerabilder bleiben auf dem Gerät und werden weder gespeichert noch übertragen. Projekt Astra enthält keine Konten, Werbung, Analyse-SDKs oder Tracker."
+        )
+        AboutInfoCard(
+            title = "Genauigkeit und Sicherheit",
+            icon = Icons.Rounded.Info,
+            body = "AR und Sensoranzeige sind Orientierungshilfen. Kalibriere den Kompass und halte Abstand zu Magneten oder Metall. Blicke niemals ohne geeigneten Sonnenfilter direkt in die Sonne oder durch ein optisches Instrument."
+        )
+        Card(
+            colors = CardDefaults.cardColors(containerColor = AstraSurface),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.65f))
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Datenquellen und Lizenzen", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Sternkatalog: HYG v4.1 · CC BY-SA 4.0", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Deep Sky: OpenNGC · CC BY-SA 4.0", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Himmelsaufnahmen: DSS2 via CDS HiPS2FITS", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Wetter: RainViewer, Open-Meteo und OpenStreetMap", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Ereignisse: NASA/GSFC und IMO", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Nachtlicht: NASA GIBS / VIIRS", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Gelände: Open-Meteo / Copernicus GLO-90", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Ephemeriden: Astronomy Engine 2.1.19 · MIT", color = AstraTextMuted, fontSize = 12.sp)
+            }
+        }
+        Text(
+            "Projekt Astra ${BuildConfig.VERSION_NAME} · Keine Werbung · Kein Benutzerkonto",
+            color = AstraBlue,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
         Spacer(Modifier.height(18.dp))
-        Text("Hinweis", fontWeight = FontWeight.Bold)
-        Text("Die Sensoranzeige ist eine Orientierungshilfe. Für präzise Beobachtungen sollte der Kompass kalibriert und magnetische Störquellen vermieden werden.")
-        Spacer(Modifier.height(18.dp))
-        Text("Sternkatalog: HYG v4.1 · CC BY-SA 4.0", color = Color(0xFFAAB8CE))
-        Text("Deep-Sky-Katalog: OpenNGC · CC BY-SA 4.0", color = Color(0xFFAAB8CE))
-        Text("Himmelsaufnahmen: DSS2 via CDS HiPS2FITS", color = Color(0xFFAAB8CE))
-        Text("Wetterkarte: RainViewer, Open-Meteo und OpenStreetMap", color = Color(0xFFAAB8CE))
-        Text("Ereignisse: NASA/GSFC und International Meteor Organization", color = Color(0xFFAAB8CE))
-        Text("Nachtlichtkarte: NASA GIBS / VIIRS", color = Color(0xFFAAB8CE))
-        Text("Geländehorizont: Open-Meteo Elevation API / Copernicus GLO-90", color = Color(0xFFAAB8CE))
-        Text("Ephemeriden: Astronomy Engine 2.1.19 · MIT", color = Color(0xFFAAB8CE))
-        Text("Version 0.7.0 · Milchstraße, Geländehorizont und erklärbarer Astra-Score", color = Color(0xFFAAB8CE))
+    }
+}
+
+@Composable
+private fun AboutInfoCard(title: String, icon: ImageVector, body: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = AstraSurface),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.65f))
+    ) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.Top) {
+            Box(
+                Modifier.size(40.dp).background(AstraBlue.copy(alpha = 0.15f), RoundedCornerShape(13.dp)),
+                contentAlignment = Alignment.Center
+            ) { Icon(icon, contentDescription = null, tint = StarGold) }
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(body, color = AstraTextMuted, fontSize = 13.sp)
+            }
+        }
     }
 }
 
