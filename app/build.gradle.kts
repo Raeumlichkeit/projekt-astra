@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.zip.ZipFile
 
 plugins {
     id("com.android.application")
@@ -12,6 +13,20 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+abstract class PreparePrivacyAssets : DefaultTask() {
+    @get:InputFile abstract val policy: RegularFileProperty
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+    @TaskAction fun generate() {
+        val dir = outputDirectory.get().asFile.apply { mkdirs() }
+        policy.get().asFile.copyTo(dir.resolve("privacy-policy.html"), overwrite = true)
+    }
+}
+
+val privacyAssets = tasks.register<PreparePrivacyAssets>("preparePrivacyAssets") {
+    policy.set(rootProject.layout.projectDirectory.file("play-store/privacy-policy.html"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/privacyAssets"))
+}
+
 android {
     namespace = "de.projektastra.app"
     compileSdk = 37
@@ -20,8 +35,8 @@ android {
         applicationId = "de.projektastra.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 9
-        versionName = "1.1.0"
+        versionCode = 10
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -61,6 +76,30 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+}
+
+// Ordinary bundleRelease remains useful for technical tests without publishing credentials.
+tasks.register("verifyPlayRelease") {
+    dependsOn("bundleRelease")
+    doLast {
+        check(keystorePropertiesFile.exists()) { "Upload-Key fehlt: Bundle ist nicht für Play signiert." }
+        check(!rootProject.file("play-store/privacy-policy.html").readText().let {
+            it.contains("RELEASE_BLOCKER") || it.contains("LEGAL_REVIEW_PENDING")
+        }) {
+            "Datenschutzfreigabe steht noch aus. Nicht veröffentlichen."
+        }
+        ZipFile(layout.buildDirectory.file("outputs/bundle/release/app-release.aab").get().asFile).use { zip ->
+            check(zip.entries().asSequence().any { it.name.matches(Regex("META-INF/.*\\.(RSA|EC|DSA)")) }) {
+                "Bundle enthält keine Signatur. Nicht hochladen."
+            }
+        }
+    }
+}
+
+dependencyLocking { lockAllConfigurations() }
+
+androidComponents.onVariants { variant ->
+    variant.sources.assets?.addGeneratedSourceDirectory(privacyAssets, PreparePrivacyAssets::outputDirectory)
 }
 
 dependencies {

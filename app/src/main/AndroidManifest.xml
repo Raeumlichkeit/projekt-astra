@@ -26,6 +26,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ProjektAstra"
         android:usesCleartextTraffic="false">
+        <service
+            android:name=".IsolatedPdfService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":imo_parser" />
         <activity
             android:name=".MainActivity"
             android:exported="true">

@@ -3,42 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
   <title>Datenschutzerklärung – Projekt Astra</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #07101f; color: #eaf1ff; }
-    body { max-width: 760px; margin: auto; padding: 32px 20px 64px; line-height: 1.65; }
-    h1, h2 { line-height: 1.2; } h1 { color: #ffd98a; } h2 { margin-top: 2rem; color: #6da8ff; }
-    a { color: #8ab9ff; } .meta { color: #aab8ce; }
+    body { max-width: 760px; margin: auto; padding: 24px 20px 48px; line-height: 1.65; overflow-wrap: anywhere; hyphens: auto; }
+    h1, h2 { line-height: 1.2; } h1 { color: #ffd98a; font-size: 1.6rem; } h2 { margin-top: 2rem; color: #6da8ff; }
+    a { color: #8ab9ff; } .meta { color: #aab8ce; } .pending { border: 1px solid #ffd98a; padding: 12px; }
   </style>
 </head>
 <body>
   <h1>Datenschutzerklärung für Projekt Astra</h1>
-  <p class="meta">Stand: 5. September 2026</p>
-  <p>Projekt Astra ist eine Astronomie-App ohne Benutzerkonto, Werbung, Analyse-SDKs oder Tracking. Diese Erklärung beschreibt, welche Daten Version 1.1.0 verarbeitet.</p>
+  <p class="meta">Entwurf für Version 1.1.1 · Stand: 6. September 2026</p>
+  <!-- LEGAL_REVIEW_PENDING: Anbieterrollen, Rechtsgrundlagen und Drittlandübermittlungen vor Veröffentlichung abschließend prüfen. -->
+  <p class="pending">Datenschutzinformation für die private Testversion. Verantwortlich: Jeremy Grez. Kontakt: <a href="mailto:jeregrez@gmail.com">jeregrez@gmail.com</a>. Die rechtliche Prüfung für eine öffentliche Veröffentlichung steht noch aus.</p>
 
-  <h2>Standort</h2>
-  <p>Der Standort wird erst nach einer bewussten Freigabe verwendet und nur während der App-Nutzung abgerufen. Er richtet Sternkarte, Wetter, Geländeprofil und Ereignisberechnungen aus. Ohne Freigabe verwendet die App den deutlich gekennzeichneten Demo-Standort Berlin.</p>
-  <p>Für Wetter- und Geländedaten werden Koordinaten verschlüsselt per HTTPS an Open-Meteo übertragen. Interaktive Karten und die numerische Lichtverschmutzungsschätzung erzeugen außerdem technisch notwendige Kachelanfragen an OpenStreetMap, RainViewer und NASA GIBS. Die App betreibt keinen eigenen Server und speichert Standortdaten nicht dauerhaft.</p>
+  <h2>Offline und freiwillige Online-Funktionen</h2>
+  <p>Die App hat keinen eigenen Backend-Server, kein Benutzerkonto, keine Werbung und keine Analyse-SDKs. Sie startet ohne Online-Zugriff. Sternkarte, AR, Berechnungen und mitgelieferte Ereignisdaten funktionieren offline. Unter „Info“ lassen sich Online-Daten gesondert erlauben und jederzeit wieder abschalten. Dabei werden laufende App-Anfragen abgebrochen. Bereits übertragene Protokolle bei Anbietern werden dadurch nicht gelöscht.</p>
 
-  <h2>Kamera und Sensoren</h2>
-  <p>Die Kamera wird ausschließlich für die freiwillig aktivierte AR-Vorschau genutzt. Kamerabilder und Videoframes werden nicht gespeichert oder übertragen. Bewegungs- und Kompasssensoren richten die Sternkarte lokal auf dem Gerät aus.</p>
+  <h2>Standort, Kamera und Sensoren</h2>
+  <p>GPS-Zugriff ist freiwillig und findet nur statt, solange die App im Vordergrund gestartet ist. Ohne Freigabe wird der gekennzeichnete Demo-Standort Berlin verwendet. Für Himmels- und Ereignisberechnungen wird der genaue Standort ausschließlich im Arbeitsspeicher verarbeitet, nicht in einem Standortverlauf gespeichert. Für Online-Wetter und Karten wird der Standort auf 0,01 Grad gerundet (Nord-Süd etwa 1,1 km, Ost-West abhängig vom Breitengrad).</p>
+  <p>Nur nach zusätzlicher Freigabe von „Genaues Online-Geländeprofil“ erhält Open-Meteo den genauen Standort und umliegende Geländepunkte mit fünf Dezimalstellen. Ohne diese Freigabe bleibt der Horizont flach. Die Kamera dient nur der AR-Vorschau: keine Foto-/Videoaufzeichnung, kein Upload. Kompass- und Bewegungssensoren werden lokal verarbeitet.</p>
 
-  <h2>Weitere Online-Dienste</h2>
-  <p>Beim Öffnen eines Objektbildes ruft die App eine astronomische Aufnahme von CDS HiPS2FITS anhand der Himmelskoordinaten des Objekts ab. Diese Koordinaten sind keine Standortdaten der nutzenden Person. Die jährlichen Meteorschauer-Kalender werden direkt von der International Meteor Organization abgerufen; dabei werden keine persönlichen Daten übermittelt.</p>
+  <h2>Empfänger und technische Protokolle</h2>
+  <p>Bei jedem erlaubten Online-Abruf erhalten der jeweilige Anbieter und gegebenenfalls dessen Hosting-/CDN-Dienstleister die IP-Adresse, Anfragezeit, angefragte Ressource und die App-Version im User-Agent. Die Übertragung erfolgt über HTTPS. Kartenkacheln und Ausschnittparameter lassen Rückschlüsse auf den betrachteten Bereich zu; sie sind nicht durch bloßes Weglassen einer Benutzerkennung anonym.</p>
+  <ul>
+    <li><a href="https://open-meteo.com/en/terms">Open-Meteo</a>: gerundete Wetter-/Wolkenkoordinaten, bei gesonderter Freigabe genaue Geländepunkte. Laut Anbieter werden technische Protokolle einschließlich Standort und IP-Adresse bis zu 90 Tage aufbewahrt.</li>
+    <li><a href="https://osmfoundation.org/wiki/Privacy_Policy">OpenStreetMap / OSM Foundation</a>: angeforderte Grundkarten-Kacheln und damit Kartenbereiche.</li>
+    <li><a href="https://www.rainviewer.com/privacy-policy.html">RainViewer</a>: Radarzeitpunkte und Radar-Kacheln.</li>
+    <li><a href="https://www.nasa.gov/privacy/">NASA GIBS</a>: Nachtlicht-Kacheln zur Karte und numerischen Schätzung.</li>
+    <li><a href="https://cds.unistra.fr/">CDS, Universität Straßburg</a>: astronomische Objektkoordinaten für DSS2-Aufnahmen; das ist nicht der GPS-Standort.</li>
+    <li><a href="https://www.imo.net/">International Meteor Organization</a>: angefragter Jahreskalender, keine GPS-Parameter.</li>
+  </ul>
+  <p>Für die übrigen Anbieter ist keine einheitliche, hier verifizierte Löschfrist bekannt; es gelten deren jeweilige Datenschutzhinweise. Die App kann deren Protokolle nicht löschen. Internationale Dienste können Anfragen auch außerhalb der EU verarbeiten. Anbieterrollen, Rechtsgrundlagen und mögliche Drittlandübermittlungen müssen vor einer öffentlichen Veröffentlichung abschließend geprüft werden.</p>
 
-  <h2>Lokale Speicherung und Löschung</h2>
-  <p>Rotlichtmodus, Objektfavoriten, gespeicherte Ereignisse und der gewählte Vorlauf für Erinnerungen werden ausschließlich lokal auf dem Gerät gespeichert. Es gibt kein serverseitiges Nutzerprofil. Alle lokalen Daten lassen sich durch Löschen der App-Daten oder Deinstallieren der App entfernen.</p>
+  <h2>Was lokal gespeichert wird</h2>
+  <p>Im privaten App-Speicher liegen Online-Auswahl, Rotlichtmodus, Objektfavoriten, gespeicherte Ereignisse, Erinnerungsvorlauf, Android-Aufträge für lokale Erinnerungen und der zuletzt gültige öffentliche IMO-Kalender. Diese Daten bleiben bis zur Änderung, Löschung der App-Daten oder Deinstallation. Es werden keine Standortparameter in diesen Einstellungen gespeichert.</p>
+  <p>WebViews verwenden weder Cookies noch DOM-Speicher noch den Browser-Diskcache. Wetterantworten, Geländeantworten, Objektbilder und Radar-/Nachtlichtkacheln verarbeitet die App nur im Arbeitsspeicher. Öffentliche OSM-Grundkarten werden zur Einhaltung der Anbietervorgaben separat im privaten, von Backups ausgeschlossenen Cache gespeichert: höchstens 32 MB, Gültigkeit maximal 30 Tage. Abgelaufene Dateien werden beim nächsten App-Start oder Kartenabruf entfernt. Kachelbilder und gehashte Dateinamen können betrachtete Regionen erkennen lassen; der Cache ist keine Anonymisierung.</p>
+  <p>„Info → Kartencache löschen“ entfernt diese Kartenbilder. Favoriten bleiben dabei erhalten. Beim ersten Update auf 1.1.1 entfernt die App alte WebView-Daten, die zuvor Standortabfragen enthalten konnten. Cloud-Backups und Android-Geräteübertragung sind für App-Daten gesperrt. Das ersetzt keinen Schutz eines entsperrten, gerooteten oder kompromittierten Geräts.</p>
 
-  <h2>Ereigniserinnerungen</h2>
-  <p>Auf Wunsch plant Android lokale Benachrichtigungen für gespeicherte Himmelsereignisse. Dafür fragt die App auf unterstützten Android-Versionen nach der Benachrichtigungsberechtigung. Es werden keine Push-Nachrichten von einem Server versendet; Erinnerungen lassen sich durch Entfernen des Ereignisses oder Entziehen der Berechtigung abschalten.</p>
+  <h2>Erinnerungen und Löschung</h2>
+  <p>Ereigniserinnerungen werden lokal durch Android geplant, ohne externen Push-Dienst. Die Benachrichtigungsberechtigung ist optional. Ein Ereignis zu entfernen löscht seinen Auftrag; Benachrichtigungen lassen sich zusätzlich in Android deaktivieren. Zum Entfernen aller lokalen Daten: Android-Einstellungen → Apps → Projekt Astra → Speicher → Daten löschen, oder deinstallieren. Eigene Screenshots, frühere manuelle Exporte oder Anbieterprotokolle werden dadurch nicht entfernt.</p>
 
-  <h2>Berechtigungen</h2>
-  <p>Standort, Kamera, Benachrichtigungen und Internet werden nur für die beschriebenen Funktionen verwendet. Kamera, Standort und Benachrichtigungen sind optional. Es findet kein Standortzugriff im Hintergrund statt.</p>
-
-  <h2>Kinder</h2>
-  <p>Projekt Astra richtet sich an ein allgemeines Astronomie-Publikum und ist nicht speziell für Kinder konzipiert. Die App sammelt nicht wissentlich personenbezogene Daten von Kindern.</p>
-
-  <h2>Kontakt</h2>
-  <p>Verantwortlich: Projekt Astra. Vor Veröffentlichung wird hier dieselbe Support-E-Mail ergänzt, die im Google-Play-Eintrag angegeben ist.</p>
+  <h2>Kontakt und Betroffenenrechte</h2>
+  <p>Verantwortlich: Jeremy Grez. Support und Datenschutzkontakt: <a href="mailto:jeregrez@gmail.com">jeregrez@gmail.com</a>. Soweit die DSGVO anwendbar ist, bestehen unter ihren Voraussetzungen insbesondere Rechte auf Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit, Widerspruch und Beschwerde bei einer zuständigen Datenschutzaufsicht. Eine erteilte Online-Freigabe kann unter „Info“ für die Zukunft widerrufen werden. Diese technischen Auswahlmöglichkeiten ersetzen nicht die noch ausstehende rechtliche Prüfung für eine Veröffentlichung.</p>
 </body>
 </html>

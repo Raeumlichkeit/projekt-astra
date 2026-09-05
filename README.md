@@ -56,7 +56,22 @@ Die vorbereiteten Store-Texte, Grafiken, Datenschutzangaben und die vollständig
 
 ## Daten und Datenschutz
 
-Der Standort wird für Himmels- und Ereignisberechnungen lokal verarbeitet, in den Karten lokal markiert und zur Abfrage von Wetter, Gelände und der VIIRS-Nachtlichtschätzung an Open-Meteo beziehungsweise NASA GIBS übertragen. Favoriten, Beobachtungslisten und Erinnerungseinstellungen bleiben lokal. Es ist kein Tracking oder Benutzerkonto enthalten.
+Version 1.1.1 startet offline. GPS bleibt für Himmels- und Ereignisberechnungen lokal. Nach separater Online-Freigabe verwenden Wetter/Karten einen auf 0,01° gerundeten Ort; das genaue Geländeprofil benötigt eine zusätzliche Freigabe unter **Info**. Anbieter erhalten IP-Adresse, Anfragezeit und Ressourcenparameter. Open-Meteo nennt eine Protokollaufbewahrung von bis zu 90 Tagen. Standortantworten bleiben in der App im Arbeitsspeicher. Öffentliche OSM-Kacheln liegen separat im privaten, löschbaren Cache (32 MB, Gültigkeit maximal 30 Tage, Bereinigung beim nächsten Start/Abruf). Kacheln können betrachtete Regionen erkennen lassen.
+
+Favoriten, Beobachtungslisten und Erinnerungseinstellungen bleiben lokal. WebViews verwenden keine Cookies, keinen DOM-Speicher und keinen Browser-Diskcache; alte WebView-Daten werden beim Update entfernt. Android-App-Backups und Geräteübertragung sind ausdrücklich ausgeschlossen. Standortlistener und App-Netzwerkzugriffe enden beim Verlassen des Vordergrunds. Details: [Datenschutzerklärung](play-store/privacy-policy.html).
+
+## Sicherheitsstand und Prüfungen
+
+- [Ursprünglicher Prüfbericht (1.1.0)](SECURITY_REVIEW.md)
+- [Maßnahmen, Nachweise und offene Release-Punkte (1.1.1)](SECURITY_REMEDIATION.md)
+- Kein Nachweis einer ISO/IEC-27001-Zertifizierung: Die Norm betrifft auch das organisatorische Informationssicherheitsmanagement, nicht nur App-Code.
+- IMO-PDFs: isolierter Android-Prozess ohne App-Daten/Internet, 4-MB-Eingangslimit, höchstens 64 Seiten/131.072 Textzeichen, 20-Sekunden-Abbruch.
+- Python-Updater: gepinntes, hashgeprüftes pypdf 6.17.0, Prozess-/Größenlimits, Linux-Speicherlimit; getrennte CI-Jobs für PDF-Verarbeitung und schreibberechtigte JSON-Veröffentlichung.
+- Gradle-Distribution mit SHA-256, Abhängigkeits-Lockfile und Verifikationsmetadaten. Neuaufnahme weiterer Checksummen immer prüfen; nicht blind regenerieren.
+
+Prüfen: `gradlew testDebugUnitTest connectedDebugAndroidTest lint bundleRelease`. Instrumentierung nur auf einem Testemulator ausführen: Androids Testinstallation kann App-Testdaten entfernen. Python: virtuelle Umgebung mit Python >=3.11, `pip install --require-hashes --only-binary=:all: -r scripts/requirements-imo.txt`, dann `python -m unittest discover -s scripts -p 'test_*.py'`.
+
+`gradlew verifyPlayRelease` blockiert fehlenden Upload-Key, fehlende Bundle-Signatur oder eine offene Datenschutzfreigabe. Ein erfolgreiches normales `bundleRelease` bedeutet ohne lokale Schlüsselkonfiguration **nicht**, dass das Bundle signiert oder veröffentlichungsfertig ist.
 
 Der abgeleitete Offline-Sternkatalog basiert auf HYG v4.1 und steht unter CC BY-SA 4.0.
 Details stehen in `THIRD_PARTY_NOTICES.md`.

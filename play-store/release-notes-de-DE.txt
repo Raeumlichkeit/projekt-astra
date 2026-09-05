@@ -1,7 +1,7 @@
-Neu in Projekt Astra 1.1:
+Neu in Projekt Astra 1.1.1:
 
-• Grenzen aller 88 IAU-Sternbilder und optionale Illustrationen
-• jährlich online aktualisierte IMO-Meteorschauer
-• numerische VIIRS-Lichtverschmutzungsschätzung im Astra-Score
-• Favoriten und persönliche Beobachtungslisten
-• einstellbare lokale Benachrichtigungen vor Himmelsereignissen
+• Offline-Start mit freiwilliger Online-Freigabe
+• Gerundeter Wetterstandort, separates genaues Geländeprofil
+• Löschbarer privater Kartencache und verbesserte Datenschutzinformationen
+• Standortzugriff nur bei geöffneter App
+• Abgesicherte Kalenderupdates, WebViews und Backup-Regeln

@@ -81,6 +81,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -123,6 +124,7 @@ import androidx.core.locationbutton.compose.LocationButtonTextType
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleStartEffect
 import io.github.cosinekitty.astronomy.Aberration
 import io.github.cosinekitty.astronomy.Body
 import io.github.cosinekitty.astronomy.EclipseKind
@@ -175,7 +177,22 @@ private val AstraSuccess = Color(0xFF76E0A0)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        PrivacySettings.migrateLegacyBrowserData(this)
+        PublicTileCache.prune(this)
+        SecureNetwork.configure(PrivacySettings.load(this))
         setContent { AstraRoot() }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        SecureNetwork.setForeground(true)
+    }
+
+    override fun onStop() {
+        SecureNetwork.setForeground(false)
+        TerrainRepository.clear()
+        LightPollutionRepository.clear()
+        super.onStop()
     }
 }
 
@@ -252,6 +269,14 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
     var locationRefreshKey by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     var favoriteObjectIds by remember { mutableStateOf(ObservationStore.favoriteObjectIds(context)) }
+    var privacy by remember { mutableStateOf(PrivacySettings.load(context)) }
+    var showOnlineConsent by remember { mutableStateOf(!PrivacySettings.hasDecision(context)) }
+    val updatePrivacy: (PrivacyOptions) -> Unit = { value ->
+        PrivacySettings.save(context, value)
+        privacy = value
+        TerrainRepository.clear()
+        LightPollutionRepository.clear()
+    }
     var savedEvents by remember { mutableStateOf(ObservationStore.savedEvents(context)) }
     var reminderHours by remember { mutableIntStateOf(ObservationStore.reminderHours(context)) }
     var notificationsGranted by remember {
@@ -333,7 +358,7 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            key(tab) {
+            key(tab, privacy) {
                 when (tab) {
                     AstraTab.SKY -> SkyScreen(
                     location = location,
@@ -400,18 +425,23 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                             }
                         }
                     )
-                    AstraTab.ABOUT -> AboutScreen(redLightMode, setRedLightMode)
+                    AstraTab.ABOUT -> AboutScreen(redLightMode, setRedLightMode, privacy,
+                        { showOnlineConsent = true }, updatePrivacy)
                 }
             }
         }
+    }
+    if (showOnlineConsent) OnlineConsentDialog { online ->
+        updatePrivacy(PrivacyOptions(online = online))
+        showOnlineConsent = false
     }
 }
 
 @Composable
 private fun LocationEffect(enabled: Boolean, refreshKey: Int, onLocation: (GeoPoint) -> Unit) {
     val context = LocalContext.current
-    DisposableEffect(enabled, refreshKey) {
-        if (!enabled) return@DisposableEffect onDispose { }
+    val currentCallback by rememberUpdatedState(onLocation)
+    LifecycleStartEffect(enabled, refreshKey) {
         val hasLocationPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_COARSE_LOCATION
@@ -419,19 +449,18 @@ private fun LocationEffect(enabled: Boolean, refreshKey: Int, onLocation: (GeoPo
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-        if (!hasLocationPermission) return@DisposableEffect onDispose { }
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val listener = LocationListener { value ->
-            onLocation(GeoPoint(value.latitude, value.longitude, value.altitude))
+            currentCallback(GeoPoint(value.latitude, value.longitude, value.altitude))
         }
         val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-        providers.forEach { provider ->
+        if (enabled && hasLocationPermission) providers.forEach { provider ->
             runCatching {
                 manager.getLastKnownLocation(provider)?.let(listener::onLocationChanged)
                 manager.requestLocationUpdates(provider, 30_000L, 100f, listener)
             }
         }
-        onDispose { manager.removeUpdates(listener) }
+        onStopOrDispose { manager.removeUpdates(listener) }
     }
 }
 
@@ -531,8 +560,10 @@ private fun SkyScreen(
         (observer.latitude * 1_000).roundToInt(),
         (observer.longitude * 1_000).roundToInt()
     ) {
-        terrainState = TerrainState.Loading
-        TerrainRepository.load(observer) { terrainState = it }
+        if (SecureNetwork.options.terrain) {
+            terrainState = TerrainState.Loading
+            TerrainRepository.load(observer) { terrainState = it }
+        } else terrainState = TerrainState.Unavailable
     }
     val milkyWay = remember(observer) {
         MilkyWayModel.horizontalBand(observer, Instant.now())
@@ -727,7 +758,7 @@ private fun SkyScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "Dein Standort richtet Himmel, Wetter und Ereignisse lokal aus. Ohne Freigabe bleibt Berlin als Demo aktiv.",
+                    "Dein Standort richtet den Himmel auf dem Gerät aus. Online-Wetter nutzt nach separater Freigabe einen gerundeten Ort. Ohne Standortfreigabe bleibt Berlin als Demo aktiv.",
                     color = Color(0xFFAAB8CE),
                     fontSize = 12.sp
                 )
@@ -1304,6 +1335,10 @@ private fun ObjectDetails(
 
 @Composable
 private fun SkySurveyImage(objectData: CelestialObject) {
+    if (!SecureNetwork.options.online) {
+        OfflineNotice()
+        return
+    }
     val context = LocalContext.current
     val fieldOfView = remember(objectData) {
         if (objectData.objectType == CelestialType.STAR) 0.35
@@ -1316,10 +1351,7 @@ private fun SkySurveyImage(objectData: CelestialObject) {
             "&dec=${objectData.decDegrees}&format=jpg&stretch=asinh"
     }
     val webView = remember(context, imageUrl) {
-        WebView(context).apply {
-            webViewClient = WebViewClient()
-            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            settings.javaScriptEnabled = false
+        PrivateWebViews.create(context, javascript = false).apply {
             settings.builtInZoomControls = true
             settings.displayZoomControls = false
             settings.loadWithOverviewMode = true
@@ -1329,8 +1361,7 @@ private fun SkySurveyImage(objectData: CelestialObject) {
     }
     DisposableEffect(webView) {
         onDispose {
-            webView.stopLoading()
-            webView.destroy()
+            PrivateWebViews.dispose(webView)
         }
     }
     Card(
@@ -1412,6 +1443,11 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
     }
 
     LaunchedEffect(observer, refreshKey) {
+        if (!SecureNetwork.options.online) {
+            state = WeatherState.Idle
+            isRefreshing = false
+            return@LaunchedEffect
+        }
         state = WeatherState.Loading
         lightPollution = LightPollutionState.Loading
         WeatherRepository.load(observer) {
@@ -1436,12 +1472,14 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                 eyebrow = "ASTRA FORECAST",
                 title = "Beobachtungswetter",
                 subtitle = if (location == null) "Demo-Standort Berlin"
-                else "Standort ${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
+                else "Wetter für deinen ungefähren Standort",
                 icon = Icons.Rounded.Cloud
             )
             Text("Nach unten ziehen zum Aktualisieren", color = AstraTextMuted, fontSize = 12.sp)
+            if (!SecureNetwork.options.online) OfflineNotice()
             when (val value = state) {
-                WeatherState.Idle, WeatherState.Loading -> Text("Aktuelle Daten werden geladen …")
+                WeatherState.Idle -> Unit
+                WeatherState.Loading -> Text("Aktuelle Daten werden geladen …")
                 is WeatherState.Error -> {
                     Text(value.message, color = StarGold)
                     Button(onClick = ::refresh) { Text("Erneut versuchen") }
@@ -1540,47 +1578,24 @@ private fun ForecastTimeline(
 @SuppressLint("SetJavaScriptEnabled")
 private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
     val context = LocalContext.current
-    val webView = remember(context) {
-        WebView(context).apply {
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    view.postDelayed({
-                        view.evaluateJavascript("window.astraMap && window.astraMap.invalidateSize(true)", null)
-                        view.invalidate()
-                    }, 500L)
-                }
-            }
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/${BuildConfig.VERSION_NAME}"
-        }
-    }
+    val webView = remember(context) { PrivateWebViews.create(context, javascript = true) }
 
     LaunchedEffect(observer, refreshKey) {
+        val approximate = NetworkPolicy.roundedLocation(observer)
         val leafletCss = context.assets.open("leaflet-1.9.4.css").bufferedReader().use { it.readText() }
         val leafletJs = context.assets.open("leaflet-1.9.4.js").bufferedReader().use { it.readText() }
         val html = context.assets.open("weather_map.html").bufferedReader().use { it.readText() }
             .replace("__LEAFLET_CSS__", leafletCss)
             .replace("__LEAFLET_JS__", leafletJs)
-            .replace("__ASTRA_LAT__", observer.latitude.toString())
-            .replace("__ASTRA_LON__", observer.longitude.toString())
-        webView.loadDataWithBaseURL(
-            "https://projekt-astra.local/",
-            html,
-            "text/html",
-            "UTF-8",
-            null
-        )
+            .replace("__ASTRA_LAT__", approximate.latitude.toString())
+            .replace("__ASTRA_LON__", approximate.longitude.toString())
+            .replace("__SCRIPT_NONCE__", java.util.UUID.randomUUID().toString())
+        PrivateWebViews.loadHtml(webView, html)
     }
 
     DisposableEffect(webView) {
         onDispose {
-            webView.stopLoading()
-            webView.destroy()
+            PrivateWebViews.dispose(webView)
         }
     }
 
@@ -1645,7 +1660,7 @@ private fun EventsScreen(
             eyebrow = "ASTRA EVENTS",
             title = "Himmelskalender",
             subtitle = if (location == null) "Berechnet für Demo-Standort Berlin"
-            else "Für ${observer.latitude.format(3)}, ${observer.longitude.format(3)}",
+            else "Lokal für deinen Beobachtungsort berechnet",
             icon = Icons.Rounded.CalendarMonth
         )
         Text(
@@ -1673,12 +1688,12 @@ private fun EventsScreen(
             LightPollutionState.Loading -> Text("Numerische VIIRS-Schätzung wird geladen …", color = AstraTextMuted)
             is LightPollutionState.Ready -> LightPollutionEstimateCard(estimate.estimate)
             LightPollutionState.Unavailable -> Text(
-                "Numerische Schätzung derzeit offline; die Karte bleibt verfügbar.",
+                "Numerische Schätzung derzeit nicht verfügbar.",
                 color = StarGold,
                 fontSize = 12.sp
             )
         }
-        LightPollutionMap(observer)
+        if (SecureNetwork.options.online) LightPollutionMap(observer) else OfflineNotice()
         Text(
             "NASA-VIIRS-Nachtlichtkomposit (2016). Index, Bortle-Klasse und Himmelshelligkeit " +
                 "sind standortbezogene Schätzwerte, keine Vor-Ort-Messung.",
@@ -1886,41 +1901,24 @@ private fun moonIlluminationPercent(instant: Instant): Double {
 @SuppressLint("SetJavaScriptEnabled")
 private fun LightPollutionMap(observer: GeoPoint) {
     val context = LocalContext.current
-    val webView = remember(context) {
-        WebView(context).apply {
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    view.postDelayed({
-                        view.evaluateJavascript("window.astraMap && window.astraMap.invalidateSize(true)", null)
-                        view.invalidate()
-                    }, 500L)
-                }
-            }
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/${BuildConfig.VERSION_NAME}"
-        }
-    }
+    val webView = remember(context) { PrivateWebViews.create(context, javascript = true) }
 
     LaunchedEffect(observer) {
+        val approximate = NetworkPolicy.roundedLocation(observer)
         val leafletCss = context.assets.open("leaflet-1.9.4.css").bufferedReader().use { it.readText() }
         val leafletJs = context.assets.open("leaflet-1.9.4.js").bufferedReader().use { it.readText() }
         val html = context.assets.open("light_pollution_map.html").bufferedReader().use { it.readText() }
             .replace("__LEAFLET_CSS__", leafletCss)
             .replace("__LEAFLET_JS__", leafletJs)
-            .replace("__ASTRA_LAT__", observer.latitude.toString())
-            .replace("__ASTRA_LON__", observer.longitude.toString())
-        webView.loadDataWithBaseURL("https://projekt-astra.local/", html, "text/html", "UTF-8", null)
+            .replace("__ASTRA_LAT__", approximate.latitude.toString())
+            .replace("__ASTRA_LON__", approximate.longitude.toString())
+            .replace("__SCRIPT_NONCE__", java.util.UUID.randomUUID().toString())
+        PrivateWebViews.loadHtml(webView, html)
     }
 
     DisposableEffect(webView) {
         onDispose {
-            webView.stopLoading()
-            webView.destroy()
+            PrivateWebViews.dispose(webView)
         }
     }
 
@@ -2251,7 +2249,16 @@ private fun EmptyPlanCard(text: String) {
 }
 
 @Composable
-private fun AboutScreen(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) {
+private fun AboutScreen(
+    redLightMode: Boolean,
+    setRedLightMode: (Boolean) -> Unit,
+    privacy: PrivacyOptions,
+    requestOnline: () -> Unit,
+    setPrivacy: (PrivacyOptions) -> Unit
+) {
+    val context = LocalContext.current
+    var showPolicy by remember { mutableStateOf(false) }
+    if (showPolicy) PrivacyPolicyDialog { showPolicy = false }
     Column(
         Modifier.fillMaxSize().background(
             Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
@@ -2289,11 +2296,15 @@ private fun AboutScreen(redLightMode: Boolean, setRedLightMode: (Boolean) -> Uni
             icon = Icons.Rounded.Public,
             body = "5.041 reale Sterne, Sonne, Mond, Planeten, Milchstraße, alle 88 IAU-Sternbildgrenzen und optional 1.016 Deep-Sky-Objekte werden passend zu Standort und Uhrzeit berechnet. Favoriten, Beobachtungslisten, Wetter und Ereignisse helfen bei der Planung."
         )
-        AboutInfoCard(
-            title = "Datenschutz",
-            icon = Icons.Rounded.GpsFixed,
-            body = "Standortzugriff erfolgt erst nach deiner bewussten Freigabe und nur während der Nutzung. Koordinaten werden verschlüsselt an Open-Meteo und NASA GIBS übertragen, um Wetter, Gelände und Nachtlicht zu bestimmen. Favoriten und Ereignislisten bleiben lokal. Kamerabilder werden weder gespeichert noch übertragen. Es gibt keine Konten, Werbung, Analyse-SDKs oder Tracker."
-        )
+        PrivacyControls(privacy, requestOnline, setPrivacy) {
+            val cleared = runCatching { PublicTileCache.clear(context); PrivateWebViews.clearBrowserStorage() }.isSuccess
+            android.widget.Toast.makeText(context,
+                if (cleared) "Kartencache gelöscht" else "Kartencache konnte nicht vollständig gelöscht werden",
+                android.widget.Toast.LENGTH_SHORT).show()
+        }
+        AboutInfoCard("Datenschutz", Icons.Rounded.GpsFixed,
+            "GPS wird nur bei geöffneter App genutzt. Kamerabilder werden weder gespeichert noch übertragen. Es gibt keine Konten, Werbung oder Analyse-SDKs. Online-Anbieter können technische Protokolle führen. Details und Aufbewahrungsfristen stehen in der mitgelieferten Datenschutzerklärung.")
+        TextButton(onClick = { showPolicy = true }) { Text("Datenschutzerklärung öffnen") }
         AboutInfoCard(
             title = "Genauigkeit und Sicherheit",
             icon = Icons.Rounded.Info,
@@ -2615,7 +2626,13 @@ private object TerrainRepository {
     private var cachedPoint: GeoPoint? = null
     private var cachedProfile: TerrainProfile? = null
 
+    fun clear() { cachedPoint = null; cachedProfile = null }
+
     fun load(point: GeoPoint, callback: (TerrainState) -> Unit) {
+        if (!SecureNetwork.available || !SecureNetwork.options.terrain) {
+            callback(TerrainState.Unavailable)
+            return
+        }
         val cached = cachedProfile
         val origin = cachedPoint
         if (cached != null && origin != null &&
@@ -2640,14 +2657,8 @@ private object TerrainRepository {
                 val url = java.net.URL(
                     "https://api.open-meteo.com/v1/elevation?latitude=$latitudes&longitude=$longitudes"
                 )
-                val connection = (url.openConnection() as java.net.HttpURLConnection).apply {
-                    connectTimeout = 10_000
-                    readTimeout = 10_000
-                    requestMethod = "GET"
-                }
-                try {
-                    if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
-                    val json = org.json.JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                run {
+                    val json = org.json.JSONObject(String(SecureNetwork.get(url.toString()).bytes, Charsets.UTF_8))
                     val elevations = json.getJSONArray("elevation")
                     if (elevations.length() != targets.size) error("Unvollständiges Höhenprofil")
                     val observerElevation = elevations.getDouble(0)
@@ -2664,17 +2675,17 @@ private object TerrainRepository {
                         TerrainSample(bearing.toDouble(), maxAngle.coerceIn(-5.0, 35.0))
                     }
                     TerrainProfile(samples, observerElevation)
-                } finally {
-                    connection.disconnect()
                 }
             }
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 callback(
                     result.fold(
                         onSuccess = {
-                            cachedPoint = point
-                            cachedProfile = it
-                            TerrainState.Ready(it)
+                            if (SecureNetwork.available && SecureNetwork.options.terrain) {
+                                cachedPoint = point
+                                cachedProfile = it
+                                TerrainState.Ready(it)
+                            } else TerrainState.Unavailable
                         },
                         onFailure = { TerrainState.Unavailable }
                     )
@@ -2838,21 +2849,16 @@ private object WeatherRepository {
     fun load(point: GeoPoint, callback: (WeatherState) -> Unit) {
         thread(name = "astra-weather") {
             val result = runCatching {
+                val approximate = NetworkPolicy.roundedLocation(point)
                 val url = java.net.URL(
-                    "https://api.open-meteo.com/v1/forecast?latitude=${point.latitude}" +
-                        "&longitude=${point.longitude}" +
+                    "https://api.open-meteo.com/v1/forecast?latitude=${approximate.latitude}" +
+                        "&longitude=${approximate.longitude}" +
                         "&current=temperature_2m,cloud_cover,wind_speed_10m" +
                         "&hourly=visibility,cloud_cover,precipitation_probability,wind_speed_10m" +
                         "&forecast_days=2&timezone=auto"
                 )
-                val connection = (url.openConnection() as java.net.HttpURLConnection).apply {
-                    connectTimeout = 8_000
-                    readTimeout = 8_000
-                    requestMethod = "GET"
-                }
-                try {
-                    if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
-                    val json = org.json.JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                run {
+                    val json = org.json.JSONObject(String(SecureNetwork.get(url.toString()).bytes, Charsets.UTF_8))
                     val current = json.getJSONObject("current")
                     val hourly = json.getJSONObject("hourly")
                     val times = hourly.getJSONArray("time")
@@ -2883,14 +2889,12 @@ private object WeatherRepository {
                         updatedAt = current.getString("time").takeLast(5),
                         forecast = forecast
                     )
-                } finally {
-                    connection.disconnect()
                 }
             }
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 callback(
                     result.fold(
-                        onSuccess = { WeatherState.Ready(it) },
+                        onSuccess = { if (SecureNetwork.available) WeatherState.Ready(it) else WeatherState.Idle },
                         onFailure = { WeatherState.Error("Wetterdaten konnten nicht geladen werden.") }
                     )
                 )

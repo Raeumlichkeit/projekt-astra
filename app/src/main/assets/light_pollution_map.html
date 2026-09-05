@@ -2,6 +2,8 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__SCRIPT_NONCE__'; style-src 'unsafe-inline'; img-src data: https://tile.openstreetmap.org https://gibs.earthdata.nasa.gov; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <style>__LEAFLET_CSS__</style>
   <style>
@@ -30,8 +32,8 @@
   <div class="scale"></div>
   <div class="labels"><span>dunkler</span><span>heller</span></div>
 </div>
-<script>__LEAFLET_JS__</script>
-<script>
+<script nonce="__SCRIPT_NONCE__">__LEAFLET_JS__</script>
+<script nonce="__SCRIPT_NONCE__">
 (() => {
   const lat = __ASTRA_LAT__;
   const lon = __ASTRA_LON__;
@@ -67,7 +69,7 @@
 
   L.marker([lat, lon], {
     icon: L.divIcon({ className: 'location-dot', iconSize: [16,16], iconAnchor: [8,8] })
-  }).addTo(map).bindPopup('Dein Beobachtungsort');
+  }).addTo(map).bindPopup('Ungefährer Beobachtungsort (gerundet)');
 })();
 </script>
 </body>

@@ -20,12 +20,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.text.PDFTextStripper
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
@@ -133,7 +129,13 @@ internal object LightPollutionRepository {
     private var cachedPoint: GeoPoint? = null
     private var cachedEstimate: LightPollutionEstimate? = null
 
+    fun clear() { cachedPoint = null; cachedEstimate = null }
+
     fun load(point: GeoPoint, callback: (LightPollutionState) -> Unit) {
+        if (!SecureNetwork.available) {
+            callback(LightPollutionState.Unavailable)
+            return
+        }
         val previousPoint = cachedPoint
         val previous = cachedEstimate
         if (previousPoint != null && previous != null &&
@@ -145,20 +147,17 @@ internal object LightPollutionRepository {
         }
         thread(name = "astra-light-pollution") {
             val result = runCatching {
-                val tile = tileCoordinate(point, 8)
+                val tile = tileCoordinate(NetworkPolicy.roundedLocation(point), 8)
                 val url = URL(
                     "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Night_Lights/" +
                         "default/2016-01-01/GoogleMapsCompatible_Level8/8/${tile.tileY}/${tile.tileX}.png"
                 )
-                val connection = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 8_000
-                    readTimeout = 8_000
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "ProjektAstra/1.1")
-                }
-                try {
-                    if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
-                    val bitmap = BitmapFactory.decodeStream(connection.inputStream) ?: error("Ungültige Kachel")
+                run {
+                    val bytes = SecureNetwork.get(url.toString(), 1_048_576).bytes
+                    val dimensions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, dimensions)
+                    check(dimensions.outWidth in 1..512 && dimensions.outHeight in 1..512)
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: error("Ungültige Kachel")
                     try {
                         var sum = 0.0
                         var count = 0
@@ -176,16 +175,16 @@ internal object LightPollutionRepository {
                     } finally {
                         bitmap.recycle()
                     }
-                } finally {
-                    connection.disconnect()
                 }
             }
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 callback(result.fold(
                     onSuccess = {
-                        cachedPoint = point
-                        cachedEstimate = it
-                        LightPollutionState.Ready(it)
+                        if (SecureNetwork.available) {
+                            cachedPoint = point
+                            cachedEstimate = it
+                            LightPollutionState.Ready(it)
+                        } else LightPollutionState.Unavailable
                     },
                     onFailure = { LightPollutionState.Unavailable }
                 ))
@@ -274,18 +273,22 @@ internal object MeteorCalendarRepository {
         val preferences = context.getSharedPreferences("astra_imo", Context.MODE_PRIVATE)
         val cachedJson = preferences.getString(CACHE_NAME, null)
         val lastFetch = preferences.getLong("last_fetch", 0L)
-        if (cachedJson != null && System.currentTimeMillis() - lastFetch < TimeUnit.DAYS.toMillis(7)) {
-            runCatching { parse(cachedJson, true) }.getOrNull()?.let {
-                callback(it)
-                return
-            }
+        val cached = cachedJson?.let { runCatching { parse(it, true) }.getOrNull() }
+        val fallback = cached ?: bundled(context)
+        callback(fallback)
+        if (!SecureNetwork.available || (cached != null && System.currentTimeMillis() - lastFetch < TimeUnit.DAYS.toMillis(7))) {
+            return
         }
         thread(name = "astra-imo-calendar") {
             val snapshot = runCatching {
                 val currentYear = LocalDate.now(ZoneOffset.UTC).year
+                var downloadedYears = 0
                 val showers = (currentYear..currentYear + 1).flatMap { year ->
-                    parseOfficialYear(year, downloadOfficialCalendar(context, year))
+                    runCatching { parseOfficialYear(year, downloadOfficialCalendar(context, year)) }
+                        .onSuccess { downloadedYears++ }
+                        .getOrElse { fallback.showers.filter { it.year == year } }
                 }
+                check(SecureNetwork.available && showers.isNotEmpty() && downloadedYears > 0)
                 MeteorCalendarSnapshot(
                     showers = showers,
                     updated = LocalDate.now(ZoneOffset.UTC).toString(),
@@ -296,30 +299,18 @@ internal object MeteorCalendarRepository {
                         putLong("last_fetch", System.currentTimeMillis())
                     }
                 }
-            }.getOrElse { bundled(context) }
+            }.getOrElse { fallback }
             android.os.Handler(android.os.Looper.getMainLooper()).post { callback(snapshot) }
         }
     }
 
     private fun downloadOfficialCalendar(context: Context, year: Int): String {
-        val connection = (URL("https://www.imo.net/files/meteor-shower/cal$year.pdf")
-            .openConnection() as HttpURLConnection).apply {
-            connectTimeout = 12_000
-            readTimeout = 20_000
-            requestMethod = "GET"
-            setRequestProperty("User-Agent", "ProjektAstra/${BuildConfig.VERSION_NAME}")
-        }
-        return try {
-            if (connection.responseCode !in 200..299) error("IMO $year: HTTP ${connection.responseCode}")
-            val bytes = connection.inputStream.use { it.readBytes() }
-            PDFBoxResourceLoader.init(context.applicationContext)
-            PDDocument.load(bytes).use { document -> PDFTextStripper().getText(document) }
-        } finally {
-            connection.disconnect()
-        }
+        val bytes = SecureNetwork.get("https://www.imo.net/files/meteor-shower/cal$year.pdf", PdfLimits.BYTES).bytes
+        return IsolatedPdfParser.extract(context.applicationContext, bytes)
     }
 
     internal fun parseOfficialYear(year: Int, pdfText: String): List<MeteorDefinition> {
+        require(year in 2020..2099 && pdfText.length <= PdfLimits.TEXT_CHARS)
         val normalized = pdfText
             .replace('−', '-')
             .replace('–', '-')
@@ -348,7 +339,7 @@ internal object MeteorCalendarRepository {
                 radiantRaHours = coordinates.groupValues[1].toDouble() / 15.0,
                 radiantDecDegrees = coordinates.groupValues[2].replace(" ", "").toDouble(),
                 zhr = zhr
-            )
+            ).also(::validate)
         }
         val missing = germanNames.keys - byCode.keys
         check(missing.isEmpty()) { "IMO $year nicht vollständig: $missing" }
@@ -381,13 +372,16 @@ internal object MeteorCalendarRepository {
     }.toString()
 
     internal fun parse(jsonText: String, online: Boolean): MeteorCalendarSnapshot {
+        require(jsonText.length <= PdfLimits.TEXT_CHARS)
         val root = JSONObject(jsonText)
         val showers = buildList {
             val years = root.getJSONArray("years")
+            require(years.length() in 1..10)
             for (yearIndex in 0 until years.length()) {
                 val yearObject = years.getJSONObject(yearIndex)
                 val year = yearObject.getInt("year")
                 val entries = yearObject.getJSONArray("showers")
+                require(entries.length() in 1..32)
                 for (entryIndex in 0 until entries.length()) {
                     val entry = entries.getJSONObject(entryIndex)
                     add(MeteorDefinition(
@@ -399,11 +393,19 @@ internal object MeteorCalendarRepository {
                         radiantRaHours = entry.getDouble("raDegrees") / 15.0,
                         radiantDecDegrees = entry.getDouble("decDegrees"),
                         zhr = entry.optInt("zhr", 0)
-                    ))
+                    ).also(::validate))
                 }
             }
         }
         return MeteorCalendarSnapshot(showers, root.optString("updated", "unbekannt"), online)
+    }
+
+    private fun validate(shower: MeteorDefinition) {
+        require(shower.year in 2020..2099 && shower.code in germanNames && shower.name.length in 1..80)
+        LocalDate.of(shower.year, shower.month, shower.day)
+        require(shower.radiantRaHours.isFinite() && shower.radiantRaHours in 0.0..24.0)
+        require(shower.radiantDecDegrees.isFinite() && shower.radiantDecDegrees in -90.0..90.0)
+        require(shower.zhr in 0..100_000)
     }
 }
 

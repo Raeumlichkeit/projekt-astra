@@ -43,7 +43,8 @@ Astronomie, Sternkarte, Wetter, AR, Planeten
 
 ## Kontaktangaben, noch in Play Console einzutragen
 
-- Support-E-Mail: persönliche Support-Adresse des Entwicklers
+- Support-E-Mail: jeregrez@gmail.com
+- Verantwortlicher: Jeremy Grez
 - Datenschutz-URL: öffentlich gehostete Version von `privacy-policy.html`
 
 ## Grafik-Alternativtexte

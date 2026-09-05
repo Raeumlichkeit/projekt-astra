@@ -1,37 +1,18 @@
-# Entwurf für den Bereich „Datensicherheit“
+# Datensicherheit – Prüfentwurf 1.1.1
 
-Dieser Entwurf beschreibt Version 1.1.0. Die Antworten müssen vor jeder Veröffentlichung noch einmal gegen den tatsächlichen App-Code und die aktuellen Google-Play-Fragen geprüft werden.
+Nicht unverändert in Play Console übernehmen: Anbieterrollen und Drittland-/Rechtsgrundlagenprüfung sind noch offen. Verantwortlicher: Jeremy Grez; Support/Datenschutz: jeregrez@gmail.com. Keine ISO-Zertifizierung und keine unabhängige Sicherheitsprüfung behaupten.
 
-## Datenerhebung und Weitergabe
+- Ungefährer Standort: optional nach separater Online-Freigabe, für Wetter/Wolken und Karten auf 0,01° gerundet.
+- Genauer Standort: nur bei zusätzlicher Freigabe des Online-Geländeprofils an Open-Meteo.
+- Auch IP-Adresse, Zeit, App-Version und angefragte Kartenbereiche/Objektbilder/Jahreskalender erreichen Dienstleister.
+- Open-Meteo nennt Protokolle einschließlich Standort/IP für bis zu 90 Tage. Daher **nicht pauschal „nur flüchtige Verarbeitung“ oder „keine Datenerhebung“ ankreuzen**.
+- Für andere Anbieter sind die Aufbewahrung und die Einordnung als Weitergabe/Dienstleister vor Veröffentlichung einzeln zu prüfen.
+- Keine Werbung, Analyse-SDKs, eigene Konten oder eigener Backend-Server. HTTPS ist erzwungen.
+- Kamera-/Sensordaten, Favoriten und Ereignislisten verlassen die App nicht über deren Netzwerkfunktionen.
+- Lokaler OSM-Kartencache: maximal 32 MB, Gültigkeit maximal 30 Tage, anschließend Löschung beim nächsten Start/Abruf. Betrachtete Regionen können aus Kacheln erschlossen werden.
+- Online-Freigabe widerrufen und Kartencache löschen unter Info. Alle lokalen Daten über Android-App-Einstellungen löschen.
+- Deinstallation/App-Daten-Löschung entfernt keine schon übermittelten Anbieterprotokolle.
+- Lokale Benachrichtigungen über Android; kein Push-Dienst.
+- App-Cloud-Backups und Geräteübertragung ausgeschlossen.
 
-- Erhobene Datentypen: ungefährer und genauer Standort
-- Zweck: App-Funktionalität – lokaler Himmel, Wetter, Geländeprofil und standortbezogene Ereignisse
-- Erhebung: optional; die App ist mit dem deutlich gekennzeichneten Demo-Standort Berlin nutzbar
-- Verarbeitung: während der Nutzung, teilweise nur vorübergehend
-- Übertragung: ausschließlich verschlüsselt über HTTPS
-- Verkauf: nein
-- Werbung oder Personalisierung: nein
-- Eigenes Benutzerkonto: nein
-- Analyse- oder Tracking-SDK: nein
-
-Standortkoordinaten werden für Wetter- und Geländeanfragen an Open-Meteo sowie für die numerische Nachtlichtschätzung an NASA GIBS übertragen. Kartenanbieter erhalten technisch notwendige Karten- und Kachelanfragen. Die App betreibt keinen eigenen Server und speichert Standortdaten nicht dauerhaft.
-
-Objektfavoriten, Beobachtungsereignisse, Erinnerungsvorlauf und Rotlichtmodus bleiben ausschließlich lokal auf dem Gerät. Die jährlichen Meteorschauer-Kalender werden ohne persönliche Kennung direkt von der International Meteor Organization abgerufen.
-
-## Kamera
-
-Die Kamera wird nur für die AR-Vorschau auf dem Gerät verwendet. Bilder und Videoframes werden nicht gespeichert und nicht vom Gerät übertragen. Kameradaten sind daher nicht als off-device erhobene Daten zu deklarieren.
-
-## Löschung
-
-Es existieren weder Konto noch serverseitiges Nutzerprofil. App-Einstellungen können durch Löschen der App-Daten oder Deinstallieren entfernt werden.
-
-## Benachrichtigungen
-
-Die optionale Benachrichtigungsberechtigung dient ausschließlich lokalen Ereigniserinnerungen. Projekt Astra verwendet keinen externen Push-Dienst und überträgt keine Favoriten oder Beobachtungslisten.
-
-## Sicherheit
-
-- Datenübertragung verschlüsselt: ja
-- Nutzer können die App ohne Standortfreigabe verwenden: ja
-- Unabhängige Sicherheitsprüfung: nein, sofern vor Veröffentlichung keine durchgeführt wird
+Details und Empfänger: [Datenschutzentwurf](privacy-policy.html). Vor Release aktuelle [Google-Play-Anleitung](https://support.google.com/googleplay/android-developer/answer/10787469) und den tatsächlichen Release-Code gemeinsam prüfen. IP-basierte Informationen und Anbieterprotokolle nicht übergehen.

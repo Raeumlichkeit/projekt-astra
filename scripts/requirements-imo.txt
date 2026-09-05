@@ -1,0 +1,2 @@
+# Python >=3.11; wheel hash from PyPI, verified 2026-09-05.
+pypdf==6.17.0 --hash=sha256:5bd827266a21553b74d910e350131a6227b72f2ab4209bf372814b8195fa11c5

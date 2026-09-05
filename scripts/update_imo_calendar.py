@@ -6,12 +6,18 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import logging
+import multiprocessing
 import re
 import urllib.request
 from datetime import date
 from pathlib import Path
 
-from pypdf import PdfReader
+from validate_imo_calendar import validate
+
+MAX_PDF_BYTES = 4 * 1024 * 1024
+MAX_TEXT_CHARS = 131072
+PARSE_SECONDS = 20
 
 
 MONTHS = {
@@ -34,15 +40,80 @@ def normalize(text: str) -> str:
             .replace("α", "Alpha").replace("σ", "Sigma").replace("π", "Pi"))
 
 
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Calendar redirects are not permitted")
+
+
+def _extract_worker(pdf: bytes, output) -> None:
+    try:
+        # Linux CI has a hard address-space/CPU budget and a parent watchdog.
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_AS, (1024**3, 1024**3))
+            resource.setrlimit(resource.RLIMIT_CPU, (PARSE_SECONDS, PARSE_SECONDS))
+        except ImportError:
+            pass  # Windows has size checks and timeout, but no RLIMIT_AS.
+        from pypdf import PdfReader
+        # Never copy arbitrary PDF contents into CI logs; validation errors are reported by the parent.
+        logging.getLogger("pypdf").disabled = True
+        logging.getLogger("pypdf").setLevel(logging.CRITICAL)
+        reader = PdfReader(io.BytesIO(pdf))
+        if reader.is_encrypted or not 1 <= len(reader.pages) <= 64:
+            raise ValueError("Calendar page/encryption limit")
+        pieces = []
+        size = 0
+        for page in reader.pages:
+            text = page.extract_text() or ""
+            size += len(text) + 1
+            if size > MAX_TEXT_CHARS:
+                raise ValueError("Calendar text limit")
+            pieces.append(text)
+        output.send((True, "\n".join(pieces)))
+    except Exception:
+        output.send((False, "Calendar PDF rejected"))
+    finally:
+        output.close()
+
+
+def extract_pdf(pdf: bytes) -> str:
+    if len(pdf) > MAX_PDF_BYTES or not pdf.startswith(b"%PDF-"):
+        raise ValueError("Invalid or oversized PDF")
+    ctx = multiprocessing.get_context("spawn")
+    receive, send = ctx.Pipe(duplex=False)
+    process = ctx.Process(target=_extract_worker, args=(pdf, send), daemon=True)
+    process.start()
+    send.close()
+    try:
+        if not receive.poll(PARSE_SECONDS):
+            raise TimeoutError("Calendar PDF parsing timed out")
+        success, text = receive.recv()
+        if not success or len(text) > MAX_TEXT_CHARS:
+            raise ValueError("Calendar PDF rejected")
+        return normalize(text)
+    finally:
+        receive.close()
+        if process.is_alive():
+            process.terminate()
+        process.join(timeout=3)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=3)
+
+
 def calendar_text(year: int) -> str:
+    if not 2020 <= year <= 2099:
+        raise ValueError("Unsupported year")
     url = f"https://www.imo.net/files/meteor-shower/cal{year}.pdf"
     request = urllib.request.Request(url, headers={"User-Agent": "ProjektAstra calendar updater"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        pdf = response.read()
-    return normalize("\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages))
+    with urllib.request.build_opener(NoRedirects).open(request, timeout=15) as response:
+        pdf = response.read(MAX_PDF_BYTES + 1)
+    return extract_pdf(pdf)
 
 
 def parse_year(year: int, text: str) -> dict:
+    if len(text) > MAX_TEXT_CHARS:
+        raise ValueError("Calendar text limit")
     rows: list[dict] = []
     for line in text.splitlines():
         code_match = re.search(r"\((\d{3})\s+([A-Z0-9]{3})\)", line)
@@ -50,7 +121,7 @@ def parse_year(year: int, text: str) -> dict:
             continue
         code = code_match.group(2)
         dates = re.findall(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{2})\b", line)
-        coordinate = re.search(r"(\d{1,3})\s*◦\s*([+-]\s*\d{1,2})\s*◦", line)
+        coordinate = re.search(r"(\d{1,3})\s*[°◦]\s*([+-]\s*\d{1,2})\s*[°◦]", line)
         zhr_match = re.search(r"(?:\s|^)(\d+)\+?\s*$", line)
         if len(dates) < 3 or not coordinate or not zhr_match:
             continue
@@ -81,6 +152,7 @@ def main() -> None:
         "updated": date.today().isoformat(),
         "years": [parse_year(year, calendar_text(year)) for year in args.years],
     }
+    validate(payload)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

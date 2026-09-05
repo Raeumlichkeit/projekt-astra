@@ -6,26 +6,67 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: imo-calendar
+  cancel-in-progress: false
 
 jobs:
-  update:
+  extract:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
-      - run: pip install "pypdf==6.0.0"
+      - run: python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-imo.txt
+      - run: python -m unittest discover -s scripts -p 'test_*.py'
       - name: Extract current and next IMO calendars
         run: |
           python scripts/update_imo_calendar.py \
             --years "$(date +%Y)" "$(( $(date +%Y) + 1 ))" \
-            --output app/src/main/assets/imo_meteor_showers.json
-      - name: Commit updated data
+            --output output/imo_meteor_showers.json
+          python scripts/validate_imo_calendar.py output/imo_meteor_showers.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: imo-json
+          path: output/imo_meteor_showers.json
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    needs: extract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: imo-json
+          path: incoming
+      - name: Validate data with standard library only
+        run: |
+          test ! -L incoming/imo_meteor_showers.json
+          python3 scripts/validate_imo_calendar.py incoming/imo_meteor_showers.json
+          cp incoming/imo_meteor_showers.json app/src/main/assets/imo_meteor_showers.json
+      - name: Commit only validated calendar data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/src/main/assets/imo_meteor_showers.json
-          git diff --cached --quiet || git commit -m "data: update annual IMO meteor calendar"
-          git push
+          git add -- app/src/main/assets/imo_meteor_showers.json
+          if ! git diff --cached --quiet; then
+            git commit -m "data: update annual IMO meteor calendar"
+            gh auth setup-git
+            git push origin "HEAD:$TARGET_BRANCH"
+          fi
