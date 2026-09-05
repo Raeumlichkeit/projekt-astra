@@ -20,11 +20,16 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -241,9 +246,24 @@ internal data class MeteorCalendarSnapshot(
 )
 
 internal object MeteorCalendarRepository {
-    private const val REMOTE_URL =
-        "https://raw.githubusercontent.com/Raeumlichkeit/projekt-astra/main/app/src/main/assets/imo_meteor_showers.json"
     private const val CACHE_NAME = "imo_calendar_cache"
+    private val monthNumbers = mapOf(
+        "Jan" to 1, "Feb" to 2, "Mar" to 3, "Apr" to 4, "May" to 5, "Jun" to 6,
+        "Jul" to 7, "Aug" to 8, "Sep" to 9, "Oct" to 10, "Nov" to 11, "Dec" to 12
+    )
+    private val germanNames = mapOf(
+        "QUA" to "Quadrantiden",
+        "LYR" to "Lyriden",
+        "ETA" to "Eta-Aquariiden",
+        "SDA" to "Südliche Delta-Aquariiden",
+        "PER" to "Perseiden",
+        "SPE" to "September-Epsilon-Perseiden",
+        "DRA" to "Draconiden",
+        "ORI" to "Orioniden",
+        "LEO" to "Leoniden",
+        "GEM" to "Geminiden",
+        "URS" to "Ursiden"
+    )
 
     fun bundled(context: Context): MeteorCalendarSnapshot = parse(
         context.assets.open("imo_meteor_showers.json").bufferedReader().use { it.readText() },
@@ -262,28 +282,103 @@ internal object MeteorCalendarRepository {
         }
         thread(name = "astra-imo-calendar") {
             val snapshot = runCatching {
-                val connection = (URL(REMOTE_URL).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 8_000
-                    readTimeout = 8_000
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "ProjektAstra/1.1")
+                val currentYear = LocalDate.now(ZoneOffset.UTC).year
+                val showers = (currentYear..currentYear + 1).flatMap { year ->
+                    parseOfficialYear(year, downloadOfficialCalendar(context, year))
                 }
-                try {
-                    if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
-                    val json = connection.inputStream.bufferedReader().use { it.readText() }
-                    parse(json, true).also {
-                        preferences.edit {
-                            putString(CACHE_NAME, json)
-                            putLong("last_fetch", System.currentTimeMillis())
-                        }
+                MeteorCalendarSnapshot(
+                    showers = showers,
+                    updated = LocalDate.now(ZoneOffset.UTC).toString(),
+                    online = true
+                ).also {
+                    preferences.edit {
+                        putString(CACHE_NAME, serialize(it))
+                        putLong("last_fetch", System.currentTimeMillis())
                     }
-                } finally {
-                    connection.disconnect()
                 }
             }.getOrElse { bundled(context) }
             android.os.Handler(android.os.Looper.getMainLooper()).post { callback(snapshot) }
         }
     }
+
+    private fun downloadOfficialCalendar(context: Context, year: Int): String {
+        val connection = (URL("https://www.imo.net/files/meteor-shower/cal$year.pdf")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 12_000
+            readTimeout = 20_000
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", "ProjektAstra/${BuildConfig.VERSION_NAME}")
+        }
+        return try {
+            if (connection.responseCode !in 200..299) error("IMO $year: HTTP ${connection.responseCode}")
+            val bytes = connection.inputStream.use { it.readBytes() }
+            PDFBoxResourceLoader.init(context.applicationContext)
+            PDDocument.load(bytes).use { document -> PDFTextStripper().getText(document) }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    internal fun parseOfficialYear(year: Int, pdfText: String): List<MeteorDefinition> {
+        val normalized = pdfText
+            .replace('−', '-')
+            .replace('–', '-')
+            .replace("η", "Eta")
+            .replace("δ", "Delta")
+            .replace("ε", "Epsilon")
+        val codePattern = Regex("""\(\d{3}\s+([A-Z0-9]{3})\)""")
+        val datePattern = Regex("""\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{2})\b""")
+        val coordinatePattern = Regex("""(\d{1,3})\s*[°◦]\s*([+-]\s*\d{1,2})\s*[°◦]""")
+        val zhrPattern = Regex("""(?:\s|^)(\d+)\+?\s*$""")
+        val byCode = linkedMapOf<String, MeteorDefinition>()
+        normalized.lineSequence().forEach { line ->
+            val code = codePattern.find(line)?.groupValues?.get(1) ?: return@forEach
+            val name = germanNames[code] ?: return@forEach
+            val dates = datePattern.findAll(line).toList()
+            val coordinates = coordinatePattern.find(line) ?: return@forEach
+            val zhr = zhrPattern.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: return@forEach
+            if (dates.size < 3) return@forEach
+            val peak = dates[2].groupValues
+            byCode[code] = MeteorDefinition(
+                year = year,
+                name = name,
+                code = code,
+                month = monthNumbers.getValue(peak[1]),
+                day = peak[2].toInt(),
+                radiantRaHours = coordinates.groupValues[1].toDouble() / 15.0,
+                radiantDecDegrees = coordinates.groupValues[2].replace(" ", "").toDouble(),
+                zhr = zhr
+            )
+        }
+        val missing = germanNames.keys - byCode.keys
+        check(missing.isEmpty()) { "IMO $year nicht vollständig: $missing" }
+        return byCode.values.sortedWith(compareBy({ it.month }, { it.day }))
+    }
+
+    private fun serialize(snapshot: MeteorCalendarSnapshot): String = JSONObject().apply {
+        put("source", "International Meteor Organization annual Meteor Shower Calendar")
+        put("updated", snapshot.updated)
+        put("years", JSONArray().apply {
+            snapshot.showers.groupBy { it.year }.toSortedMap().forEach { (year, showers) ->
+                put(JSONObject().apply {
+                    put("year", year)
+                    put("showers", JSONArray().apply {
+                        showers.forEach { shower ->
+                            put(JSONObject().apply {
+                                put("name", shower.name)
+                                put("code", shower.code)
+                                put("month", shower.month)
+                                put("day", shower.day)
+                                put("raDegrees", shower.radiantRaHours * 15.0)
+                                put("decDegrees", shower.radiantDecDegrees)
+                                put("zhr", shower.zhr)
+                            })
+                        }
+                    })
+                })
+            }
+        })
+    }.toString()
 
     internal fun parse(jsonText: String, online: Boolean): MeteorCalendarSnapshot {
         val root = JSONObject(jsonText)

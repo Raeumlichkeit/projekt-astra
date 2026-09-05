@@ -58,7 +58,10 @@ Meteor-shower maxima can vary and the calculated score is not an official observ
 
 The bundled JSON is generated from the official annual IMO PDF calendars by
 `scripts/update_imo_calendar.py`. A scheduled GitHub workflow refreshes the current and following
-year; the app retrieves that generated JSON and retains a local offline fallback.
+year. The app also checks those official PDF calendars weekly and retains a local offline fallback.
+
+PdfBox-Android 2.0.27.0 is used to extract the official PDF text on Android.
+Source: https://github.com/TomRoush/PdfBox-Android · License: Apache-2.0.
 
 ## IAU constellation boundaries
 

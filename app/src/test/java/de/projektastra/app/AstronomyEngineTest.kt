@@ -120,4 +120,18 @@ class AstronomyEngineTest {
         assertTrue(snapshot.showers.any { it.year == 2026 && it.code == "PER" && it.zhr == 100 })
         assertTrue(snapshot.showers.any { it.year == 2027 && it.code == "PER" && it.zhr == 110 })
     }
+
+    @Test
+    fun `official IMO working-list rows are parsed into yearly maxima`() {
+        val codes = listOf("QUA", "LYR", "ETA", "SDA", "PER", "SPE", "DRA", "ORI", "LEO", "GEM", "URS")
+        val text = codes.mapIndexed { index, code ->
+            "Shower (001 $code) Jan 01–Jan 31 Jan ${String.format("%02d", index + 1)} 48° +58° 59 2.2 ${index + 10}"
+        }.joinToString("\n")
+
+        val parsed = MeteorCalendarRepository.parseOfficialYear(2027, text)
+
+        assertEquals(11, parsed.size)
+        assertEquals(2027, parsed.first().year)
+        assertTrue(parsed.any { it.code == "PER" && it.zhr == 14 })
+    }
 }

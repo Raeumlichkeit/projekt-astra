@@ -16,7 +16,7 @@ Dieser Entwurf beschreibt Version 1.1.0. Die Antworten müssen vor jeder Veröff
 
 Standortkoordinaten werden für Wetter- und Geländeanfragen an Open-Meteo sowie für die numerische Nachtlichtschätzung an NASA GIBS übertragen. Kartenanbieter erhalten technisch notwendige Karten- und Kachelanfragen. Die App betreibt keinen eigenen Server und speichert Standortdaten nicht dauerhaft.
 
-Objektfavoriten, Beobachtungsereignisse, Erinnerungsvorlauf und Rotlichtmodus bleiben ausschließlich lokal auf dem Gerät. Die jährliche Meteorschauer-Datei wird ohne persönliche Kennung über GitHub abgerufen.
+Objektfavoriten, Beobachtungsereignisse, Erinnerungsvorlauf und Rotlichtmodus bleiben ausschließlich lokal auf dem Gerät. Die jährlichen Meteorschauer-Kalender werden ohne persönliche Kennung direkt von der International Meteor Organization abgerufen.
 
 ## Kamera
 

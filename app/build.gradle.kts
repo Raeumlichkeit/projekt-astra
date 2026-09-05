@@ -82,6 +82,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.core.locationbutton:locationbutton-compose:1.0.0-alpha01")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
+        exclude(group = "org.bouncycastle")
+    }
     implementation("io.github.cosinekitty:astronomy:2.1.19")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
