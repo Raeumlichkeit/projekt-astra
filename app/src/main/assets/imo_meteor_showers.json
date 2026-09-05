@@ -1,0 +1,214 @@
+{
+  "source": "International Meteor Organization annual Meteor Shower Calendar",
+  "updated": "2026-09-05",
+  "years": [
+    {
+      "year": 2026,
+      "showers": [
+        {
+          "name": "Quadrantiden",
+          "code": "QUA",
+          "month": 1,
+          "day": 3,
+          "raDegrees": 230.0,
+          "decDegrees": 49.0,
+          "zhr": 80
+        },
+        {
+          "name": "Lyriden",
+          "code": "LYR",
+          "month": 4,
+          "day": 22,
+          "raDegrees": 271.0,
+          "decDegrees": 34.0,
+          "zhr": 18
+        },
+        {
+          "name": "Eta-Aquariiden",
+          "code": "ETA",
+          "month": 5,
+          "day": 6,
+          "raDegrees": 338.0,
+          "decDegrees": -1.0,
+          "zhr": 50
+        },
+        {
+          "name": "Südliche Delta-Aquariiden",
+          "code": "SDA",
+          "month": 7,
+          "day": 31,
+          "raDegrees": 340.0,
+          "decDegrees": -16.0,
+          "zhr": 25
+        },
+        {
+          "name": "Perseiden",
+          "code": "PER",
+          "month": 8,
+          "day": 13,
+          "raDegrees": 48.0,
+          "decDegrees": 58.0,
+          "zhr": 100
+        },
+        {
+          "name": "September-Epsilon-Perseiden",
+          "code": "SPE",
+          "month": 9,
+          "day": 9,
+          "raDegrees": 48.0,
+          "decDegrees": 40.0,
+          "zhr": 8
+        },
+        {
+          "name": "Draconiden",
+          "code": "DRA",
+          "month": 10,
+          "day": 9,
+          "raDegrees": 262.0,
+          "decDegrees": 54.0,
+          "zhr": 5
+        },
+        {
+          "name": "Orioniden",
+          "code": "ORI",
+          "month": 10,
+          "day": 21,
+          "raDegrees": 95.0,
+          "decDegrees": 16.0,
+          "zhr": 20
+        },
+        {
+          "name": "Leoniden",
+          "code": "LEO",
+          "month": 11,
+          "day": 17,
+          "raDegrees": 152.0,
+          "decDegrees": 22.0,
+          "zhr": 15
+        },
+        {
+          "name": "Geminiden",
+          "code": "GEM",
+          "month": 12,
+          "day": 14,
+          "raDegrees": 112.0,
+          "decDegrees": 33.0,
+          "zhr": 150
+        },
+        {
+          "name": "Ursiden",
+          "code": "URS",
+          "month": 12,
+          "day": 22,
+          "raDegrees": 217.0,
+          "decDegrees": 76.0,
+          "zhr": 10
+        }
+      ]
+    },
+    {
+      "year": 2027,
+      "showers": [
+        {
+          "name": "Quadrantiden",
+          "code": "QUA",
+          "month": 1,
+          "day": 4,
+          "raDegrees": 230.0,
+          "decDegrees": 49.0,
+          "zhr": 80
+        },
+        {
+          "name": "Lyriden",
+          "code": "LYR",
+          "month": 4,
+          "day": 23,
+          "raDegrees": 271.0,
+          "decDegrees": 34.0,
+          "zhr": 18
+        },
+        {
+          "name": "Eta-Aquariiden",
+          "code": "ETA",
+          "month": 5,
+          "day": 6,
+          "raDegrees": 338.0,
+          "decDegrees": -1.0,
+          "zhr": 50
+        },
+        {
+          "name": "Südliche Delta-Aquariiden",
+          "code": "SDA",
+          "month": 7,
+          "day": 31,
+          "raDegrees": 340.0,
+          "decDegrees": -16.0,
+          "zhr": 25
+        },
+        {
+          "name": "Perseiden",
+          "code": "PER",
+          "month": 8,
+          "day": 13,
+          "raDegrees": 48.0,
+          "decDegrees": 58.0,
+          "zhr": 110
+        },
+        {
+          "name": "September-Epsilon-Perseiden",
+          "code": "SPE",
+          "month": 9,
+          "day": 10,
+          "raDegrees": 48.0,
+          "decDegrees": 40.0,
+          "zhr": 8
+        },
+        {
+          "name": "Draconiden",
+          "code": "DRA",
+          "month": 10,
+          "day": 9,
+          "raDegrees": 263.0,
+          "decDegrees": 56.0,
+          "zhr": 5
+        },
+        {
+          "name": "Orioniden",
+          "code": "ORI",
+          "month": 10,
+          "day": 22,
+          "raDegrees": 95.0,
+          "decDegrees": 16.0,
+          "zhr": 20
+        },
+        {
+          "name": "Leoniden",
+          "code": "LEO",
+          "month": 11,
+          "day": 18,
+          "raDegrees": 152.0,
+          "decDegrees": 22.0,
+          "zhr": 15
+        },
+        {
+          "name": "Geminiden",
+          "code": "GEM",
+          "month": 12,
+          "day": 14,
+          "raDegrees": 112.0,
+          "decDegrees": 33.0,
+          "zhr": 150
+        },
+        {
+          "name": "Ursiden",
+          "code": "URS",
+          "month": 12,
+          "day": 23,
+          "raDegrees": 217.0,
+          "decDegrees": 76.0,
+          "zhr": 10
+        }
+      ]
+    }
+  ]
+}

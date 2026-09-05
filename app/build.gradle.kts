@@ -20,8 +20,8 @@ android {
         applicationId = "de.projektastra.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 8
-        versionName = "1.0.0"
+        versionCode = 9
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -81,12 +81,14 @@ dependencies {
     implementation("androidx.camera:camera-view:1.6.2")
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.core.locationbutton:locationbutton-compose:1.0.0-alpha01")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("io.github.cosinekitty:astronomy:2.1.19")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20260814")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }

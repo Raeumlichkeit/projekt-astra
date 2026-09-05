@@ -4,7 +4,7 @@
 
 - `targetSdk 37` und `compileSdk 37`
 - eindeutige Application-ID `de.projektastra.app`
-- Version 1.0.0 / Version Code 8
+- Version 1.1.0 / Version Code 9
 - Android App Bundle konfiguriert
 - R8-Minifizierung und Ressourcenverkleinerung für Release
 - optionale lokale Upload-Key-Konfiguration ohne Geheimnisse im Repository
@@ -13,6 +13,8 @@
 - Android-12+-Splashscreen
 - Android-17-Location-Button und nur sitzungsbasierter Vordergrundstandort
 - keine Hintergrundstandortberechtigung
+- optionale Benachrichtigungsberechtigung nur für lokale Ereigniserinnerungen
+- WorkManager-Aufträge werden beim Entfernen eines Ereignisses wieder gelöscht
 - Kamera und Sensoren als optionale Hardwaremerkmale
 - Datenschutztext in der App
 - Store-Texte, Datensicherheitsentwurf und Grafikpaket
@@ -26,7 +28,7 @@
 4. Das signierte `app-release.aab` erzeugen und Play App Signing aktivieren.
 5. Support-E-Mail und eine öffentlich erreichbare, nicht editierbare Datenschutz-URL eintragen.
 6. Store-Texte und Grafiken aus diesem Verzeichnis hochladen.
-7. Datensicherheitsformular anhand `data-safety-de.md` ausfüllen.
+7. Datensicherheitsformular anhand `data-safety-de.md` ausfüllen und Standort-, Karten- sowie Benachrichtigungsnutzung gegen die aktuelle Play-Console-Abfrage prüfen.
 8. Angaben zu App-Zugriff, Werbung, Zielgruppe, Nachrichten-Apps, Gesundheitsfunktionen und Inhaltsbewertung beantworten. Vorschlag: keine Anmeldung, keine Werbung, nicht speziell für Kinder, Kategorie Bildung.
 9. Interne Prüfung starten und den automatischen Pre-Launch-Report bearbeiten.
 10. Falls das persönliche Entwicklerkonto nach dem 13. November 2023 erstellt wurde: geschlossenen Test mit mindestens 12 dauerhaft angemeldeten Testern über 14 Tage durchführen und anschließend Produktionszugang beantragen.

@@ -77,4 +77,47 @@ class AstronomyEngineTest {
         assertTrue(eclipse.partialBegin.time < eclipse.peak.time)
         assertTrue(eclipse.peak.time < eclipse.partialEnd.time)
     }
+
+    @Test
+    fun `IAU B1875 precession produces valid J2000 coordinates`() {
+        val point = IauBoundaryCatalog.precessB1875ToJ2000(22.86667, 34.5)
+
+        assertTrue(point.raHours in 0.0..24.0)
+        assertTrue(point.decDegrees in -90.0..90.0)
+        assertTrue(kotlin.math.abs(point.raHours - 22.86667) < 0.2)
+    }
+
+    @Test
+    fun `IAU catalogue contains all 88 constellations including both Serpens regions`() {
+        val text = java.io.File("src/main/assets/iau_constellation_boundaries_b1875.dat").readText()
+        val boundaries = IauBoundaryCatalog.parse(text)
+
+        assertEquals(89, boundaries.size)
+        assertEquals(88, boundaries.map { it.abbreviation }.toSet().size)
+        assertEquals(2, boundaries.count { it.abbreviation == "SER" })
+    }
+
+    @Test
+    fun `VIIRS brightness estimate increases Bortle class and score penalty`() {
+        val dark = LightPollutionRepository.estimateFromLuminance(2.0)
+        val bright = LightPollutionRepository.estimateFromLuminance(250.0)
+        val observer = GeoPoint(52.52, 13.405, 34.0)
+        val instant = Instant.parse("2026-09-05T20:00:00Z")
+        val darkScore = AstraScoreCalculator.calculate(0, 0, 5.0, 20_000.0, observer, instant, dark).score
+        val brightScore = AstraScoreCalculator.calculate(0, 0, 5.0, 20_000.0, observer, instant, bright).score
+
+        assertTrue(bright.index > dark.index)
+        assertTrue(bright.bortleClass > dark.bortleClass)
+        assertTrue(brightScore < darkScore)
+    }
+
+    @Test
+    fun `bundled IMO JSON parser reads both annual calendars`() {
+        val json = java.io.File("src/main/assets/imo_meteor_showers.json").readText()
+        val snapshot = MeteorCalendarRepository.parse(json, online = false)
+
+        assertEquals(22, snapshot.showers.size)
+        assertTrue(snapshot.showers.any { it.year == 2026 && it.code == "PER" && it.zhr == 100 })
+        assertTrue(snapshot.showers.any { it.year == 2027 && it.code == "PER" && it.zhr == 110 })
+    }
 }

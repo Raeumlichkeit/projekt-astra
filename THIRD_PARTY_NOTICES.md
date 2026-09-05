@@ -56,6 +56,18 @@ The generated subset remains available under CC BY-SA 4.0.
 Solar-system positions and exact local eclipse circumstances are calculated with Astronomy Engine.
 Meteor-shower maxima can vary and the calculated score is not an official observing forecast.
 
+The bundled JSON is generated from the official annual IMO PDF calendars by
+`scripts/update_imo_calendar.py`. A scheduled GitHub workflow refreshes the current and following
+year; the app retrieves that generated JSON and retains a local offline fallback.
+
+## IAU constellation boundaries
+
+- Catalogue VI/49, `constbnd.dat`: Davenhall A. C. and Leggett S. K., Catalogue of
+  Constellation Boundary Data, CDS/VizieR.
+- Source: https://cdsarc.cds.unistra.fr/viz-bin/cat/VI/49
+- The catalogue is based on the official constellation delimitations by Eugène Delporte (1930).
+- The bundled B1875 points are precessed to J2000 in the app and used to render all 88 boundaries.
+
 ## Astronomy Engine 2.1.19
 
 - Source: https://github.com/cosinekitty/astronomy
@@ -64,10 +76,10 @@ Meteor-shower maxima can vary and the calculated score is not an official observ
   galactic-coordinate rotation, and local solar/lunar eclipse calculations.
 - Full license text: `LICENSES/Astronomy-Engine-MIT.txt`
 
-## Night-light map
+## Night-light map and numerical estimate
 
-- Earth at Night (2012, VIIRS, Suomi NPP) imagery: NASA Global Imagery Browse Services (GIBS),
-  layer `VIIRS_CityLights_2012`, https://earthdata.nasa.gov/gibs
+- Black Marble Nighttime Lights (annual 2016, VIIRS, Suomi NPP) imagery: NASA Global Imagery
+  Browse Services (GIBS), layer `VIIRS_Night_Lights`, https://earthdata.nasa.gov/gibs
 
-The night-light imagery is used as a visual proxy for artificial light pollution. It is not a
-current measurement or a Bortle-class map.
+Rendered pixel luminance near the observer is converted into an explicitly labelled 0–100 proxy,
+estimated Bortle class and approximate sky brightness. These values are not an SQM measurement.

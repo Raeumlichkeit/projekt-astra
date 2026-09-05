@@ -14,6 +14,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.os.Build
 import android.os.Bundle
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -53,11 +54,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -235,7 +240,7 @@ private fun AstraTheme(redLightMode: Boolean, content: @Composable () -> Unit) {
     )
 }
 
-private enum class AstraTab { SKY, WEATHER, EVENTS, ABOUT }
+private enum class AstraTab { SKY, WEATHER, EVENTS, PLAN, ABOUT }
 
 @Composable
 private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) {
@@ -246,11 +251,27 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
     var arEnabled by remember { mutableStateOf(false) }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
+    var favoriteObjectIds by remember { mutableStateOf(ObservationStore.favoriteObjectIds(context)) }
+    var savedEvents by remember { mutableStateOf(ObservationStore.savedEvents(context)) }
+    var reminderHours by remember { mutableIntStateOf(ObservationStore.reminderHours(context)) }
+    var notificationsGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         cameraGranted = granted
         if (granted) arEnabled = true
+    }
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationsGranted = granted
+        if (granted) EventReminderScheduler.rescheduleAll(context, savedEvents, reminderHours)
     }
 
     LaunchedEffect(Unit) {
@@ -295,6 +316,13 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     colors = navigationColors
                 )
                 NavigationBarItem(
+                    selected = tab == AstraTab.PLAN,
+                    onClick = { tab = AstraTab.PLAN },
+                    icon = { Icon(Icons.Rounded.Bookmarks, null) },
+                    label = { Text("Plan") },
+                    colors = navigationColors
+                )
+                NavigationBarItem(
                     selected = tab == AstraTab.ABOUT,
                     onClick = { tab = AstraTab.ABOUT },
                     icon = { Icon(Icons.Rounded.Info, null) },
@@ -313,7 +341,15 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     cameraPermissionGranted = cameraGranted,
                     arEnabled = arEnabled,
                     redLightMode = redLightMode,
+                    favoriteObjectIds = favoriteObjectIds,
                     toggleRedLightMode = { setRedLightMode(!redLightMode) },
+                    toggleFavorite = { objectData ->
+                        favoriteObjectIds = ObservationStore.setObjectFavorite(
+                            context,
+                            objectData.catalogId,
+                            objectData.catalogId !in favoriteObjectIds
+                        )
+                    },
                     onLocationPermissionResult = { permissionGranted = it },
                     toggleAr = {
                         if (arEnabled) arEnabled = false
@@ -325,7 +361,45 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                         location = location,
                         refreshLocation = { locationRefreshKey++ }
                     )
-                    AstraTab.EVENTS -> EventsScreen(location)
+                    AstraTab.EVENTS -> EventsScreen(
+                        location = location,
+                        savedEventKeys = savedEvents.mapTo(mutableSetOf()) { it.key },
+                        toggleSavedEvent = { event ->
+                            val saved = event.key !in savedEvents.map { it.key }.toSet()
+                            val stored = event.toSavedEvent()
+                            savedEvents = ObservationStore.setEventSaved(context, stored, saved)
+                            if (saved) {
+                                EventReminderScheduler.schedule(context, stored, reminderHours)
+                                if (!notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            } else EventReminderScheduler.cancel(context, stored.key)
+                        }
+                    )
+                    AstraTab.PLAN -> ObservationPlanScreen(
+                        location = location,
+                        favoriteIds = favoriteObjectIds,
+                        savedEvents = savedEvents,
+                        reminderHours = reminderHours,
+                        notificationsGranted = notificationsGranted,
+                        setReminderHours = { hours ->
+                            reminderHours = hours
+                            ObservationStore.setReminderHours(context, hours)
+                            EventReminderScheduler.rescheduleAll(context, savedEvents, hours)
+                        },
+                        removeFavorite = { id ->
+                            favoriteObjectIds = ObservationStore.setObjectFavorite(context, id, false)
+                        },
+                        removeEvent = { event ->
+                            savedEvents = ObservationStore.setEventSaved(context, event, false)
+                            EventReminderScheduler.cancel(context, event.key)
+                        },
+                        requestNotifications = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                    )
                     AstraTab.ABOUT -> AboutScreen(redLightMode, setRedLightMode)
                 }
             }
@@ -422,7 +496,9 @@ private fun SkyScreen(
     cameraPermissionGranted: Boolean,
     arEnabled: Boolean,
     redLightMode: Boolean,
+    favoriteObjectIds: Set<String>,
     toggleRedLightMode: () -> Unit,
+    toggleFavorite: (CelestialObject) -> Unit,
     onLocationPermissionResult: (Boolean) -> Unit,
     toggleAr: () -> Unit
 ) {
@@ -431,9 +507,13 @@ private fun SkyScreen(
     val context = LocalContext.current
     val stars = remember { StarCatalog.load(context) }
     val deepSkyObjects = remember { DeepSkyCatalog.load(context) }
+    val iauBoundaries = remember { IauBoundaryCatalog.load(context) }
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
+    var showBoundaries by remember { mutableStateOf(true) }
+    var showIllustrations by remember { mutableStateOf(false) }
+    var showLayersPanel by remember { mutableStateOf(false) }
     var showCalibration by remember { mutableStateOf(false) }
     var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
     var manualAzimuth by remember { mutableFloatStateOf(180f) }
@@ -456,6 +536,22 @@ private fun SkyScreen(
     }
     val milkyWay = remember(observer) {
         MilkyWayModel.horizontalBand(observer, Instant.now())
+    }
+    val horizontalBoundaries = remember(observer, iauBoundaries) {
+        val instant = Instant.now()
+        iauBoundaries.map { boundary ->
+            HorizontalConstellationBoundary(
+                boundary.abbreviation,
+                boundary.points.map { point ->
+                    AstronomyEngine.horizontalCoordinates(
+                        point.raHours,
+                        point.decDegrees,
+                        observer,
+                        instant
+                    )
+                }
+            )
+        }
     }
     val visible = remember(observer, orientation.azimuth, orientation.altitude, showDeepSky) {
         val solarSystem = SolarSystemCatalog.at(observer, Instant.now())
@@ -498,6 +594,8 @@ private fun SkyScreen(
                 horizontalFov = if (arEnabled) cameraFov else manualFov.toDouble(),
                 arMode = arEnabled,
                 milkyWay = milkyWay,
+                constellationBoundaries = if (showBoundaries) horizontalBoundaries else emptyList(),
+                showConstellationIllustrations = showIllustrations,
                 terrainProfile = (terrainState as? TerrainState.Ready)?.profile,
                 gesturesEnabled = !arEnabled,
                 onViewChange = { azimuth, altitude, fov ->
@@ -534,6 +632,35 @@ private fun SkyScreen(
                     )
                 ) {
                     Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
+                }
+                Button(
+                    onClick = { showLayersPanel = !showLayersPanel },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (showLayersPanel) AstraSurfaceHigh else NightBlue.copy(alpha = 0.88f),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(if (showLayersPanel) "Ebenen schließen" else "Ebenen")
+                }
+                if (showLayersPanel) {
+                    Button(
+                        onClick = { showBoundaries = !showBoundaries },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (showBoundaries) AstraBlue else NightBlue.copy(alpha = 0.88f),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(if (showBoundaries) "IAU-Grenzen ✓" else "IAU-Grenzen")
+                    }
+                    Button(
+                        onClick = { showIllustrations = !showIllustrations },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (showIllustrations) StarGold else NightBlue.copy(alpha = 0.88f),
+                            contentColor = if (showIllustrations) Night else Color.White
+                        )
+                    ) {
+                        Text(if (showIllustrations) "Bilder ✓" else "Bilder")
+                    }
                 }
                 if (!arEnabled) {
                     Button(
@@ -620,7 +747,12 @@ private fun SkyScreen(
 
     selected?.let { item ->
         ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = NightBlue) {
-            ObjectDetails(item, observer)
+            ObjectDetails(
+                item = item,
+                observer = observer,
+                isFavorite = item.celestial.catalogId in favoriteObjectIds,
+                toggleFavorite = { toggleFavorite(item.celestial) }
+            )
         }
     }
     if (showCalibration) {
@@ -740,6 +872,8 @@ private fun SkyCanvas(
     horizontalFov: Double,
     arMode: Boolean,
     milkyWay: List<HorizontalCoordinates>,
+    constellationBoundaries: List<HorizontalConstellationBoundary>,
+    showConstellationIllustrations: Boolean,
     terrainProfile: TerrainProfile?,
     gesturesEnabled: Boolean,
     onViewChange: (azimuth: Double, altitude: Double, fov: Double) -> Unit,
@@ -789,6 +923,7 @@ private fun SkyCanvas(
     ) {
         drawSkyGrid(viewAzimuth, viewAltitude)
         drawMilkyWay(milkyWay, viewAzimuth, viewAltitude, horizontalFov)
+        drawIauBoundaries(constellationBoundaries, viewAzimuth, viewAltitude, horizontalFov, arMode)
         val projected = objects.mapNotNull { item ->
             project(item.position, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)?.let { item to it }
         }
@@ -802,6 +937,7 @@ private fun SkyCanvas(
         }
         ConstellationLines.labels.forEach { label ->
             byHip[label.anchorHip]?.let { point ->
+                if (showConstellationIllustrations) drawConstellationIllustration(label.name, point, arMode)
                 drawContext.canvas.nativeCanvas.drawText(
                     label.name.uppercase(Locale.GERMAN),
                     point.x + 14f,
@@ -859,6 +995,98 @@ private fun SkyCanvas(
         }
         drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
     }
+}
+
+private data class HorizontalConstellationBoundary(
+    val abbreviation: String,
+    val points: List<HorizontalCoordinates>
+)
+
+private fun DrawScope.drawIauBoundaries(
+    boundaries: List<HorizontalConstellationBoundary>,
+    viewAzimuth: Double,
+    viewAltitude: Double,
+    horizontalFov: Double,
+    arMode: Boolean
+) {
+    boundaries.forEach { boundary ->
+        val closed = boundary.points + boundary.points.firstOrNull().orEmpty()
+        closed.zipWithNext().forEach { (from, to) ->
+            val start = project(from, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
+            val end = project(to, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
+            if (start != null && end != null && kotlin.math.abs(start.x - end.x) < size.width * 0.35f) {
+                drawLine(
+                    StarGold.copy(alpha = if (arMode) 0.34f else 0.19f),
+                    start,
+                    end,
+                    if (arMode) 1.5f else 1.1f
+                )
+            }
+        }
+    }
+}
+
+private fun HorizontalCoordinates?.orEmpty(): List<HorizontalCoordinates> =
+    if (this == null) emptyList() else listOf(this)
+
+private fun DrawScope.drawConstellationIllustration(name: String, anchor: Offset, arMode: Boolean) {
+    val color = StarGold.copy(alpha = if (arMode) 0.26f else 0.14f)
+    val stroke = Stroke(width = if (arMode) 3.0f else 2.2f)
+    val path = Path()
+    when (name) {
+        "Orion", "Perseus", "Andromeda" -> {
+            drawCircle(color, 13f, anchor - Offset(0f, 58f), style = stroke)
+            path.moveTo(anchor.x, anchor.y - 43f)
+            path.lineTo(anchor.x, anchor.y + 42f)
+            path.moveTo(anchor.x - 42f, anchor.y - 14f)
+            path.lineTo(anchor.x + 42f, anchor.y - 4f)
+            path.moveTo(anchor.x, anchor.y + 42f)
+            path.lineTo(anchor.x - 34f, anchor.y + 86f)
+            path.moveTo(anchor.x, anchor.y + 42f)
+            path.lineTo(anchor.x + 34f, anchor.y + 86f)
+        }
+        "Zwillinge" -> {
+            listOf(-24f, 24f).forEach { x ->
+                drawCircle(color, 10f, anchor + Offset(x, -48f), style = stroke)
+                path.moveTo(anchor.x + x, anchor.y - 36f)
+                path.lineTo(anchor.x + x, anchor.y + 45f)
+                path.moveTo(anchor.x + x, anchor.y - 8f)
+                path.lineTo(anchor.x + x + if (x < 0) -25f else 25f, anchor.y + 12f)
+            }
+        }
+        "Großer Wagen", "Löwe", "Pegasus" -> {
+            drawOval(color, anchor - Offset(55f, 24f), androidx.compose.ui.geometry.Size(110f, 58f), style = stroke)
+            path.moveTo(anchor.x - 52f, anchor.y)
+            path.cubicTo(anchor.x - 90f, anchor.y - 12f, anchor.x - 102f, anchor.y - 48f, anchor.x - 116f, anchor.y - 62f)
+            path.moveTo(anchor.x - 25f, anchor.y + 26f)
+            path.lineTo(anchor.x - 34f, anchor.y + 68f)
+            path.moveTo(anchor.x + 28f, anchor.y + 26f)
+            path.lineTo(anchor.x + 38f, anchor.y + 68f)
+        }
+        "Schwan", "Adler" -> {
+            path.moveTo(anchor.x - 78f, anchor.y + 12f)
+            path.quadraticTo(anchor.x - 30f, anchor.y - 42f, anchor.x, anchor.y)
+            path.quadraticTo(anchor.x + 32f, anchor.y - 42f, anchor.x + 82f, anchor.y + 12f)
+            path.moveTo(anchor.x, anchor.y - 58f)
+            path.lineTo(anchor.x, anchor.y + 72f)
+        }
+        "Leier" -> {
+            path.moveTo(anchor.x - 48f, anchor.y - 58f)
+            path.quadraticTo(anchor.x - 34f, anchor.y + 52f, anchor.x, anchor.y + 62f)
+            path.quadraticTo(anchor.x + 34f, anchor.y + 52f, anchor.x + 48f, anchor.y - 58f)
+            path.moveTo(anchor.x - 42f, anchor.y - 36f)
+            path.lineTo(anchor.x + 42f, anchor.y - 36f)
+        }
+        "Kassiopeia" -> {
+            path.moveTo(anchor.x - 65f, anchor.y + 42f)
+            path.lineTo(anchor.x - 42f, anchor.y - 40f)
+            path.lineTo(anchor.x, anchor.y + 12f)
+            path.lineTo(anchor.x + 42f, anchor.y - 40f)
+            path.lineTo(anchor.x + 65f, anchor.y + 42f)
+        }
+        else -> return
+    }
+    drawPath(path, color, style = stroke)
 }
 
 private fun DrawScope.drawMilkyWay(
@@ -972,7 +1200,12 @@ private fun project(
 }
 
 @Composable
-private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
+private fun ObjectDetails(
+    item: VisibleObject,
+    observer: GeoPoint,
+    isFavorite: Boolean,
+    toggleFavorite: () -> Unit
+) {
     val objectData = item.celestial
     val path = remember(item.celestial, observer) {
         (0..12).map { hours ->
@@ -986,6 +1219,18 @@ private fun ObjectDetails(item: VisibleObject, observer: GeoPoint) {
     ) {
         Text(objectData.name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(objectData.catalogId, color = AstraBlue)
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = toggleFavorite,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isFavorite) StarGold else AstraSurfaceHigh,
+                contentColor = if (isFavorite) Night else Color.White
+            )
+        ) {
+            Icon(if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (isFavorite) "In Beobachtungsliste ✓" else "Zur Beobachtungsliste")
+        }
         Spacer(Modifier.height(18.dp))
         DetailRow("Objekttyp", objectData.objectType.label)
         DetailRow(
@@ -1155,6 +1400,7 @@ private fun AstraSectionTitle(title: String, subtitle: String? = null) {
 @Composable
 private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
     var state by remember { mutableStateOf<WeatherState>(WeatherState.Idle) }
+    var lightPollution by remember { mutableStateOf<LightPollutionState>(LightPollutionState.Loading) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var isRefreshing by remember { mutableStateOf(false) }
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
@@ -1167,10 +1413,12 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
 
     LaunchedEffect(observer, refreshKey) {
         state = WeatherState.Loading
+        lightPollution = LightPollutionState.Loading
         WeatherRepository.load(observer) {
             state = it
             isRefreshing = false
         }
+        LightPollutionRepository.load(observer) { lightPollution = it }
     }
 
     PullToRefreshBox(
@@ -1199,10 +1447,21 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                     Button(onClick = ::refresh) { Text("Erneut versuchen") }
                 }
                 is WeatherState.Ready -> {
-                    ObservationScore(value.weather, observer)
+                    ObservationScore(
+                        value.weather,
+                        observer,
+                        (lightPollution as? LightPollutionState.Ready)?.estimate
+                    )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         WeatherTile("Temperatur", "${value.weather.temperature.format(1)} °C", Modifier.weight(1f))
                         WeatherTile("Bewölkung", "${value.weather.cloudCover}%", Modifier.weight(1f))
+                    }
+                    (lightPollution as? LightPollutionState.Ready)?.estimate?.let {
+                        WeatherTile(
+                            "Lichtverschmutzung",
+                            "Index ${it.index}/100 · Bortle ≈ ${it.bortleClass}",
+                            Modifier.fillMaxWidth()
+                        )
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         WeatherTile("Wind", "${value.weather.windSpeed.format(1)} km/h", Modifier.weight(1f))
@@ -1210,7 +1469,11 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                     }
                     Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
                     AstraSectionTitle("24-Stunden-Ausblick", "Stündliche Bedingungen am aktuellen Standort")
-                    ForecastTimeline(value.weather.forecast, observer)
+                    ForecastTimeline(
+                        value.weather.forecast,
+                        observer,
+                        (lightPollution as? LightPollutionState.Ready)?.estimate
+                    )
                     AstraSectionTitle("Wolken- und Regenkarte", "Radar, Niederschlag und Bewölkung")
                     Text(
                         "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
@@ -1225,7 +1488,11 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
 }
 
 @Composable
-private fun ForecastTimeline(forecast: List<HourlyForecast>, observer: GeoPoint) {
+private fun ForecastTimeline(
+    forecast: List<HourlyForecast>,
+    observer: GeoPoint,
+    lightPollution: LightPollutionEstimate?
+) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1238,7 +1505,8 @@ private fun ForecastTimeline(forecast: List<HourlyForecast>, observer: GeoPoint)
                     windSpeed = hour.windSpeed,
                     visibilityMeters = hour.visibility,
                     observer = observer,
-                    instant = Instant.now().plusSeconds(hour.hoursFromNow * 3_600L)
+                    instant = Instant.now().plusSeconds(hour.hoursFromNow * 3_600L),
+                    lightPollution = lightPollution
                 ).score
             }
             Card(
@@ -1288,7 +1556,7 @@ private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/1.0"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/${BuildConfig.VERSION_NAME}"
         }
     }
 
@@ -1331,15 +1599,6 @@ private enum class SkyEventKind(val label: String) {
     LUNAR_ECLIPSE("Mondfinsternis")
 }
 
-private data class MeteorDefinition(
-    val name: String,
-    val month: Int,
-    val day: Int,
-    val radiantRaHours: Double,
-    val radiantDecDegrees: Double,
-    val zhr: Int
-)
-
 private data class SkyEvent(
     val title: String,
     val kind: SkyEventKind,
@@ -1349,26 +1608,32 @@ private data class SkyEvent(
     val statusColor: Color,
     val facts: String,
     val description: String
-)
+) {
+    val key: String get() = "${kind.name}:$title:${instant.atZone(ZoneId.systemDefault()).year}"
+}
 
-private val meteorShowers = listOf(
-    MeteorDefinition("Quadrantiden", 1, 3, 15.33, 49.0, 80),
-    MeteorDefinition("Lyriden", 4, 22, 18.12, 34.0, 18),
-    MeteorDefinition("Eta-Aquariiden", 5, 6, 22.53, -1.0, 50),
-    MeteorDefinition("Südliche Delta-Aquariiden", 7, 30, 22.67, -16.0, 25),
-    MeteorDefinition("Perseiden", 8, 12, 3.13, 58.0, 100),
-    MeteorDefinition("September-Epsilon-Perseiden", 9, 9, 3.20, 40.0, 8),
-    MeteorDefinition("Draconiden", 10, 8, 17.47, 54.0, 10),
-    MeteorDefinition("Orioniden", 10, 21, 6.35, 16.0, 20),
-    MeteorDefinition("Leoniden", 11, 17, 10.13, 22.0, 15),
-    MeteorDefinition("Geminiden", 12, 14, 7.47, 33.0, 150),
-    MeteorDefinition("Ursiden", 12, 22, 14.47, 76.0, 10)
+private fun SkyEvent.toSavedEvent() = SavedSkyEvent(
+    key = key,
+    title = title,
+    kind = kind.label,
+    instantEpochSeconds = instant.epochSecond
 )
 
 @Composable
-private fun EventsScreen(location: GeoPoint?) {
+private fun EventsScreen(
+    location: GeoPoint?,
+    savedEventKeys: Set<String>,
+    toggleSavedEvent: (SkyEvent) -> Unit
+) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
-    val events = remember(observer) { buildUpcomingEvents(observer) }
+    val context = LocalContext.current
+    var meteorCalendar by remember { mutableStateOf(MeteorCalendarRepository.bundled(context)) }
+    var lightPollution by remember { mutableStateOf<LightPollutionState>(LightPollutionState.Loading) }
+    LaunchedEffect(observer) {
+        MeteorCalendarRepository.refresh(context) { meteorCalendar = it }
+        LightPollutionRepository.load(observer) { lightPollution = it }
+    }
+    val events = remember(observer, meteorCalendar) { buildUpcomingEvents(observer, meteorCalendar.showers) }
     Column(
         Modifier.fillMaxSize().background(
             Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
@@ -1389,6 +1654,13 @@ private fun EventsScreen(location: GeoPoint?) {
             color = Color(0xFFAAB8CE),
             fontSize = 13.sp
         )
+        Text(
+            if (meteorCalendar.online) "IMO-Kalender online aktualisiert · Stand ${meteorCalendar.updated}"
+            else "IMO-Kalender offline verfügbar · Stand ${meteorCalendar.updated}",
+            color = if (meteorCalendar.online) AstraSuccess else AstraTextMuted,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
 
         AstraSectionTitle("Lichtverschmutzung", "Dunkle Beobachtungsplätze in deiner Umgebung finden")
         Text(
@@ -1397,16 +1669,31 @@ private fun EventsScreen(location: GeoPoint?) {
             color = Color(0xFFAAB8CE),
             fontSize = 13.sp
         )
+        when (val estimate = lightPollution) {
+            LightPollutionState.Loading -> Text("Numerische VIIRS-Schätzung wird geladen …", color = AstraTextMuted)
+            is LightPollutionState.Ready -> LightPollutionEstimateCard(estimate.estimate)
+            LightPollutionState.Unavailable -> Text(
+                "Numerische Schätzung derzeit offline; die Karte bleibt verfügbar.",
+                color = StarGold,
+                fontSize = 12.sp
+            )
+        }
         LightPollutionMap(observer)
         Text(
-            "NASA-VIIRS-Nachtlichtaufnahme (2012). Sie ist eine Orientierungshilfe für " +
-                "Lichtverschmutzung, keine aktuelle Bortle-Messung.",
+            "NASA-VIIRS-Nachtlichtkomposit (2016). Index, Bortle-Klasse und Himmelshelligkeit " +
+                "sind standortbezogene Schätzwerte, keine Vor-Ort-Messung.",
             color = Color(0xFFAAB8CE),
             fontSize = 11.sp
         )
 
         AstraSectionTitle("Kommende Ereignisse", "Finsternisse und Meteorschauer chronologisch sortiert")
-        events.forEach { EventCard(it) }
+        events.forEach { event ->
+            EventCard(
+                event = event,
+                saved = event.key in savedEventKeys,
+                toggleSaved = { toggleSavedEvent(event) }
+            )
+        }
         Text(
             "Quellen: NASA/GSFC Eclipse Catalog · International Meteor Organization (IMO)",
             color = Color(0xFFAAB8CE),
@@ -1417,7 +1704,7 @@ private fun EventsScreen(location: GeoPoint?) {
 }
 
 @Composable
-private fun EventCard(event: SkyEvent) {
+private fun EventCard(event: SkyEvent, saved: Boolean, toggleSaved: () -> Unit) {
     val zone = ZoneId.systemDefault()
     val dateFormat = DateTimeFormatter.ofPattern("EEE, d. MMM yyyy", Locale.GERMAN).withZone(zone)
     val timeFormat = DateTimeFormatter.ofPattern("HH:mm 'Uhr'", Locale.GERMAN).withZone(zone)
@@ -1428,13 +1715,26 @@ private fun EventCard(event: SkyEvent) {
         border = BorderStroke(1.dp, event.statusColor.copy(alpha = 0.28f))
     ) {
         Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(event.kind.label.uppercase(Locale.GERMAN), color = AstraBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (event.timeIsApproximate) "Maximum-Nacht" else timeFormat.format(event.instant),
-                    color = StarGold,
-                    fontSize = 12.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (event.timeIsApproximate) "Maximum-Nacht" else timeFormat.format(event.instant),
+                        color = StarGold,
+                        fontSize = 12.sp
+                    )
+                    IconButton(onClick = toggleSaved) {
+                        Icon(
+                            if (saved) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = if (saved) "Vormerkung entfernen" else "Ereignis vormerken",
+                            tint = if (saved) StarGold else AstraTextMuted
+                        )
+                    }
+                }
             }
             Text(event.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(dateFormat.format(event.instant), color = Color(0xFFD8E4F7))
@@ -1445,16 +1745,19 @@ private fun EventCard(event: SkyEvent) {
     }
 }
 
-private fun buildUpcomingEvents(observer: GeoPoint): List<SkyEvent> {
+private fun buildUpcomingEvents(observer: GeoPoint, meteorShowers: List<MeteorDefinition>): List<SkyEvent> {
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
     val meteorEvents = (today.year..today.year + 1).flatMap { year ->
-        meteorShowers.map { shower ->
-            val localPeak = ZonedDateTime.of(LocalDate.of(year, shower.month, shower.day), LocalTime.of(2, 0), zone)
-            val instant = localPeak.toInstant()
+        meteorShowers.filter { it.year == year }.map { shower ->
+            val instant = ZonedDateTime.of(
+                LocalDate.of(year, shower.month, shower.day),
+                LocalTime.MIDNIGHT,
+                java.time.ZoneOffset.UTC
+            ).toInstant()
             val radiant = CelestialObject(
                 name = shower.name,
-                catalogId = "IMO-Radiant",
+                catalogId = "IMO ${shower.code}",
                 raHours = shower.radiantRaHours,
                 decDegrees = shower.radiantDecDegrees,
                 magnitude = 0.0,
@@ -1476,8 +1779,9 @@ private fun buildUpcomingEvents(observer: GeoPoint): List<SkyEvent> {
                 timeIsApproximate = true,
                 status = quality.first,
                 statusColor = quality.second,
-                facts = "Radiant ca. ${altitude.format(0)}° hoch · Mond ca. ${moon.format(0)} % · ZHR ${shower.zhr}",
-                description = "${quality.third} Die ZHR gilt nur unter ideal dunklem Himmel."
+                facts = "Radiant ca. ${altitude.format(0)}° hoch · Mond ca. ${moon.format(0)} % · " +
+                    if (shower.zhr > 0) "ZHR ${shower.zhr}" else "ZHR variabel",
+                description = "${quality.third} Maximum nach dem jährlichen IMO-Kalender; die ZHR gilt nur unter ideal dunklem Himmel."
             )
         }
     }
@@ -1488,7 +1792,29 @@ private fun buildUpcomingEvents(observer: GeoPoint): List<SkyEvent> {
     return (meteorEvents + eclipseEvents)
         .filter { it.instant.isAfter(now) }
         .sortedBy { it.instant }
-        .take(14)
+        .take(18)
+}
+
+@Composable
+private fun LightPollutionEstimateCard(estimate: LightPollutionEstimate) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = AstraSurface),
+        border = BorderStroke(1.dp, StarGold.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("VIIRS-Index ${estimate.index}/100", fontWeight = FontWeight.Bold, color = StarGold)
+                Text("Bortle ≈ ${estimate.bortleClass}", fontWeight = FontWeight.Bold)
+            }
+            Text(estimate.qualityLabel.replaceFirstChar { it.uppercase() }, color = AstraTextMuted)
+            Text(
+                "Himmelshelligkeit ≈ ${estimate.skyBrightnessMag.format(1)} mag/arcsec² · Datenjahr ${estimate.sourceYear}",
+                color = AstraTextMuted,
+                fontSize = 12.sp
+            )
+        }
+    }
 }
 
 private fun exactLocalEclipseEvents(observer: GeoPoint): List<SkyEvent> {
@@ -1576,7 +1902,7 @@ private fun LightPollutionMap(observer: GeoPoint) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/1.0"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/${BuildConfig.VERSION_NAME}"
         }
     }
 
@@ -1607,26 +1933,32 @@ private fun LightPollutionMap(observer: GeoPoint) {
     }
 }
 
-private data class ScorePenalty(
+internal data class ScorePenalty(
     val label: String,
     val points: Int,
     val explanation: String
 )
 
-private data class AstraScoreBreakdown(
+internal data class AstraScoreBreakdown(
     val score: Int,
     val penalties: List<ScorePenalty>
 )
 
-private object AstraScoreCalculator {
-    fun calculate(weather: WeatherSnapshot, observer: GeoPoint, instant: Instant): AstraScoreBreakdown {
+internal object AstraScoreCalculator {
+    fun calculate(
+        weather: WeatherSnapshot,
+        observer: GeoPoint,
+        instant: Instant,
+        lightPollution: LightPollutionEstimate? = null
+    ): AstraScoreBreakdown {
         return calculate(
             cloudCover = weather.cloudCover,
             rainProbability = weather.forecast.firstOrNull()?.rainProbability ?: 0,
             windSpeed = weather.windSpeed,
             visibilityMeters = weather.visibility,
             observer = observer,
-            instant = instant
+            instant = instant,
+            lightPollution = lightPollution
         )
     }
 
@@ -1636,7 +1968,8 @@ private object AstraScoreCalculator {
         windSpeed: Double,
         visibilityMeters: Double,
         observer: GeoPoint,
-        instant: Instant
+        instant: Instant,
+        lightPollution: LightPollutionEstimate? = null
     ): AstraScoreBreakdown {
         val visibilityKilometers = visibilityMeters / 1_000.0
         val moon = SolarSystemCatalog.horizontal(Body.Moon, observer, instant)
@@ -1645,31 +1978,38 @@ private object AstraScoreCalculator {
         val penalties = listOf(
             ScorePenalty(
                 "Bewölkung",
-                (cloudCover * 0.45).roundToInt().coerceIn(0, 45),
-                "$cloudCover % Wolken · maximal −45"
+                (cloudCover * 0.40).roundToInt().coerceIn(0, 40),
+                "$cloudCover % Wolken · maximal −40"
             ),
             ScorePenalty(
                 "Regenrisiko",
-                (rainProbability * 0.15).roundToInt().coerceIn(0, 15),
-                "$rainProbability % in der nächsten Prognosestufe · maximal −15"
+                (rainProbability * 0.10).roundToInt().coerceIn(0, 10),
+                "$rainProbability % in der nächsten Prognosestufe · maximal −10"
             ),
             ScorePenalty(
                 "Wind",
-                (((windSpeed - 5.0).coerceAtLeast(0.0) / 25.0) * 15.0)
-                    .roundToInt().coerceIn(0, 15),
-                "${windSpeed.format(1)} km/h; bis 5 km/h ohne Abzug · maximal −15"
+                (((windSpeed - 5.0).coerceAtLeast(0.0) / 25.0) * 10.0)
+                    .roundToInt().coerceIn(0, 10),
+                "${windSpeed.format(1)} km/h; bis 5 km/h ohne Abzug · maximal −10"
             ),
             ScorePenalty(
                 "Sichtweite",
-                (((20.0 - visibilityKilometers).coerceAtLeast(0.0) / 20.0) * 15.0)
-                    .roundToInt().coerceIn(0, 15),
-                "${visibilityKilometers.format(1)} km; ab 20 km ohne Abzug · maximal −15"
+                (((20.0 - visibilityKilometers).coerceAtLeast(0.0) / 20.0) * 10.0)
+                    .roundToInt().coerceIn(0, 10),
+                "${visibilityKilometers.format(1)} km; ab 20 km ohne Abzug · maximal −10"
             ),
             ScorePenalty(
                 "Mondlicht",
                 (moonIllumination * sin(Math.toRadians(moon.altitude)).coerceAtLeast(0.0) * 10.0)
                     .roundToInt().coerceIn(0, 10),
                 "${(moonIllumination * 100.0).format(0)} % beleuchtet, ${moon.altitude.format(0)}° hoch · maximal −10"
+            ),
+            ScorePenalty(
+                "Lichtverschmutzung",
+                lightPollution?.let { (it.index * 0.20).roundToInt().coerceIn(0, 20) } ?: 0,
+                lightPollution?.let {
+                    "VIIRS-Index ${it.index}/100 · Bortle ≈ ${it.bortleClass} · maximal −20"
+                } ?: "Noch kein VIIRS-Wert verfügbar · kein Abzug"
             )
         )
         return AstraScoreBreakdown(
@@ -1680,10 +2020,14 @@ private object AstraScoreCalculator {
 }
 
 @Composable
-private fun ObservationScore(weather: WeatherSnapshot, observer: GeoPoint) {
+private fun ObservationScore(
+    weather: WeatherSnapshot,
+    observer: GeoPoint,
+    lightPollution: LightPollutionEstimate?
+) {
     var detailsVisible by remember { mutableStateOf(false) }
-    val breakdown = remember(weather, observer) {
-        AstraScoreCalculator.calculate(weather, observer, Instant.now())
+    val breakdown = remember(weather, observer, lightPollution) {
+        AstraScoreCalculator.calculate(weather, observer, Instant.now(), lightPollution)
     }
     val score = breakdown.score
     val label = when {
@@ -1740,7 +2084,7 @@ private fun ObservationScore(weather: WeatherSnapshot, observer: GeoPoint) {
                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                     Text("Ergebnis: $score / 100", fontWeight = FontWeight.Bold, color = AstraBlue)
                     Text(
-                        "Die Lichtverschmutzung ist derzeit nur auf der Nachtlichtkarte sichtbar und noch nicht als Messwert im Score enthalten. Das Geländeprofil beeinflusst die sichtbare Horizontlinie, aber nicht das Wetter.",
+                        "Der Lichtabzug basiert auf dem NASA-VIIRS-Komposit von 2016 und ist eine Satellitenschätzung, keine SQM-Messung. Das Geländeprofil beeinflusst die sichtbare Horizontlinie, aber nicht das Wetter.",
                         color = Color(0xFFAAB8CE),
                         fontSize = 12.sp
                     )
@@ -1763,6 +2107,146 @@ private fun WeatherTile(label: String, value: String, modifier: Modifier = Modif
             Spacer(Modifier.height(5.dp))
             Text(value, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+@Composable
+private fun ObservationPlanScreen(
+    location: GeoPoint?,
+    favoriteIds: Set<String>,
+    savedEvents: List<SavedSkyEvent>,
+    reminderHours: Int,
+    notificationsGranted: Boolean,
+    setReminderHours: (Int) -> Unit,
+    removeFavorite: (String) -> Unit,
+    removeEvent: (SavedSkyEvent) -> Unit,
+    requestNotifications: () -> Unit
+) {
+    val context = LocalContext.current
+    val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
+    val catalog = remember(context, observer) {
+        StarCatalog.load(context) + DeepSkyCatalog.load(context) + SolarSystemCatalog.at(observer, Instant.now())
+    }
+    val favorites = remember(catalog, favoriteIds) { catalog.filter { it.catalogId in favoriteIds } }
+    val zone = ZoneId.systemDefault()
+    val dateFormat = DateTimeFormatter.ofPattern("EEE, d. MMM yyyy · HH:mm", Locale.GERMAN).withZone(zone)
+
+    Column(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
+        ).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Spacer(Modifier.height(6.dp))
+        AstraScreenHeader(
+            eyebrow = "ASTRA PLAN",
+            title = "Beobachtungsliste",
+            subtitle = "${favorites.size} Objekte · ${savedEvents.size} Ereignisse",
+            icon = Icons.Rounded.Bookmarks
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = AstraSurface),
+            border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.75f)),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Notifications, null, tint = StarGold)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Ereigniserinnerungen", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (notificationsGranted) "Benachrichtigungen sind freigegeben"
+                            else "Benachrichtigungen sind noch nicht freigegeben",
+                            color = if (notificationsGranted) AstraSuccess else StarGold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                Text("Vorlauf", color = AstraTextMuted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1, 6, 24, 48).forEach { hours ->
+                        Button(
+                            onClick = { setReminderHours(hours) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (reminderHours == hours) StarGold else AstraSurfaceHigh,
+                                contentColor = if (reminderHours == hours) Night else Color.White
+                            )
+                        ) { Text(if (hours < 24) "${hours} h" else "${hours / 24} T") }
+                    }
+                }
+                if (!notificationsGranted) {
+                    Button(
+                        onClick = requestNotifications,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AstraBlue,
+                            contentColor = Night
+                        )
+                    ) { Text("Benachrichtigungen erlauben") }
+                }
+                Text(
+                    "Android kann die Zustellung zur Schonung des Akkus leicht verzögern.",
+                    color = AstraTextMuted,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        AstraSectionTitle("Vorgemerkte Ereignisse", "Sternsymbol im Kalender zum Hinzufügen")
+        if (savedEvents.isEmpty()) {
+            EmptyPlanCard("Noch keine Ereignisse vorgemerkt.")
+        } else savedEvents.sortedBy { it.instantEpochSeconds }.forEach { event ->
+            Card(colors = CardDefaults.cardColors(containerColor = AstraSurface)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(event.title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(event.kind, color = AstraBlue, fontSize = 12.sp)
+                        Text(dateFormat.format(Instant.ofEpochSecond(event.instantEpochSeconds)), color = AstraTextMuted)
+                    }
+                    IconButton(onClick = { removeEvent(event) }) {
+                        Icon(Icons.Rounded.Star, "Vormerkung entfernen", tint = StarGold)
+                    }
+                }
+            }
+        }
+
+        AstraSectionTitle("Favorisierte Himmelsobjekte", "Sterne und Deep-Sky-Ziele für deine Nacht")
+        if (favorites.isEmpty()) {
+            EmptyPlanCard("Tippe ein Objekt in der Sternkarte an und füge es zur Liste hinzu.")
+        } else favorites.forEach { objectData ->
+            val position = remember(objectData, observer) { coordinatesAt(objectData, observer, Instant.now()) }
+            Card(colors = CardDefaults.cardColors(containerColor = AstraSurface)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(objectData.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("${objectData.objectType.label} · ${objectData.catalogId}", color = AstraBlue, fontSize = 12.sp)
+                        Text(
+                            "Jetzt: Az ${position.azimuth.format(0)}° · Höhe ${position.altitude.format(0)}°",
+                            color = if (position.altitude > 0) AstraSuccess else AstraTextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                    IconButton(onClick = { removeFavorite(objectData.catalogId) }) {
+                        Icon(Icons.Rounded.Star, "Favorit entfernen", tint = StarGold)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun EmptyPlanCard(text: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = AstraSurface.copy(alpha = 0.72f))) {
+        Text(text, Modifier.fillMaxWidth().padding(18.dp), color = AstraTextMuted)
     }
 }
 
@@ -1803,12 +2287,12 @@ private fun AboutScreen(redLightMode: Boolean, setRedLightMode: (Boolean) -> Uni
         AboutInfoCard(
             title = "Für die Nacht gebaut",
             icon = Icons.Rounded.Public,
-            body = "5.041 reale Sterne, Sonne, Mond, Planeten, die Milchstraße und optional 1.016 Deep-Sky-Objekte werden passend zu Standort und Uhrzeit berechnet. Wetter, Ereigniskalender und Nachtlichtkarte helfen bei der Planung."
+            body = "5.041 reale Sterne, Sonne, Mond, Planeten, Milchstraße, alle 88 IAU-Sternbildgrenzen und optional 1.016 Deep-Sky-Objekte werden passend zu Standort und Uhrzeit berechnet. Favoriten, Beobachtungslisten, Wetter und Ereignisse helfen bei der Planung."
         )
         AboutInfoCard(
             title = "Datenschutz",
             icon = Icons.Rounded.GpsFixed,
-            body = "Standortzugriff erfolgt erst nach deiner bewussten Freigabe und nur während der Nutzung. Koordinaten werden verschlüsselt an Open-Meteo übertragen, um Wetter und Geländehöhen abzurufen. Kamerabilder bleiben auf dem Gerät und werden weder gespeichert noch übertragen. Projekt Astra enthält keine Konten, Werbung, Analyse-SDKs oder Tracker."
+            body = "Standortzugriff erfolgt erst nach deiner bewussten Freigabe und nur während der Nutzung. Koordinaten werden verschlüsselt an Open-Meteo und NASA GIBS übertragen, um Wetter, Gelände und Nachtlicht zu bestimmen. Favoriten und Ereignislisten bleiben lokal. Kamerabilder werden weder gespeichert noch übertragen. Es gibt keine Konten, Werbung, Analyse-SDKs oder Tracker."
         )
         AboutInfoCard(
             title = "Genauigkeit und Sicherheit",
@@ -1823,6 +2307,7 @@ private fun AboutScreen(redLightMode: Boolean, setRedLightMode: (Boolean) -> Uni
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("Datenquellen und Lizenzen", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text("Sternkatalog: HYG v4.1 · CC BY-SA 4.0", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Sternbildgrenzen: CDS/VizieR VI/49 · IAU/Delporte", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Deep Sky: OpenNGC · CC BY-SA 4.0", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Himmelsaufnahmen: DSS2 via CDS HiPS2FITS", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Wetter: RainViewer, Open-Meteo und OpenStreetMap", color = AstraTextMuted, fontSize = 12.sp)
@@ -2289,13 +2774,27 @@ internal object AstronomyEngine {
         observer: GeoPoint,
         instant: Instant
     ): HorizontalCoordinates {
+        return horizontalCoordinates(
+            objectData.raHours,
+            objectData.decDegrees,
+            observer,
+            instant
+        )
+    }
+
+    fun horizontalCoordinates(
+        raHours: Double,
+        decDegrees: Double,
+        observer: GeoPoint,
+        instant: Instant
+    ): HorizontalCoordinates {
         val jd = instant.epochSecond / 86400.0 + 2440587.5
         val daysSinceJ2000 = jd - 2451545.0
         val gmst = normalizeDegrees(280.46061837 + 360.98564736629 * daysSinceJ2000)
         val localSidereal = normalizeDegrees(gmst + observer.longitude)
-        val hourAngle = Math.toRadians(normalizeSignedDegrees(localSidereal - objectData.raHours * 15.0))
+        val hourAngle = Math.toRadians(normalizeSignedDegrees(localSidereal - raHours * 15.0))
         val latitude = Math.toRadians(observer.latitude)
-        val declination = Math.toRadians(objectData.decDegrees)
+        val declination = Math.toRadians(decDegrees)
         val altitude = asin(
             sin(declination) * sin(latitude) + cos(declination) * cos(latitude) * cos(hourAngle)
         )
@@ -2310,7 +2809,7 @@ internal object AstronomyEngine {
     }
 }
 
-private data class HourlyForecast(
+internal data class HourlyForecast(
     val time: String,
     val hoursFromNow: Int,
     val cloudCover: Int,
@@ -2319,7 +2818,7 @@ private data class HourlyForecast(
     val visibility: Double
 )
 
-private data class WeatherSnapshot(
+internal data class WeatherSnapshot(
     val temperature: Double,
     val cloudCover: Int,
     val windSpeed: Double,

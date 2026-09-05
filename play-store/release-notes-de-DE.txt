@@ -1,8 +1,7 @@
-Willkommen bei Projekt Astra 1.0:
+Neu in Projekt Astra 1.1:
 
-• interaktive Sternkarte mit Milchstraße, Planeten und Deep-Sky-Objekten
-• optionaler AR-Modus und GPS-Ausrichtung
-• Wetter-, Wolken-, Regen- und Lichtverschmutzungskarten
-• Kalender für Finsternisse und Meteorschauer
-• lokales Geländeprofil und erklärbarer Astra-Score
-• neuer Rotlichtmodus für eine bessere Dunkeladaption
+• Grenzen aller 88 IAU-Sternbilder und optionale Illustrationen
+• jährlich online aktualisierte IMO-Meteorschauer
+• numerische VIIRS-Lichtverschmutzungsschätzung im Astra-Score
+• Favoriten und persönliche Beobachtungslisten
+• einstellbare lokale Benachrichtigungen vor Himmelsereignissen

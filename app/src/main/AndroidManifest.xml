@@ -8,6 +8,7 @@
         android:usesPermissionFlags="onlyForLocationButton"
         tools:targetApi="31" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_LOCATION_BUTTON" />
 
     <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />

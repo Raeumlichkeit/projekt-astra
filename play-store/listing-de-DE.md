@@ -19,12 +19,14 @@ Die App enthält:
 - 5.041 reale Sterne aus dem HYG-Katalog
 - Sonne, Mond und die sichtbaren Planeten mit aktuellen Ephemeriden
 - die dynamische Ebene der Milchstraße
+- vollständige Grenzen aller 88 IAU-Sternbilder und optionale Illustrationen
 - optional 1.016 Deep-Sky-Objekte aus OpenNGC
 - ein lokales Geländeprofil für einen realistischen Horizont
 - aktuelle Wetterdaten und eine Wolken- und Regenkarte
-- einen erklärbaren Astra-Score für die Beobachtungsbedingungen
-- einen Kalender für Meteorschauer sowie Sonnen- und Mondfinsternisse
-- eine NASA-Nachtlichtkarte zur Orientierung bei Lichtverschmutzung
+- einen erklärbaren Astra-Score mit numerischer VIIRS-Lichtverschmutzungsschätzung
+- einen Kalender mit jährlich aktualisierten IMO-Meteorschauern sowie Sonnen- und Mondfinsternissen
+- eine NASA-Nachtlichtkarte mit geschätzter Bortle-Klasse
+- Favoriten, Beobachtungslisten und einstellbare Ereigniserinnerungen
 - einen Rotlichtmodus zum Schutz der Dunkeladaption
 
 Viele astronomische Berechnungen und Katalogdaten funktionieren lokal auf dem Gerät. Projekt Astra enthält keine Werbung, kein Benutzerkonto und keine Analyse- oder Tracking-SDKs.
@@ -50,4 +52,5 @@ Astronomie, Sternkarte, Wetter, AR, Planeten
 - Feature-Grafik: Milchstraße über einem Bergpanorama mit feinem Himmelsraster
 - Sternkarten-Screenshot: Interaktive Sternkarte mit Milchstraße und Geländehorizont
 - Wetter-Screenshot: Beobachtungswetter mit Astra-Score und Stundenprognose
-- Kalender-Screenshot: Lichtverschmutzungskarte und kommende Himmelsereignisse
+- Kalender-Screenshot: Lichtverschmutzungsschätzung und kommende Himmelsereignisse
+- Planungs-Screenshot: Favoriten, Beobachtungsliste und Erinnerungsvorlauf

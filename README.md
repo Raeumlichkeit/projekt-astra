@@ -12,6 +12,7 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - Offline-Katalog mit 5.041 HIP-Sternen bis zur visuellen Helligkeit 6,0 (HYG v4.1)
 - optional zuschaltbarer Offline-Katalog mit 1.016 Deep-Sky-Objekten (OpenNGC)
 - Sternfarben, Horizont sowie erweiterte Linien und Namen markanter Sternbilder
+- vollständige Grenzen aller 88 IAU-Sternbilder sowie optionale, dezente Illustrationen
 - dynamische Milchstraßenebene, passend zu Uhrzeit, Standort und aktuellem Kartenausschnitt
 - lokales 360°-Geländeprofil aus GLO-90-Höhendaten für einen realistisch verdeckten Horizont, mit Offline-Fallback
 - Sonne, Mond und alle sieben von der Erde sichtbaren Planeten mit topozentrischen Ephemeriden
@@ -22,13 +23,16 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - interaktive Wetterkarte mit lokal gebündeltem Kartenrenderer, Regenradar und Bewölkung
 - Pull-to-Refresh aktualisiert Wetter, Wetterkarte und GPS-Standort
 - stündliche 24-Stunden-Zeitleiste für Wolken, Regenwahrscheinlichkeit, Wind und Beobachtungssicht
-- aufklappbare Astra-Score-Erklärung mit Einzelabzügen für Bewölkung, Regen, Wind, Sichtweite und Mondlicht
+- aufklappbare Astra-Score-Erklärung mit Einzelabzügen für Bewölkung, Regen, Wind, Sichtweite, Mondlicht und Lichtverschmutzung
 - manuell verschiebbare und zoombare Sternkarte; AR bleibt separat sensorgesteuert
 - standortbezogener Himmelskalender für Meteorschauer sowie Sonnen- und Mondfinsternisse
+- automatische Online-Aktualisierung der jährlichen IMO-Meteorschauer-Maxima mit Offline-Fallback
 - exakt berechnete lokale Sonnenfinsterniskontakte, Bedeckung und Sonnenhöhe
 - lokale Mondfinsternisfilterung mit Kontaktzeiten und Mondhöhe
 - lokale Beobachtungseinschätzung aus Radiantenhöhe und ungefährem Mondlicht
 - interaktive NASA-VIIRS-Nachtlichtkarte als Orientierung für Lichtverschmutzung
+- numerischer VIIRS-Lichtindex, geschätzte Bortle-Klasse und Einbezug in den Astra-Score
+- lokale Favoriten und Beobachtungslisten mit einstellbaren Ereigniserinnerungen
 - geführte Kompass-/AR-Kalibrierung mit Android-Sensorgenauigkeit
 - globaler, dauerhaft gespeicherter Rotlichtmodus mit Schnellschalter in der Sternkarte
 - adaptives und monochromes App-Icon sowie Android-12+-Startbildschirm
@@ -50,16 +54,9 @@ Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung be
 
 Die vorbereiteten Store-Texte, Grafiken, Datenschutzangaben und die vollständige Veröffentlichungsliste liegen unter `play-store/`. Ein Release-Bundle lässt sich auch ohne Schlüssel zur technischen Prüfung mit `gradlew bundleRelease` erstellen. Für den Upload muss einmalig ein privater Upload-Key eingerichtet werden; die Anleitung steht in `play-store/release-checklist.md`.
 
-## Möglicher weiterer Ausbau
-
-- vollständige IAU-Sternbildgrenzen und optionale Illustrationen
-- automatische Online-Aktualisierung der jährlichen IMO-Meteorschauer-Maxima
-- numerische Lichtverschmutzungsschätzung für den Astra-Score
-- Favoriten, Beobachtungslisten und rechtzeitige Ereignisbenachrichtigungen
-
 ## Daten und Datenschutz
 
-Der Standort wird für Himmels- und Ereignisberechnungen lokal verarbeitet, in den Karten lokal markiert und zur Abfrage des standortbezogenen Wetters sowie des Geländehöhenprofils an Open-Meteo übertragen. Es ist kein Tracking oder Benutzerkonto enthalten.
+Der Standort wird für Himmels- und Ereignisberechnungen lokal verarbeitet, in den Karten lokal markiert und zur Abfrage von Wetter, Gelände und der VIIRS-Nachtlichtschätzung an Open-Meteo beziehungsweise NASA GIBS übertragen. Favoriten, Beobachtungslisten und Erinnerungseinstellungen bleiben lokal. Es ist kein Tracking oder Benutzerkonto enthalten.
 
 Der abgeleitete Offline-Sternkatalog basiert auf HYG v4.1 und steht unter CC BY-SA 4.0.
 Details stehen in `THIRD_PARTY_NOTICES.md`.
