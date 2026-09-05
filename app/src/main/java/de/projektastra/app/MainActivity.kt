@@ -1080,7 +1080,7 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                     }
                     Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
                     Text("24-Stunden-Ausblick", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    ForecastTimeline(value.weather.forecast)
+                    ForecastTimeline(value.weather.forecast, observer)
                     Text("Wolken- und Regenkarte", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
@@ -1095,13 +1095,22 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
 }
 
 @Composable
-private fun ForecastTimeline(forecast: List<HourlyForecast>) {
+private fun ForecastTimeline(forecast: List<HourlyForecast>, observer: GeoPoint) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         forecast.forEach { hour ->
-            val score = (100 - hour.cloudCover - min(20.0, hour.windSpeed)).toInt().coerceIn(0, 100)
+            val score = remember(hour, observer) {
+                AstraScoreCalculator.calculate(
+                    cloudCover = hour.cloudCover,
+                    rainProbability = hour.rainProbability,
+                    windSpeed = hour.windSpeed,
+                    visibilityMeters = hour.visibility,
+                    observer = observer,
+                    instant = Instant.now().plusSeconds(hour.hoursFromNow * 3_600L)
+                ).score
+            }
             Card(
                 modifier = Modifier.width(126.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF10243F)),
@@ -1112,7 +1121,7 @@ private fun ForecastTimeline(forecast: List<HourlyForecast>) {
                     Text("☁ ${hour.cloudCover} %", fontSize = 13.sp)
                     Text("Regen ${hour.rainProbability} %", fontSize = 12.sp, color = Color(0xFFAAB8CE))
                     Text("Wind ${hour.windSpeed.format(0)} km/h", fontSize = 12.sp, color = Color(0xFFAAB8CE))
-                    Text("Sicht $score/100", color = if (score >= 60) Color(0xFF76E0A0) else AstraBlue, fontSize = 12.sp)
+                    Text("Astra $score/100", color = if (score >= 60) Color(0xFF76E0A0) else AstraBlue, fontSize = 12.sp)
                 }
             }
         }
@@ -1465,16 +1474,33 @@ private data class AstraScoreBreakdown(
 
 private object AstraScoreCalculator {
     fun calculate(weather: WeatherSnapshot, observer: GeoPoint, instant: Instant): AstraScoreBreakdown {
-        val rainProbability = weather.forecast.firstOrNull()?.rainProbability ?: 0
-        val visibilityKilometers = weather.visibility / 1_000.0
+        return calculate(
+            cloudCover = weather.cloudCover,
+            rainProbability = weather.forecast.firstOrNull()?.rainProbability ?: 0,
+            windSpeed = weather.windSpeed,
+            visibilityMeters = weather.visibility,
+            observer = observer,
+            instant = instant
+        )
+    }
+
+    fun calculate(
+        cloudCover: Int,
+        rainProbability: Int,
+        windSpeed: Double,
+        visibilityMeters: Double,
+        observer: GeoPoint,
+        instant: Instant
+    ): AstraScoreBreakdown {
+        val visibilityKilometers = visibilityMeters / 1_000.0
         val moon = SolarSystemCatalog.horizontal(Body.Moon, observer, instant)
         val moonIllumination = illumination(Body.Moon, instant.toAstroTime()).phaseFraction
 
         val penalties = listOf(
             ScorePenalty(
                 "Bewölkung",
-                (weather.cloudCover * 0.45).roundToInt().coerceIn(0, 45),
-                "${weather.cloudCover} % Wolken · maximal −45"
+                (cloudCover * 0.45).roundToInt().coerceIn(0, 45),
+                "$cloudCover % Wolken · maximal −45"
             ),
             ScorePenalty(
                 "Regenrisiko",
@@ -1483,9 +1509,9 @@ private object AstraScoreCalculator {
             ),
             ScorePenalty(
                 "Wind",
-                (((weather.windSpeed - 5.0).coerceAtLeast(0.0) / 25.0) * 15.0)
+                (((windSpeed - 5.0).coerceAtLeast(0.0) / 25.0) * 15.0)
                     .roundToInt().coerceIn(0, 15),
-                "${weather.windSpeed.format(1)} km/h; bis 5 km/h ohne Abzug · maximal −15"
+                "${windSpeed.format(1)} km/h; bis 5 km/h ohne Abzug · maximal −15"
             ),
             ScorePenalty(
                 "Sichtweite",
@@ -2056,9 +2082,11 @@ internal object AstronomyEngine {
 
 private data class HourlyForecast(
     val time: String,
+    val hoursFromNow: Int,
     val cloudCover: Int,
     val rainProbability: Int,
-    val windSpeed: Double
+    val windSpeed: Double,
+    val visibility: Double
 )
 
 private data class WeatherSnapshot(
@@ -2108,12 +2136,14 @@ private object WeatherRepository {
                     for (i in 0 until times.length()) {
                         if (times.getString(i).startsWith(currentHour)) { index = i; break }
                     }
-                    val forecast = (index until min(index + 25, times.length()) step 3).map { i ->
+                    val forecast = (index until min(index + 24, times.length())).map { i ->
                         HourlyForecast(
                             time = times.getString(i).takeLast(5),
+                            hoursFromNow = i - index,
                             cloudCover = cloudCover.optInt(i, 0),
                             rainProbability = rainProbability.optInt(i, 0),
-                            windSpeed = hourlyWind.optDouble(i, 0.0)
+                            windSpeed = hourlyWind.optDouble(i, 0.0),
+                            visibility = visibilities.optDouble(i, 10_000.0)
                         )
                     }
                     WeatherSnapshot(
