@@ -38,6 +38,10 @@ The generated subset remains available under CC BY-SA 4.0.
 - Rain radar tiles and timeline metadata: RainViewer Weather Maps API, free for personal and
   educational use with attribution, https://www.rainviewer.com/api.html
 - Cloud-cover values: Open-Meteo, https://open-meteo.com/
+- Local horizon elevations: Open-Meteo Elevation API using the 90-metre Copernicus GLO-90
+  digital elevation model, https://open-meteo.com/en/docs/elevation-api
+- Open-Meteo data license: Creative Commons Attribution 4.0 (CC BY 4.0) for
+  non-commercial use, https://open-meteo.com/en/licence
 - Base map: © OpenStreetMap contributors, used according to the OSM tile usage policy,
   https://operations.osmfoundation.org/policies/tiles/
 - Map renderer: Leaflet 1.9.4, BSD-2-Clause, https://leafletjs.com/
@@ -57,7 +61,7 @@ Meteor-shower maxima can vary and the calculated score is not an official observ
 - Source: https://github.com/cosinekitty/astronomy
 - License: MIT
 - Used for topocentric Sun, Moon and planet positions, illumination, constellation lookup,
-  and local solar/lunar eclipse calculations.
+  galactic-coordinate rotation, and local solar/lunar eclipse calculations.
 - Full license text: `LICENSES/Astronomy-Engine-MIT.txt`
 
 ## Night-light map

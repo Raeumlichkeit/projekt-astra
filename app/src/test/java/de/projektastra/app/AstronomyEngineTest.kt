@@ -35,6 +35,35 @@ class AstronomyEngineTest {
     }
 
     @Test
+    fun `milky way projection forms a complete valid galactic band`() {
+        val band = MilkyWayModel.horizontalBand(
+            GeoPoint(52.52, 13.405, 34.0),
+            Instant.parse("2026-09-05T20:00:00Z")
+        )
+
+        assertEquals(121, band.size)
+        assertTrue(band.all { it.azimuth in 0.0..360.0 })
+        assertTrue(band.all { it.altitude in -90.0..90.0 })
+    }
+
+    @Test
+    fun `terrain profile interpolates across north without a seam`() {
+        val profile = TerrainProfile(
+            samples = listOf(
+                TerrainSample(0.0, 4.0),
+                TerrainSample(90.0, 8.0),
+                TerrainSample(180.0, 2.0),
+                TerrainSample(270.0, 6.0)
+            ),
+            observerElevationMeters = 100.0
+        )
+
+        assertEquals(5.0, profile.altitudeAt(315.0), 0.001)
+        assertEquals(5.0, profile.altitudeAt(-45.0), 0.001)
+        assertEquals(4.0, profile.altitudeAt(360.0), 0.001)
+    }
+
+    @Test
     fun `next Berlin solar eclipse agrees with NASA 2027 event date`() {
         val eclipse = localSolarEclipsesAfter(
             Time(2027, 1, 1, 0, 0, 0.0),

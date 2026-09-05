@@ -87,6 +87,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -108,12 +109,15 @@ import io.github.cosinekitty.astronomy.EquatorEpoch
 import io.github.cosinekitty.astronomy.Observer
 import io.github.cosinekitty.astronomy.Refraction
 import io.github.cosinekitty.astronomy.Time as AstroTime
+import io.github.cosinekitty.astronomy.Vector
 import io.github.cosinekitty.astronomy.constellation
 import io.github.cosinekitty.astronomy.equator
 import io.github.cosinekitty.astronomy.horizon
 import io.github.cosinekitty.astronomy.illumination
 import io.github.cosinekitty.astronomy.localSolarEclipsesAfter
 import io.github.cosinekitty.astronomy.lunarEclipsesAfter
+import io.github.cosinekitty.astronomy.rotationEqjEqd
+import io.github.cosinekitty.astronomy.rotationGalEqj
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -134,6 +138,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val Night = Color(0xFF07101F)
@@ -367,6 +372,7 @@ private fun SkyScreen(
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
     var showCalibration by remember { mutableStateOf(false) }
+    var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
     var manualAzimuth by remember { mutableFloatStateOf(180f) }
     var manualAltitude by remember { mutableFloatStateOf(35f) }
     var manualFov by remember { mutableFloatStateOf(95f) }
@@ -378,6 +384,16 @@ private fun SkyScreen(
     }
     val viewAzimuth = if (arEnabled) orientation.azimuth else manualAzimuth
     val viewAltitude = if (arEnabled) orientation.altitude else manualAltitude
+    LaunchedEffect(
+        (observer.latitude * 1_000).roundToInt(),
+        (observer.longitude * 1_000).roundToInt()
+    ) {
+        terrainState = TerrainState.Loading
+        TerrainRepository.load(observer) { terrainState = it }
+    }
+    val milkyWay = remember(observer) {
+        MilkyWayModel.horizontalBand(observer, Instant.now())
+    }
     val visible = remember(observer, orientation.azimuth, orientation.altitude, showDeepSky) {
         val solarSystem = SolarSystemCatalog.at(observer, Instant.now())
         val catalog = if (showDeepSky) stars + solarSystem + deepSkyObjects else stars + solarSystem
@@ -411,6 +427,8 @@ private fun SkyScreen(
                 viewAltitude = viewAltitude.toDouble(),
                 horizontalFov = if (arEnabled) cameraFov else manualFov.toDouble(),
                 arMode = arEnabled,
+                milkyWay = milkyWay,
+                terrainProfile = (terrainState as? TerrainState.Ready)?.profile,
                 gesturesEnabled = !arEnabled,
                 onViewChange = { azimuth, altitude, fov ->
                     manualAzimuth = azimuth.toFloat()
@@ -485,6 +503,17 @@ private fun SkyScreen(
                     fontSize = 12.sp
                 )
             }
+            Text(
+                when (terrainState) {
+                    TerrainState.Loading -> "Geländeprofil wird geladen …"
+                    is TerrainState.Ready -> "Geländehorizont · GLO-90"
+                    TerrainState.Unavailable -> "Flacher Horizont · Gelände offline"
+                },
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+                    .background(Night.copy(alpha = 0.72f), RoundedCornerShape(10.dp)).padding(7.dp),
+                color = Color(0xFFAAB8CE),
+                fontSize = 10.sp
+            )
             if (!orientation.available) {
                 Text(
                     "Kein Richtungssensor – statische Ansicht",
@@ -629,6 +658,8 @@ private fun SkyCanvas(
     viewAltitude: Double,
     horizontalFov: Double,
     arMode: Boolean,
+    milkyWay: List<HorizontalCoordinates>,
+    terrainProfile: TerrainProfile?,
     gesturesEnabled: Boolean,
     onViewChange: (azimuth: Double, altitude: Double, fov: Double) -> Unit,
     onSelect: (VisibleObject) -> Unit
@@ -676,6 +707,7 @@ private fun SkyCanvas(
             )
     ) {
         drawSkyGrid(viewAzimuth, viewAltitude)
+        drawMilkyWay(milkyWay, viewAzimuth, viewAltitude, horizontalFov)
         val projected = objects.mapNotNull { item ->
             project(item.position, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)?.let { item to it }
         }
@@ -700,21 +732,6 @@ private fun SkyCanvas(
                     }
                 )
             }
-        }
-        val verticalFov = horizontalFov * size.height / size.width
-        val horizonY = (size.height * (0.5 - (0.0 - viewAltitude) / verticalFov)).toFloat()
-        if (horizonY in 0f..size.height) {
-            drawLine(StarGold.copy(alpha = 0.65f), Offset(0f, horizonY), Offset(size.width, horizonY), 2f)
-            drawContext.canvas.nativeCanvas.drawText(
-                "HORIZONT",
-                18f,
-                horizonY - 10f,
-                android.graphics.Paint().apply {
-                    color = android.graphics.Color.rgb(255, 217, 138)
-                    textSize = 24f
-                    alpha = 190
-                }
-            )
         }
         projected.forEach { (item, point) ->
             val objectData = item.celestial
@@ -759,6 +776,84 @@ private fun SkyCanvas(
                 )
             }
         }
+        drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
+    }
+}
+
+private fun DrawScope.drawMilkyWay(
+    band: List<HorizontalCoordinates>,
+    viewAzimuth: Double,
+    viewAltitude: Double,
+    horizontalFov: Double
+) {
+    if (band.size < 2) return
+    band.zipWithNext().forEach { (from, to) ->
+        val start = project(from, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
+        val end = project(to, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
+        if (start != null && end != null && abs(start.x - end.x) < size.width * 0.25f) {
+            drawLine(Color(0xFF96BFFF).copy(alpha = 0.035f), start, end, 76f)
+            drawLine(Color(0xFFB8D2FF).copy(alpha = 0.07f), start, end, 34f)
+            drawLine(Color(0xFFD5E3FF).copy(alpha = 0.23f), start, end, 2f)
+        }
+    }
+    band.asSequence().filterIndexed { index, _ -> index % 20 == 0 }
+        .mapNotNull { project(it, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov) }
+        .firstOrNull { it.x in 70f..size.width - 210f && it.y in 40f..size.height - 40f }
+        ?.let { point ->
+            drawContext.canvas.nativeCanvas.drawText(
+                "MILCHSTRASSE",
+                point.x,
+                point.y - 18f,
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.rgb(184, 210, 255)
+                    textSize = 23f
+                    alpha = 165
+                }
+            )
+        }
+}
+
+private fun DrawScope.drawTerrainHorizon(
+    profile: TerrainProfile?,
+    viewAzimuth: Double,
+    viewAltitude: Double,
+    horizontalFov: Double,
+    arMode: Boolean
+) {
+    val verticalFov = horizontalFov * size.height / size.width
+    val points = (0..120).map { step ->
+        val fraction = step / 120.0
+        val azimuth = normalizeDegrees(viewAzimuth - horizontalFov / 2.0 + horizontalFov * fraction)
+        val altitude = profile?.altitudeAt(azimuth) ?: 0.0
+        Offset(
+            (size.width * fraction).toFloat(),
+            (size.height * (0.5 - (altitude - viewAltitude) / verticalFov)).toFloat()
+        )
+    }
+    if (points.none { it.y in -20f..size.height + 20f }) return
+    val ground = Path().apply {
+        moveTo(points.first().x, points.first().y)
+        points.drop(1).forEach { lineTo(it.x, it.y) }
+        lineTo(size.width, size.height)
+        lineTo(0f, size.height)
+        close()
+    }
+    drawPath(ground, Color(0xFF03070D).copy(alpha = if (arMode) 0.30f else 0.97f))
+    points.zipWithNext().forEach { (start, end) ->
+        drawLine(StarGold.copy(alpha = 0.72f), start, end, 2.2f)
+    }
+    val labelPoint = points[3]
+    if (labelPoint.y in 20f..size.height - 10f) {
+        drawContext.canvas.nativeCanvas.drawText(
+            if (profile == null) "HORIZONT" else "GELÄNDEHORIZONT",
+            18f,
+            labelPoint.y - 10f,
+            android.graphics.Paint().apply {
+                color = android.graphics.Color.rgb(255, 217, 138)
+                textSize = 24f
+                alpha = 200
+            }
+        )
     }
 }
 
@@ -974,7 +1069,7 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                     Button(onClick = ::refresh) { Text("Erneut versuchen") }
                 }
                 is WeatherState.Ready -> {
-                    ObservationScore(value.weather)
+                    ObservationScore(value.weather, observer)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         WeatherTile("Temperatur", "${value.weather.temperature.format(1)} °C", Modifier.weight(1f))
                         WeatherTile("Bewölkung", "${value.weather.cloudCover}%", Modifier.weight(1f))
@@ -1043,7 +1138,7 @@ private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.6"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.7"
         }
     }
 
@@ -1326,7 +1421,7 @@ private fun LightPollutionMap(observer: GeoPoint) {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.6"
+            settings.userAgentString = settings.userAgentString + " ProjektAstra/0.7"
         }
     }
 
@@ -1357,9 +1452,68 @@ private fun LightPollutionMap(observer: GeoPoint) {
     }
 }
 
+private data class ScorePenalty(
+    val label: String,
+    val points: Int,
+    val explanation: String
+)
+
+private data class AstraScoreBreakdown(
+    val score: Int,
+    val penalties: List<ScorePenalty>
+)
+
+private object AstraScoreCalculator {
+    fun calculate(weather: WeatherSnapshot, observer: GeoPoint, instant: Instant): AstraScoreBreakdown {
+        val rainProbability = weather.forecast.firstOrNull()?.rainProbability ?: 0
+        val visibilityKilometers = weather.visibility / 1_000.0
+        val moon = SolarSystemCatalog.horizontal(Body.Moon, observer, instant)
+        val moonIllumination = illumination(Body.Moon, instant.toAstroTime()).phaseFraction
+
+        val penalties = listOf(
+            ScorePenalty(
+                "Bewölkung",
+                (weather.cloudCover * 0.45).roundToInt().coerceIn(0, 45),
+                "${weather.cloudCover} % Wolken · maximal −45"
+            ),
+            ScorePenalty(
+                "Regenrisiko",
+                (rainProbability * 0.15).roundToInt().coerceIn(0, 15),
+                "$rainProbability % in der nächsten Prognosestufe · maximal −15"
+            ),
+            ScorePenalty(
+                "Wind",
+                (((weather.windSpeed - 5.0).coerceAtLeast(0.0) / 25.0) * 15.0)
+                    .roundToInt().coerceIn(0, 15),
+                "${weather.windSpeed.format(1)} km/h; bis 5 km/h ohne Abzug · maximal −15"
+            ),
+            ScorePenalty(
+                "Sichtweite",
+                (((20.0 - visibilityKilometers).coerceAtLeast(0.0) / 20.0) * 15.0)
+                    .roundToInt().coerceIn(0, 15),
+                "${visibilityKilometers.format(1)} km; ab 20 km ohne Abzug · maximal −15"
+            ),
+            ScorePenalty(
+                "Mondlicht",
+                (moonIllumination * sin(Math.toRadians(moon.altitude)).coerceAtLeast(0.0) * 10.0)
+                    .roundToInt().coerceIn(0, 10),
+                "${(moonIllumination * 100.0).format(0)} % beleuchtet, ${moon.altitude.format(0)}° hoch · maximal −10"
+            )
+        )
+        return AstraScoreBreakdown(
+            score = (100 - penalties.sumOf { it.points }).coerceIn(0, 100),
+            penalties = penalties
+        )
+    }
+}
+
 @Composable
-private fun ObservationScore(weather: WeatherSnapshot) {
-    val score = (100 - weather.cloudCover - min(25.0, weather.windSpeed * 1.4)).toInt().coerceIn(0, 100)
+private fun ObservationScore(weather: WeatherSnapshot, observer: GeoPoint) {
+    var detailsVisible by remember { mutableStateOf(false) }
+    val breakdown = remember(weather, observer) {
+        AstraScoreCalculator.calculate(weather, observer, Instant.now())
+    }
+    val score = breakdown.score
     val label = when {
         score >= 75 -> "Sehr gute Sicht"
         score >= 50 -> "Brauchbare Sicht"
@@ -1367,15 +1521,54 @@ private fun ObservationScore(weather: WeatherSnapshot) {
         else -> "Ungünstig"
     }
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF122A49))) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(64.dp).background(AstraBlue.copy(alpha = 0.18f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) { Text("$score", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = AstraBlue) }
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(label, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("Vorläufiger Astra-Score", color = Color(0xFFAAB8CE))
+        Column {
+            Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(64.dp).background(AstraBlue.copy(alpha = 0.18f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) { Text("$score", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = AstraBlue) }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(label, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Astra-Score von 100 Punkten", color = Color(0xFFAAB8CE))
+                }
+            }
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Row(
+                Modifier.fillMaxWidth().clickable { detailsVisible = !detailsVisible }.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.Info, contentDescription = null, tint = AstraBlue)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (detailsVisible) "Berechnung ausblenden" else "Wie setzt sich der Score zusammen?",
+                    color = AstraBlue,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (detailsVisible) {
+                Column(
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(11.dp)
+                ) {
+                    Text("Startwert 100", fontWeight = FontWeight.Bold)
+                    breakdown.penalties.forEach { penalty ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                Text(penalty.label, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(penalty.explanation, color = Color(0xFFAAB8CE), fontSize = 12.sp)
+                            }
+                            Text("−${penalty.points}", color = if (penalty.points > 0) StarGold else Color(0xFF76E0A0))
+                        }
+                    }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    Text("Ergebnis: $score / 100", fontWeight = FontWeight.Bold, color = AstraBlue)
+                    Text(
+                        "Die Lichtverschmutzung ist derzeit nur auf der Nachtlichtkarte sichtbar und noch nicht als Messwert im Score enthalten. Das Geländeprofil beeinflusst die sichtbare Horizontlinie, aber nicht das Wetter.",
+                        color = Color(0xFFAAB8CE),
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }
@@ -1398,7 +1591,7 @@ private fun AboutScreen() {
         Text("Projekt Astra", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Dein Begleiter für den Nachthimmel", color = AstraBlue)
         Spacer(Modifier.height(24.dp))
-        Text("Die App berechnet 5.041 reale Sterne, Sonne, Mond, Planeten und optional 1.016 Deep-Sky-Objekte direkt für deinen Standort.")
+        Text("Die App berechnet 5.041 reale Sterne, Sonne, Mond, Planeten, die galaktische Ebene der Milchstraße und optional 1.016 Deep-Sky-Objekte direkt für deinen Standort.")
         Spacer(Modifier.height(18.dp))
         Text("Hinweis", fontWeight = FontWeight.Bold)
         Text("Die Sensoranzeige ist eine Orientierungshilfe. Für präzise Beobachtungen sollte der Kompass kalibriert und magnetische Störquellen vermieden werden.")
@@ -1409,8 +1602,9 @@ private fun AboutScreen() {
         Text("Wetterkarte: RainViewer, Open-Meteo und OpenStreetMap", color = Color(0xFFAAB8CE))
         Text("Ereignisse: NASA/GSFC und International Meteor Organization", color = Color(0xFFAAB8CE))
         Text("Nachtlichtkarte: NASA GIBS / VIIRS", color = Color(0xFFAAB8CE))
+        Text("Geländehorizont: Open-Meteo Elevation API / Copernicus GLO-90", color = Color(0xFFAAB8CE))
         Text("Ephemeriden: Astronomy Engine 2.1.19 · MIT", color = Color(0xFFAAB8CE))
-        Text("Version 0.6.0 · Sonnensystem, Vorhersage und Kalibrierung", color = Color(0xFFAAB8CE))
+        Text("Version 0.7.0 · Milchstraße, Geländehorizont und erklärbarer Astra-Score", color = Color(0xFFAAB8CE))
     }
 }
 
@@ -1627,6 +1821,142 @@ private fun solarSystemColor(body: Body?): Color = when (body) {
     Body.Uranus -> Color(0xFF99E9ED)
     Body.Neptune -> Color(0xFF7398FF)
     else -> AstraBlue
+}
+
+internal object MilkyWayModel {
+    fun horizontalBand(observer: GeoPoint, instant: Instant): List<HorizontalCoordinates> {
+        val time = instant.toAstroTime()
+        val place = observer.toAstroObserver()
+        val galacticToJ2000 = rotationGalEqj()
+        val j2000ToDate = rotationEqjEqd(time)
+        return (0..360 step 3).map { longitude ->
+            val angle = Math.toRadians(longitude.toDouble())
+            val galactic = Vector(cos(angle), sin(angle), 0.0, time)
+            val equatorial = j2000ToDate.rotate(galacticToJ2000.rotate(galactic)).toEquatorial()
+            val topocentric = horizon(
+                time,
+                place,
+                equatorial.ra,
+                equatorial.dec,
+                Refraction.None
+            )
+            HorizontalCoordinates(topocentric.azimuth, topocentric.altitude)
+        }
+    }
+}
+
+internal data class TerrainSample(val azimuth: Double, val altitude: Double)
+
+internal data class TerrainProfile(
+    val samples: List<TerrainSample>,
+    val observerElevationMeters: Double
+) {
+    fun altitudeAt(azimuth: Double): Double {
+        if (samples.isEmpty()) return 0.0
+        val normalized = normalizeDegrees(azimuth)
+        val step = 360.0 / samples.size
+        val lower = floor(normalized / step).toInt().coerceIn(samples.indices)
+        val upper = (lower + 1) % samples.size
+        val fraction = (normalized - lower * step) / step
+        return samples[lower].altitude * (1.0 - fraction) + samples[upper].altitude * fraction
+    }
+}
+
+private sealed interface TerrainState {
+    data object Loading : TerrainState
+    data class Ready(val profile: TerrainProfile) : TerrainState
+    data object Unavailable : TerrainState
+}
+
+private object TerrainRepository {
+    private val distancesMeters = doubleArrayOf(1_000.0, 3_000.0, 8_000.0, 20_000.0)
+    private val bearings = (0 until 360 step 15).toList()
+    private var cachedPoint: GeoPoint? = null
+    private var cachedProfile: TerrainProfile? = null
+
+    fun load(point: GeoPoint, callback: (TerrainState) -> Unit) {
+        val cached = cachedProfile
+        val origin = cachedPoint
+        if (cached != null && origin != null &&
+            abs(origin.latitude - point.latitude) < 0.002 &&
+            abs(origin.longitude - point.longitude) < 0.002
+        ) {
+            callback(TerrainState.Ready(cached))
+            return
+        }
+        thread(name = "astra-terrain") {
+            val result = runCatching {
+                val targets = buildList {
+                    add(point.latitude to point.longitude)
+                    bearings.forEach { bearing ->
+                        distancesMeters.forEach { distance ->
+                            add(destinationPoint(point, bearing.toDouble(), distance))
+                        }
+                    }
+                }
+                val latitudes = targets.joinToString(",") { String.format(Locale.US, "%.5f", it.first) }
+                val longitudes = targets.joinToString(",") { String.format(Locale.US, "%.5f", it.second) }
+                val url = java.net.URL(
+                    "https://api.open-meteo.com/v1/elevation?latitude=$latitudes&longitude=$longitudes"
+                )
+                val connection = (url.openConnection() as java.net.HttpURLConnection).apply {
+                    connectTimeout = 10_000
+                    readTimeout = 10_000
+                    requestMethod = "GET"
+                }
+                try {
+                    if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
+                    val json = org.json.JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                    val elevations = json.getJSONArray("elevation")
+                    if (elevations.length() != targets.size) error("Unvollständiges Höhenprofil")
+                    val observerElevation = elevations.getDouble(0)
+                    val samples = bearings.mapIndexed { bearingIndex, bearing ->
+                        val maxAngle = distancesMeters.indices.maxOf { distanceIndex ->
+                            val distance = distancesMeters[distanceIndex]
+                            val elevationIndex = 1 + bearingIndex * distancesMeters.size + distanceIndex
+                            val terrainElevation = elevations.getDouble(elevationIndex)
+                            val curvatureDrop = distance * distance / (2.0 * 6_371_000.0 * (7.0 / 6.0))
+                            Math.toDegrees(
+                                atan2(terrainElevation - observerElevation - 1.7 - curvatureDrop, distance)
+                            )
+                        }
+                        TerrainSample(bearing.toDouble(), maxAngle.coerceIn(-5.0, 35.0))
+                    }
+                    TerrainProfile(samples, observerElevation)
+                } finally {
+                    connection.disconnect()
+                }
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                callback(
+                    result.fold(
+                        onSuccess = {
+                            cachedPoint = point
+                            cachedProfile = it
+                            TerrainState.Ready(it)
+                        },
+                        onFailure = { TerrainState.Unavailable }
+                    )
+                )
+            }
+        }
+    }
+
+    private fun destinationPoint(origin: GeoPoint, bearingDegrees: Double, distanceMeters: Double): Pair<Double, Double> {
+        val angularDistance = distanceMeters / 6_371_000.0
+        val bearing = Math.toRadians(bearingDegrees)
+        val latitude = Math.toRadians(origin.latitude)
+        val longitude = Math.toRadians(origin.longitude)
+        val targetLatitude = asin(
+            sin(latitude) * cos(angularDistance) +
+                cos(latitude) * sin(angularDistance) * cos(bearing)
+        )
+        val targetLongitude = longitude + atan2(
+            sin(bearing) * sin(angularDistance) * cos(latitude),
+            cos(angularDistance) - sin(latitude) * sin(targetLatitude)
+        )
+        return Math.toDegrees(targetLatitude) to Math.toDegrees(targetLongitude)
+    }
 }
 
 internal object SolarSystemCatalog {
