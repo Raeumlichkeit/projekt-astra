@@ -43,6 +43,10 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - Referenztests für Ephemeriden und die lokale Sonnenfinsternis vom 2. August 2027
 - Dunkles, für Nachtbeobachtung optimiertes Compose-UI
 
+## Offene Aufgaben
+
+Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Objektsuche und Nachführen, Zeitsteuerung, Vollbildmodus, Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+
 ## Lokal starten
 
 1. Das Verzeichnis in einer aktuellen Version von Android Studio öffnen.

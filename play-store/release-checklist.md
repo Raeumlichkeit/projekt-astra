@@ -1,10 +1,12 @@
 # Release-Checkliste für Google Play
 
+Die funktionale Ausbauplanung und Testprioritäten stehen in der [Aufgabenliste](../AUFGABEN.md). Akkutests haben niedrige Priorität; funktionale Geräte- und Sicherheitsprüfungen werden davon getrennt behandelt.
+
 ## Im Projekt erledigt
 
 - `targetSdk 37` und `compileSdk 37`
 - eindeutige Application-ID `de.projektastra.app`
-- Version 1.1.1 / Version Code 10
+- Version 1.1.2 / Version Code 11
 - Android App Bundle konfiguriert
 - R8-Minifizierung und Ressourcenverkleinerung für Release
 - optionale lokale Upload-Key-Konfiguration ohne Geheimnisse im Repository
