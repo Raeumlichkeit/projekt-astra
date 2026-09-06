@@ -1,7 +1,7 @@
-Neu in Projekt Astra 1.1.1:
+Neu in Projekt Astra 1.1.2:
 
-• Offline-Start mit freiwilliger Online-Freigabe
-• Gerundeter Wetterstandort, separates genaues Geländeprofil
-• Löschbarer privater Kartencache und verbesserte Datenschutzinformationen
-• Standortzugriff nur bei geöffneter App
-• Abgesicherte Kalenderupdates, WebViews und Backup-Regeln
+• Sternkarte ohne leere Bereiche oberhalb des Zenits
+• Sternbildlinien, Grenzen und Milchstraße bis zum Kartenrand
+• Besser lesbare Sternnamen am Rand
+• Durchgängiger Gelände- und Bodenhorizont
+• Weniger Neuberechnungen beim Schwenken; AR-Ausrichtung unverändert

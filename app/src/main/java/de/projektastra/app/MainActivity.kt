@@ -103,11 +103,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -548,6 +551,18 @@ private fun SkyScreen(
     var manualAzimuth by remember { mutableFloatStateOf(180f) }
     var manualAltitude by remember { mutableFloatStateOf(35f) }
     var manualFov by remember { mutableFloatStateOf(95f) }
+    var skyInstant by remember { mutableStateOf(Instant.now()) }
+    LifecycleStartEffect(Unit) {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val tick = object : Runnable {
+            override fun run() {
+                skyInstant = Instant.now()
+                handler.postDelayed(this, 5_000)
+            }
+        }
+        handler.post(tick)
+        onStopOrDispose { handler.removeCallbacks(tick) }
+    }
     LaunchedEffect(arEnabled) {
         if (!arEnabled) {
             manualAzimuth = orientation.azimuth
@@ -565,11 +580,10 @@ private fun SkyScreen(
             TerrainRepository.load(observer) { terrainState = it }
         } else terrainState = TerrainState.Unavailable
     }
-    val milkyWay = remember(observer) {
-        MilkyWayModel.horizontalBand(observer, Instant.now())
+    val milkyWay = remember(observer, skyInstant) {
+        MilkyWayModel.horizontalBand(observer, skyInstant)
     }
-    val horizontalBoundaries = remember(observer, iauBoundaries) {
-        val instant = Instant.now()
+    val horizontalBoundaries = remember(observer, iauBoundaries, skyInstant) {
         iauBoundaries.map { boundary ->
             HorizontalConstellationBoundary(
                 boundary.abbreviation,
@@ -578,17 +592,17 @@ private fun SkyScreen(
                         point.raHours,
                         point.decDegrees,
                         observer,
-                        instant
+                        skyInstant
                     )
                 }
             )
         }
     }
-    val visible = remember(observer, orientation.azimuth, orientation.altitude, showDeepSky) {
-        val solarSystem = SolarSystemCatalog.at(observer, Instant.now())
+    val visible = remember(observer, skyInstant, showDeepSky) {
+        val solarSystem = SolarSystemCatalog.at(observer, skyInstant)
         val catalog = if (showDeepSky) stars + solarSystem + deepSkyObjects else stars + solarSystem
         catalog.map {
-            VisibleObject(it, coordinatesAt(it, observer, Instant.now()))
+            VisibleObject(it, coordinatesAt(it, observer, skyInstant))
         }
     }
 
@@ -896,7 +910,7 @@ private fun rememberCameraHorizontalFov(): Double {
 }
 
 @Composable
-private fun SkyCanvas(
+internal fun SkyCanvas(
     objects: List<VisibleObject>,
     viewAzimuth: Double,
     viewAltitude: Double,
@@ -908,26 +922,24 @@ private fun SkyCanvas(
     terrainProfile: TerrainProfile?,
     gesturesEnabled: Boolean,
     onViewChange: (azimuth: Double, altitude: Double, fov: Double) -> Unit,
-    onSelect: (VisibleObject) -> Unit
+    onSelect: (VisibleObject) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val latestAzimuth by rememberUpdatedState(viewAzimuth)
     val latestAltitude by rememberUpdatedState(viewAltitude)
     val latestFov by rememberUpdatedState(horizontalFov)
+    val objectsByHip = remember(objects) { objects.mapNotNull { item -> item.celestial.hipId?.let { it to item } }.toMap() }
     Canvas(
-        Modifier.fillMaxSize()
+        modifier.fillMaxSize().clipToBounds()
             .onSizeChanged { canvasSize = it }
-            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov) {
+            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov, arMode) {
                 detectTapGestures { tap ->
+                    val projection = SkyProjection(viewAzimuth, viewAltitude,
+                        canvasSize.width.toFloat(), canvasSize.height.toFloat(), horizontalFov, perspective = !arMode)
                     val closest = objects.mapNotNull { item ->
-                        project(
-                            item.position,
-                            viewAzimuth,
-                            viewAltitude,
-                            canvasSize.width.toFloat(),
-                            canvasSize.height.toFloat(),
-                            horizontalFov
-                        )?.let { point -> item to hypot((point.x - tap.x).toDouble(), (point.y - tap.y).toDouble()) }
+                        projection.point(item.position, padding = 32f)
+                            ?.let { point -> item to hypot((point.x - tap.x).toDouble(), (point.y - tap.y).toDouble()) }
                     }.minByOrNull { it.second }
                     if (closest != null && closest.second <= 42.0) onSelect(closest.first)
                 }
@@ -952,27 +964,29 @@ private fun SkyCanvas(
                 else Modifier.background(Brush.radialGradient(listOf(Color(0xFF142D50), Night)))
             )
     ) {
+        val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov, perspective = !arMode)
         drawSkyGrid(viewAzimuth, viewAltitude)
-        drawMilkyWay(milkyWay, viewAzimuth, viewAltitude, horizontalFov)
-        drawIauBoundaries(constellationBoundaries, viewAzimuth, viewAltitude, horizontalFov, arMode)
+        drawMilkyWay(milkyWay, projection)
+        drawIauBoundaries(constellationBoundaries, projection, arMode)
         val projected = objects.mapNotNull { item ->
-            project(item.position, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)?.let { item to it }
+            projection.point(item.position, padding = 32f)?.let { item to it }
         }
         val byHip = projected.mapNotNull { (item, point) -> item.celestial.hipId?.let { it to point } }.toMap()
         ConstellationLines.connections.forEach { (from, to) ->
-            val start = byHip[from]
-            val end = byHip[to]
+            val start = objectsByHip[from]?.position
+            val end = objectsByHip[to]?.position
             if (start != null && end != null) {
-                drawLine(AstraBlue.copy(alpha = if (arMode) 0.75f else 0.42f), start, end, 2f)
+                projection.segments(start, end, padding = 1f).forEach { segment ->
+                    drawLine(AstraBlue.copy(alpha = if (arMode) 0.75f else 0.42f), segment.start, segment.end, 2f)
+                }
             }
         }
         ConstellationLines.labels.forEach { label ->
             byHip[label.anchorHip]?.let { point ->
                 if (showConstellationIllustrations) drawConstellationIllustration(label.name, point, arMode)
-                drawContext.canvas.nativeCanvas.drawText(
+                if (projection.contains(point)) drawEdgeLabel(
                     label.name.uppercase(Locale.GERMAN),
-                    point.x + 14f,
-                    point.y + 34f,
+                    point + Offset(14f, 34f),
                     android.graphics.Paint().apply {
                         color = android.graphics.Color.rgb(109, 168, 255)
                         textSize = 24f
@@ -1011,11 +1025,10 @@ private fun SkyCanvas(
                 CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> true
                 else -> objectData.messierId.isNotBlank() || objectData.magnitude < 7.0
             }
-            if (shouldLabel) {
-                drawContext.canvas.nativeCanvas.drawText(
+            if (shouldLabel && projection.contains(point)) {
+                drawEdgeLabel(
                     objectData.name,
-                    point.x + 10f,
-                    point.y - 8f,
+                    point + Offset(10f, -8f),
                     android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
                         textSize = 30f
@@ -1024,36 +1037,26 @@ private fun SkyCanvas(
                 )
             }
         }
-        drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
+        if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
+        else drawSphericalTerrainHorizon(terrainProfile, projection)
     }
 }
 
-private data class HorizontalConstellationBoundary(
+internal data class HorizontalConstellationBoundary(
     val abbreviation: String,
     val points: List<HorizontalCoordinates>
 )
 
 private fun DrawScope.drawIauBoundaries(
     boundaries: List<HorizontalConstellationBoundary>,
-    viewAzimuth: Double,
-    viewAltitude: Double,
-    horizontalFov: Double,
+    projection: SkyProjection,
     arMode: Boolean
 ) {
     boundaries.forEach { boundary ->
         val closed = boundary.points + boundary.points.firstOrNull().orEmpty()
-        closed.zipWithNext().forEach { (from, to) ->
-            val start = project(from, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
-            val end = project(to, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
-            if (start != null && end != null && kotlin.math.abs(start.x - end.x) < size.width * 0.35f) {
-                drawLine(
-                    StarGold.copy(alpha = if (arMode) 0.34f else 0.19f),
-                    start,
-                    end,
-                    if (arMode) 1.5f else 1.1f
-                )
-            }
-        }
+        drawPath(projectedPath(closed, projection, padding = 1f),
+            StarGold.copy(alpha = if (arMode) 0.34f else 0.19f),
+            style = Stroke(width = if (arMode) 1.5f else 1.1f, join = StrokeJoin.Round))
     }
 }
 
@@ -1122,22 +1125,19 @@ private fun DrawScope.drawConstellationIllustration(name: String, anchor: Offset
 
 private fun DrawScope.drawMilkyWay(
     band: List<HorizontalCoordinates>,
-    viewAzimuth: Double,
-    viewAltitude: Double,
-    horizontalFov: Double
+    projection: SkyProjection
 ) {
     if (band.size < 2) return
-    band.zipWithNext().forEach { (from, to) ->
-        val start = project(from, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
-        val end = project(to, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov)
-        if (start != null && end != null && abs(start.x - end.x) < size.width * 0.25f) {
-            drawLine(Color(0xFF96BFFF).copy(alpha = 0.035f), start, end, 76f)
-            drawLine(Color(0xFFB8D2FF).copy(alpha = 0.07f), start, end, 34f)
-            drawLine(Color(0xFFD5E3FF).copy(alpha = 0.23f), start, end, 2f)
-        }
-    }
+    // Keep the glow visible even when its centerline is just beyond the viewport.
+    val path = projectedPath(band, projection, padding = 38f)
+    drawPath(path, Color(0xFF96BFFF).copy(alpha = 0.035f),
+        style = Stroke(76f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawPath(path, Color(0xFFB8D2FF).copy(alpha = 0.07f),
+        style = Stroke(34f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawPath(path, Color(0xFFD5E3FF).copy(alpha = 0.23f),
+        style = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     band.asSequence().filterIndexed { index, _ -> index % 20 == 0 }
-        .mapNotNull { project(it, viewAzimuth, viewAltitude, size.width, size.height, horizontalFov) }
+        .mapNotNull { projection.point(it) }
         .firstOrNull { it.x in 70f..size.width - 210f && it.y in 40f..size.height - 40f }
         ?.let { point ->
             drawContext.canvas.nativeCanvas.drawText(
@@ -1160,6 +1160,7 @@ private fun DrawScope.drawTerrainHorizon(
     horizontalFov: Double,
     arMode: Boolean
 ) {
+    if (size.width <= 0f || size.height <= 0f) return
     val verticalFov = horizontalFov * size.height / size.width
     val points = (0..120).map { step ->
         val fraction = step / 120.0
@@ -1170,7 +1171,8 @@ private fun DrawScope.drawTerrainHorizon(
             (size.height * (0.5 - (altitude - viewAltitude) / verticalFov)).toFloat()
         )
     }
-    if (points.none { it.y in -20f..size.height + 20f }) return
+    // An off-screen horizon above the viewport still covers the view with ground.
+    if (points.all { it.y > size.height + 20f }) return
     val ground = Path().apply {
         moveTo(points.first().x, points.first().y)
         points.drop(1).forEach { lineTo(it.x, it.y) }
@@ -1197,6 +1199,35 @@ private fun DrawScope.drawTerrainHorizon(
     }
 }
 
+private fun DrawScope.drawSphericalTerrainHorizon(profile: TerrainProfile?, projection: SkyProjection) {
+    val horizon = (0..120).map { step ->
+        val azimuth = step * 3.0
+        HorizontalCoordinates(azimuth, profile?.altitudeAt(azimuth) ?: 0.0)
+    }
+    val nadir = HorizontalCoordinates(0.0, -90.0)
+    val ground = Path().apply {
+        horizon.zipWithNext().forEach { (from, to) ->
+            val polygon = projection.polygon(listOf(from, to, nadir))
+            if (polygon.size >= 3) {
+                moveTo(polygon.first().x, polygon.first().y)
+                polygon.drop(1).forEach { lineTo(it.x, it.y) }
+                close()
+            }
+        }
+    }
+    drawPath(ground, Color(0xFF03070D).copy(alpha = 0.97f))
+    drawPath(projectedPath(horizon, projection, padding = 1.1f), StarGold.copy(alpha = 0.72f),
+        style = Stroke(2.2f, join = StrokeJoin.Round))
+    horizon.mapNotNull { projection.point(it) }.minByOrNull { it.x }?.let { point ->
+        drawEdgeLabel(if (profile == null) "HORIZONT" else "GELÄNDEHORIZONT", point + Offset(18f, -10f),
+            android.graphics.Paint().apply {
+                color = android.graphics.Color.rgb(255, 217, 138)
+                textSize = 24f
+                alpha = 200
+            })
+    }
+}
+
 private fun DrawScope.drawSkyGrid(viewAzimuth: Double, viewAltitude: Double) {
     val grid = Color.White.copy(alpha = 0.10f)
     repeat(7) { i ->
@@ -1212,21 +1243,42 @@ private fun DrawScope.drawSkyGrid(viewAzimuth: Double, viewAltitude: Double) {
     drawLine(Color.White.copy(alpha = 0.35f), center - Offset(0f, 12f), center + Offset(0f, 12f), 1f)
 }
 
-private fun project(
-    horizontal: HorizontalCoordinates,
-    centerAzimuth: Double,
-    centerAltitude: Double,
-    width: Float,
-    height: Float,
-    horizontalFov: Double
-): Offset? {
-    val azDelta = normalizeSignedDegrees(horizontal.azimuth - centerAzimuth)
-    val altDelta = horizontal.altitude - centerAltitude
-    val verticalFov = horizontalFov * height / width
-    if (abs(azDelta) > horizontalFov / 2 || abs(altDelta) > verticalFov / 2) return null
-    return Offset(
-        (width * (0.5 + azDelta / horizontalFov)).toFloat(),
-        (height * (0.5 - altDelta / verticalFov)).toFloat()
+private fun projectedPath(
+    points: List<HorizontalCoordinates>,
+    projection: SkyProjection,
+    padding: Float
+): Path = Path().apply {
+    var previousEnd: Offset? = null
+    points.zipWithNext().forEach { (from, to) ->
+        val segments = projection.segments(from, to, padding)
+        if (segments.isEmpty()) previousEnd = null
+        segments.forEach { segment ->
+            if (previousEnd?.let { (it - segment.start).getDistance() < 0.25f } != true) {
+                moveTo(segment.start.x, segment.start.y)
+            }
+            lineTo(segment.end.x, segment.end.y)
+            previousEnd = segment.end
+        }
+    }
+}
+
+private fun DrawScope.drawEdgeLabel(text: String, desired: Offset, paint: android.graphics.Paint) {
+    val padding = 8f
+    val availableWidth = size.width - padding * 2
+    val metrics = paint.fontMetrics
+    val minBaseline = padding - metrics.ascent
+    val maxBaseline = size.height - padding - metrics.descent
+    if (availableWidth <= 0f || minBaseline > maxBaseline) return
+    val label = if (paint.measureText(text) <= availableWidth) text else {
+        val remaining = availableWidth - paint.measureText("…")
+        if (remaining <= 0f) return
+        text.take(paint.breakText(text, true, remaining, null)) + "…"
+    }
+    drawContext.canvas.nativeCanvas.drawText(
+        label,
+        desired.x.coerceIn(padding, (size.width - padding - paint.measureText(label)).coerceAtLeast(padding)),
+        desired.y.coerceIn(minBaseline, maxBaseline),
+        paint
     )
 }
 
@@ -2424,7 +2476,7 @@ internal data class CelestialObject(
     val astronomyDescription: String = ""
 )
 internal data class HorizontalCoordinates(val azimuth: Double, val altitude: Double)
-private data class VisibleObject(val celestial: CelestialObject, val position: HorizontalCoordinates)
+internal data class VisibleObject(val celestial: CelestialObject, val position: HorizontalCoordinates)
 
 private object StarCatalog {
     private val fallbackObjects = listOf(

@@ -25,6 +25,8 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - stündliche 24-Stunden-Zeitleiste für Wolken, Regenwahrscheinlichkeit, Wind und Beobachtungssicht
 - aufklappbare Astra-Score-Erklärung mit Einzelabzügen für Bewölkung, Regen, Wind, Sichtweite, Mondlicht und Lichtverschmutzung
 - manuell verschiebbare und zoombare Sternkarte; AR bleibt separat sensorgesteuert
+- sphärische Perspektive der manuellen Karte ohne leere Zenitbereiche; randgenaues Clipping von Sternbildlinien, IAU-Grenzen und Milchstraße (1.1.2)
+- lesbare Randbeschriftungen und durchgängiger Geländehorizont; gemeinsame Himmelszeit mit Aktualisierung alle fünf Sekunden im Vordergrund
 - standortbezogener Himmelskalender für Meteorschauer sowie Sonnen- und Mondfinsternisse
 - automatische Online-Aktualisierung der jährlichen IMO-Meteorschauer-Maxima mit Offline-Fallback
 - exakt berechnete lokale Sonnenfinsterniskontakte, Bedeckung und Sonnenhöhe
