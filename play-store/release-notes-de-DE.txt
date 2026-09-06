@@ -1,7 +1,8 @@
-Neu in Projekt Astra 1.1.3:
+Neu in Projekt Astra 1.1.4:
 
-• Strukturierte Milchstraße aus offline gebündelten NASA/Gaia-Daten
-• Natürlichere Sterne und dezenter Kartenhintergrund
-• Neue Ebenenauswahl mit natürlicher/verstärkter Ansicht und Helligkeitsregler
-• Optionale dezente Milchstraßenüberlagerung in AR
-• Gemeinsame J2000-Ausrichtung von Sternen, Sternbildgrenzen und Textur
+• Offline-Suche nach Sternen, Planeten, Deep Sky und Sternbildern
+• Alternativnamen sowie HIP-, Messier- und NGC-Nummern finden
+• Ziele aus Suche und Beobachtungsliste direkt in der Karte öffnen
+• Ausgewählte Objekte optional nachführen; Wischen beendet das Nachführen
+• Höhenlage und Gelände-Verdeckung direkt am Suchtreffer erkennen
+• Keine gespeicherte Suchhistorie

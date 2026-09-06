@@ -37,6 +37,8 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - interaktive NASA-VIIRS-Nachtlichtkarte als Orientierung für Lichtverschmutzung
 - numerischer VIIRS-Lichtindex, geschätzte Bortle-Klasse und Einbezug in den Astra-Score
 - lokale Favoriten und Beobachtungslisten mit einstellbaren Ereigniserinnerungen
+- Offline-Objektsuche mit Alternativnamen, HIP-/Messier-/NGC-Nummern und getrennten Sternbild-/Galaxientreffern (1.1.4)
+- Ziele aus Suche und Beobachtungsliste zentrieren, markieren und optional in der manuellen Karte nachführen
 - geführte Kompass-/AR-Kalibrierung mit Android-Sensorgenauigkeit
 - globaler, dauerhaft gespeicherter Rotlichtmodus mit Schnellschalter in der Sternkarte
 - adaptives und monochromes App-Icon sowie Android-12+-Startbildschirm
@@ -47,7 +49,17 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 
 ## Offene Aufgaben
 
-Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Objektsuche und Nachführen, Zeitsteuerung und Vollbildmodus (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Die visuelle Kartenüberarbeitung P1.4 ist in 1.1.3 implementiert; eine zusätzliche Prüfung auf echten älteren Geräten steht aus. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Zeitsteuerung und Vollbildmodus (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Objektsuche/Nachführen P1.1 ist in 1.1.4, die visuelle Kartenüberarbeitung P1.4 in 1.1.3 implementiert; eine zusätzliche Prüfung auf echten älteren Geräten steht aus. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+
+## Objektsuche und Nachführen (1.1.4)
+
+Die Lupe im Kopf der Sternkarte öffnet die Offline-Suche. Beispiele: `Saturn`, `Andromeda`, `M31`, `NGC224`, `HIP 91262`, `Wega`, `Polarstern` oder `Plejaden`. Katalognummern werden unabhängig von Leerzeichen, Bindestrichen und Großschreibung erkannt; exakte Namen stehen vor Teiltreffern. Die Suche umfasst den gebündelten Katalog, keinen vollständigen Online-Objektkatalog. Übliche deutsche Alternativnamen und vorhandene Bayer-Kürzel sind ergänzt. Sternbilder verwenden ihren lateinischen Namen sowie für häufige Sternbilder deutsche Namen; der angezeigte Referenzstern dient zum Zentrieren und zur Höhenangabe, nicht als Aussage über die Sichtbarkeit des gesamten Sternbilds. Der Große Wagen ist separat als Sternmuster gekennzeichnet.
+
+Antippen öffnet das Ziel in der manuellen Karte. Deep-Sky-Treffer schalten bei Bedarf Deep Sky ein, Sternbilder die Grenzen. Auch **Plan → In Karte öffnen** führt direkt zum Ziel. Unter der Karte stehen Höhenlage, Zentrieren, Infos und optionales Nachführen; der Zielring bleibt hinter dem Gelände verborgen. **Nachführen** hält das Ziel mit der gemeinsamen Himmelszeit im Zentrum (Aktualisierung alle fünf Sekunden). Wischen oder Zoomen, eine neue Auswahl, Ausrichten und der Wechsel in AR beenden es. AR bleibt sensorgesteuert. **Zentrieren** aus AR wechselt bewusst zur manuellen Karte.
+
+Suche und Auswahl benötigen keine Online-Freigabe. Suchtext wird beim Schließen verworfen; es gibt keine Suchhistorie, Synchronisierung oder zusätzliche Berechtigung. Höhenlage und Gelände-Verdeckung sind geometrische Hinweise; Wetter, Tageslicht und Mondhelligkeit sind keine Suchfilter. Ohne Standortfreigabe ist Berlin deutlich als Demo angegeben. Automatisierte Tests decken Suchbegriffe, Katalognummern, Ebenenbedarf, Nachführzustand, Gelände-Verdeckung und den tatsächlich gebündelten Katalog ab; Kartensprung, Plan-Navigation, Wisch-Abbruch und Rotlicht wurden zusätzlich im Emulator bedient.
+
+Prüfstand 1.1.4: 53 JVM-Tests und 18 Android-Instrumentationstests erfolgreich (Android-17-Emulator), Lint ohne Befund; Debug-APK und technisches Release-Bundle gebaut. Der Katalogtest prüft auch Suchziele für alle 88 Sternbilder. Tests auf echten Geräten und die separate Store-Freigabe stehen weiterhin aus.
 
 ## Neue Himmelsdarstellung (1.1.3)
 

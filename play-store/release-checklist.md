@@ -6,7 +6,7 @@ Die funktionale Ausbauplanung und Testprioritäten stehen in der [Aufgabenliste]
 
 - `targetSdk 37` und `compileSdk 37`
 - eindeutige Application-ID `de.projektastra.app`
-- Version 1.1.3 / Version Code 12
+- Version 1.1.4 / Version Code 13
 - Android App Bundle konfiguriert
 - R8-Minifizierung und Ressourcenverkleinerung für Release
 - optionale lokale Upload-Key-Konfiguration ohne Geheimnisse im Repository

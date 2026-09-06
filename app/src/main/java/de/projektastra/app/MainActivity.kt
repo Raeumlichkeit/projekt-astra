@@ -64,6 +64,7 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -269,6 +270,7 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
     var permissionGranted by remember { mutableStateOf(false) }
     var cameraGranted by remember { mutableStateOf(false) }
     var arEnabled by remember { mutableStateOf(false) }
+    var pendingSkyObjectId by remember { mutableStateOf<String?>(null) }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     var favoriteObjectIds by remember { mutableStateOf(ObservationStore.favoriteObjectIds(context)) }
@@ -370,6 +372,9 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     arEnabled = arEnabled,
                     redLightMode = redLightMode,
                     favoriteObjectIds = favoriteObjectIds,
+                    requestedObjectId = pendingSkyObjectId,
+                    consumeObjectRequest = { pendingSkyObjectId = null },
+                    useManualMap = { arEnabled = false },
                     toggleRedLightMode = { setRedLightMode(!redLightMode) },
                     toggleFavorite = { objectData ->
                         favoriteObjectIds = ObservationStore.setObjectFavorite(
@@ -407,6 +412,11 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     AstraTab.PLAN -> ObservationPlanScreen(
                         location = location,
                         favoriteIds = favoriteObjectIds,
+                        openObject = { id ->
+                            pendingSkyObjectId = id
+                            arEnabled = false
+                            tab = AstraTab.SKY
+                        },
                         savedEvents = savedEvents,
                         reminderHours = reminderHours,
                         notificationsGranted = notificationsGranted,
@@ -529,6 +539,9 @@ private fun SkyScreen(
     arEnabled: Boolean,
     redLightMode: Boolean,
     favoriteObjectIds: Set<String>,
+    requestedObjectId: String?,
+    consumeObjectRequest: () -> Unit,
+    useManualMap: () -> Unit,
     toggleRedLightMode: () -> Unit,
     toggleFavorite: (CelestialObject) -> Unit,
     onLocationPermissionResult: (Boolean) -> Unit,
@@ -542,6 +555,9 @@ private fun SkyScreen(
     val iauBoundaries = remember { IauBoundaryCatalog.load(context) }
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
+    var showSearch by remember { mutableStateOf(false) }
+    var selection by remember { mutableStateOf(SkyTargetSelection()) }
+    var targetMessage by remember { mutableStateOf<String?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
     var showBoundaries by remember { mutableStateOf(false) }
     var showIllustrations by remember { mutableStateOf(false) }
@@ -565,14 +581,15 @@ private fun SkyScreen(
         handler.post(tick)
         onStopOrDispose { handler.removeCallbacks(tick) }
     }
+    var wasArEnabled by remember { mutableStateOf(arEnabled) }
     LaunchedEffect(arEnabled) {
-        if (!arEnabled) {
+        if (wasArEnabled && !arEnabled && selection.target == null) {
             manualAzimuth = orientation.azimuth
             manualAltitude = orientation.altitude
         }
+        if (arEnabled) selection = selection.release()
+        wasArEnabled = arEnabled
     }
-    val viewAzimuth = if (arEnabled) orientation.azimuth else manualAzimuth
-    val viewAltitude = if (arEnabled) orientation.altitude else manualAltitude
     LaunchedEffect(
         (observer.latitude * 1_000).roundToInt(),
         (observer.longitude * 1_000).roundToInt()
@@ -583,6 +600,47 @@ private fun SkyScreen(
         } else terrainState = TerrainState.Unavailable
     }
     val coordinateFrame = remember(observer, skyInstant) { SkyCoordinateFrame(observer, skyInstant) }
+    val solarSystem = remember(observer, skyInstant) { SolarSystemCatalog.at(observer, skyInstant) }
+    val searchIndex = remember(stars, deepSkyObjects) {
+        SkySearchIndex((stars + deepSkyObjects + solarSystem).map { SkySearchTarget(it) } + constellationSearchTargets(stars))
+    }
+    val resolveTarget: (SkySearchTarget) -> CelestialObject = { target ->
+        solarSystem.firstOrNull { it.catalogId == target.objectData.catalogId } ?: target.objectData
+    }
+    val positionOf: (SkySearchTarget) -> HorizontalCoordinates = { target ->
+        val data = resolveTarget(target)
+        data.solarBody?.let { SolarSystemCatalog.horizontal(it, observer, skyInstant) }
+            ?: coordinateFrame.horizontal(data.raHours, data.decDegrees)
+    }
+    val targetPosition = selection.target?.let(positionOf)
+    val viewAzimuth = if (arEnabled) orientation.azimuth
+        else if (selection.tracking && targetPosition != null) targetPosition.azimuth.toFloat() else manualAzimuth
+    val viewAltitude = if (arEnabled) orientation.altitude
+        else if (selection.tracking && targetPosition != null) targetPosition.altitude.toFloat() else manualAltitude
+    val openTarget: (SkySearchTarget) -> Unit = { target ->
+        val position = positionOf(target)
+        useManualMap()
+        selection = selection.select(target)
+        manualAzimuth = position.azimuth.toFloat()
+        manualAltitude = position.altitude.toFloat()
+        if (target.needsDeepSky) showDeepSky = true
+        if (target.regionName != null) showBoundaries = true
+        targetMessage = when {
+            target.needsDeepSky -> "Deep-Sky-Ebene eingeschaltet"
+            target.regionName != null -> "Sternbildgrenzen eingeschaltet · Referenzpunkt: ${target.objectData.name}"
+            else -> null
+        }
+        showSearch = false
+        selected = null
+    }
+    LaunchedEffect(requestedObjectId, solarSystem) {
+        if (requestedObjectId != null) {
+            val data = (stars + deepSkyObjects + solarSystem).firstOrNull { it.catalogId == requestedObjectId }
+            if (data != null) openTarget(SkySearchTarget(data))
+            else targetMessage = "Das vorgemerkte Objekt ist im Offline-Katalog nicht verfügbar."
+            consumeObjectRequest()
+        }
+    }
     val horizontalBoundaries = remember(coordinateFrame, iauBoundaries) {
         iauBoundaries.map { boundary ->
             HorizontalConstellationBoundary(
@@ -594,7 +652,6 @@ private fun SkyScreen(
         }
     }
     val visible = remember(observer, skyInstant, showDeepSky) {
-        val solarSystem = SolarSystemCatalog.at(observer, skyInstant)
         val catalog = if (showDeepSky) stars + solarSystem + deepSkyObjects else stars + solarSystem
         catalog.map {
             VisibleObject(it, it.solarBody?.let { body -> SolarSystemCatalog.horizontal(body, observer, skyInstant) }
@@ -617,6 +674,9 @@ private fun SkyScreen(
                 Text("Live-Himmel", fontSize = 26.sp, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { showSearch = true }) {
+                    Icon(Icons.Rounded.Search, "Objekte suchen", tint = AstraTextMuted)
+                }
                 IconButton(onClick = toggleRedLightMode) {
                     Icon(
                         Icons.Rounded.DarkMode,
@@ -647,13 +707,22 @@ private fun SkyScreen(
                 terrainProfile = (terrainState as? TerrainState.Ready)?.profile,
                 gesturesEnabled = !arEnabled,
                 onViewChange = { azimuth, altitude, fov ->
+                    if (selection.tracking) targetMessage = "Nachführen durch manuelle Bedienung beendet"
+                    selection = selection.release()
                     manualAzimuth = azimuth.toFloat()
                     manualAltitude = altitude.toFloat()
                     manualFov = fov.toFloat()
                 },
-                onSelect = { selected = it },
+                onSelect = {
+                    manualAzimuth = viewAzimuth
+                    manualAltitude = viewAltitude
+                    selection = selection.select(SkySearchTarget(it.celestial))
+                    targetMessage = null
+                    selected = it
+                },
                 drawBackground = arEnabled,
-                showGrid = appearance.showGrid
+                showGrid = appearance.showGrid,
+                targetPosition = targetPosition.takeUnless { selection.target?.needsDeepSky == true && !showDeepSky }
             )
             Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(cardinalDirection(viewAzimuth), color = StarGold, fontWeight = FontWeight.Bold)
@@ -664,7 +733,12 @@ private fun SkyScreen(
                 horizontalAlignment = Alignment.End
             ) {
                 Button(
-                    onClick = toggleAr,
+                    onClick = {
+                        manualAzimuth = viewAzimuth
+                        manualAltitude = viewAltitude
+                        selection = selection.release()
+                        toggleAr()
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (arEnabled) StarGold else NightBlue.copy(alpha = 0.88f),
                         contentColor = if (arEnabled) Night else Color.White
@@ -695,6 +769,7 @@ private fun SkyScreen(
                 if (!arEnabled) {
                     Button(
                         onClick = {
+                            selection = selection.release()
                             manualAzimuth = orientation.azimuth
                             manualAltitude = orientation.altitude
                             manualFov = 95f
@@ -721,7 +796,7 @@ private fun SkyScreen(
                     Text("Kalibrieren")
                 }
             }
-            if (!arEnabled) {
+            if (!arEnabled && selection.target == null) {
                 Text(
                     "Wischen zum Bewegen · Zwei Finger zum Zoomen",
                     modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
@@ -741,7 +816,7 @@ private fun SkyScreen(
                 color = Color(0xFFAAB8CE),
                 fontSize = 10.sp
             )
-            if (!orientation.available) {
+            if (!orientation.available && arEnabled) {
                 Text(
                     "Kein Richtungssensor – statische Ansicht",
                     modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
@@ -750,6 +825,39 @@ private fun SkyScreen(
                 )
             }
         }
+
+        selection.target?.let { target ->
+            Column(Modifier.fillMaxWidth().background(NightBlue).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("${target.name} · ${target.typeLabel}", fontWeight = FontWeight.Bold)
+                targetPosition?.let { position ->
+                    Text("${targetVisibility(position, (terrainState as? TerrainState.Ready)?.profile).label} · Höhe ${position.altitude.format(1)}°",
+                        fontSize = 12.sp, color = StarGold)
+                }
+                targetMessage?.let { Text(it, fontSize = 11.sp, color = AstraTextMuted) }
+                if (target.needsDeepSky && !showDeepSky) Text("Deep-Sky-Ebene ausgeblendet", fontSize = 12.sp, color = StarGold)
+                if (selection.tracking) Text("Nachführen aktiv · Wischen beendet es", fontSize = 12.sp, color = AstraBlue)
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    if (!arEnabled) TextButton(onClick = {
+                        manualAzimuth = viewAzimuth
+                        manualAltitude = viewAltitude
+                        selection = if (selection.tracking) selection.release() else selection.follow()
+                        targetMessage = null
+                    }) { Text(if (selection.tracking) "Nachführen stoppen" else "Nachführen") }
+                    TextButton(onClick = { openTarget(target) }) { Text("Zentrieren") }
+                    if (target.regionName == null) TextButton(onClick = {
+                        selected = VisibleObject(resolveTarget(target), positionOf(target))
+                    }) { Text("Infos") }
+                    TextButton(onClick = {
+                        manualAzimuth = viewAzimuth
+                        manualAltitude = viewAltitude
+                        selection = SkyTargetSelection()
+                        targetMessage = null
+                    }) { Text("Schließen") }
+                }
+            }
+        }
+        if (selection.target == null) targetMessage?.let { Text(it, Modifier.padding(12.dp), color = StarGold) }
 
         if (!locationPermissionGranted) {
             Column(
@@ -796,11 +904,19 @@ private fun SkyScreen(
         }
     }
 
-    selected?.let { item ->
+    if (showSearch) SkySearchSheet(searchIndex, redLightMode, location == null,
+        (terrainState as? TerrainState.Ready)?.profile, positionOf,
+        dismiss = { showSearch = false }, open = openTarget)
+
+    selected?.let { original ->
+        val target = SkySearchTarget(original.celestial)
+        val item = VisibleObject(resolveTarget(target), positionOf(target))
         ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = NightBlue) {
+            TextButton(onClick = { openTarget(target) }) { Text("In Karte zentrieren") }
             ObjectDetails(
                 item = item,
                 observer = observer,
+                terrain = (terrainState as? TerrainState.Ready)?.profile,
                 isFavorite = item.celestial.catalogId in favoriteObjectIds,
                 toggleFavorite = { toggleFavorite(item.celestial) }
             )
@@ -931,7 +1047,8 @@ internal fun SkyCanvas(
     onSelect: (VisibleObject) -> Unit,
     modifier: Modifier = Modifier,
     drawBackground: Boolean = true,
-    showGrid: Boolean = false
+    showGrid: Boolean = false,
+    targetPosition: HorizontalCoordinates? = null
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val latestAzimuth by rememberUpdatedState(viewAzimuth)
@@ -1057,6 +1174,11 @@ internal fun SkyCanvas(
         }
         if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
         else drawSphericalTerrainHorizon(terrainProfile, projection)
+        targetPosition?.takeIf { targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE }?.let { target ->
+            projection.point(target)?.let { point ->
+                drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
+            }
+        }
     }
 }
 
@@ -1304,6 +1426,7 @@ private fun DrawScope.drawEdgeLabel(text: String, desired: Offset, paint: androi
 private fun ObjectDetails(
     item: VisibleObject,
     observer: GeoPoint,
+    terrain: TerrainProfile?,
     isFavorite: Boolean,
     toggleFavorite: () -> Unit
 ) {
@@ -1339,7 +1462,7 @@ private fun ObjectDetails(
             "RA ${formatRa(objectData.raHours)} · Dec ${formatDec(objectData.decDegrees)}"
         )
         DetailRow("Aktuelle Position", "Az ${item.position.azimuth.format(1)}° · Höhe ${item.position.altitude.format(1)}°")
-        DetailRow("Sichtbarkeit", if (item.position.altitude >= 0.0) "über dem Horizont" else "unter dem Horizont")
+        DetailRow("Höhenlage", targetVisibility(item.position, terrain).label)
         DetailRow("Helligkeit", "${objectData.magnitude.format(2)} mag")
         if (objectData.constellation.isNotBlank()) DetailRow("Sternbild", objectData.constellation)
         if (objectData.solarBody != null) {
@@ -2182,6 +2305,7 @@ private fun WeatherTile(label: String, value: String, modifier: Modifier = Modif
 private fun ObservationPlanScreen(
     location: GeoPoint?,
     favoriteIds: Set<String>,
+    openObject: (String) -> Unit,
     savedEvents: List<SavedSkyEvent>,
     reminderHours: Int,
     notificationsGranted: Boolean,
@@ -2300,6 +2424,7 @@ private fun ObservationPlanScreen(
                             color = if (position.altitude > 0) AstraSuccess else AstraTextMuted,
                             fontSize = 12.sp
                         )
+                        TextButton(onClick = { openObject(objectData.catalogId) }) { Text("In Karte öffnen") }
                     }
                     IconButton(onClick = { removeFavorite(objectData.catalogId) }) {
                         Icon(Icons.Rounded.Star, "Favorit entfernen", tint = StarGold)
@@ -2492,12 +2617,13 @@ internal data class CelestialObject(
     val solarBody: Body? = null,
     val distanceAu: Double? = null,
     val phaseFraction: Double? = null,
-    val astronomyDescription: String = ""
+    val astronomyDescription: String = "",
+    val searchAliases: List<String> = emptyList()
 )
 internal data class HorizontalCoordinates(val azimuth: Double, val altitude: Double)
 internal data class VisibleObject(val celestial: CelestialObject, val position: HorizontalCoordinates)
 
-private object StarCatalog {
+internal object StarCatalog {
     private val fallbackObjects = listOf(
         CelestialObject("Sirius", "HIP 32349", 6.7525, -16.7161, -1.46, 8.6, "A1V"),
         CelestialObject("Canopus", "HIP 30438", 6.3992, -52.6957, -0.74, 310.0, "A9II"),
@@ -2538,14 +2664,16 @@ private object StarCatalog {
                         properMotionDec = fields.getOrNull(10)?.toDoubleOrNull(),
                         radialVelocity = fields.getOrNull(11)?.toDoubleOrNull(),
                         absoluteMagnitude = fields.getOrNull(12)?.toDoubleOrNull(),
-                        luminositySolar = fields.getOrNull(13)?.toDoubleOrNull()
+                        luminositySolar = fields.getOrNull(13)?.toDoubleOrNull(),
+                        searchAliases = fields.getOrNull(14)?.takeIf { it.isNotBlank() }
+                            ?.let { listOf("$it ${fields[8]}") }.orEmpty()
                     )
                 }.toList()
         }.ifEmpty { fallbackObjects }
     }.getOrDefault(fallbackObjects)
 }
 
-private object DeepSkyCatalog {
+internal object DeepSkyCatalog {
     fun load(context: Context): List<CelestialObject> = runCatching {
         context.assets.open("openngc_deep_sky.tsv").bufferedReader().useLines { lines ->
             lines.filterNot { it.startsWith("#") || it.isBlank() }

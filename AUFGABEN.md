@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 6. September 2026 · Ausgangsbasis: Version 1.1.2.
+Stand: 6. September 2026 · Aktueller Ausbau: Version 1.1.4.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -8,12 +8,14 @@ Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bes
 
 ### 1. Objektsuche und Nachführen
 
-- [ ] Offline-Suche nach Namen, gebräuchlichen Alternativnamen und Katalognummern, beispielsweise Saturn, Andromeda, M31 und HIP-Nummern.
-- [ ] Ergebnisse mit Objekttyp und aktueller Sichtbarkeit anzeigen; zwischen Andromeda als Sternbild und als Galaxie unterscheiden.
-- [ ] Suchtreffer und Einträge der Beobachtungsliste direkt in der Sternkarte öffnen und zentrieren.
-- [ ] Optional ein ausgewähltes Objekt in der manuellen Karte nachführen; Nachführen beim manuellen Verschieben beenden und den Zustand klar anzeigen.
-- [ ] Auswahl und Suche auch ohne Online-Freigabe nutzbar halten; keine Suchhistorie ohne ausdrückliche Nutzerentscheidung speichern.
-- [ ] Tests für alternative Namen, leere Ergebnisse, ausgeblendete Deep-Sky-Ebene und Ziele unter dem Gelände-/Horizont ergänzen.
+- [x] Offline-Suche nach Namen, gebräuchlichen Alternativnamen und Katalognummern, beispielsweise Saturn, Andromeda, M31 und HIP-Nummern.
+- [x] Ergebnisse mit Objekttyp und aktueller Sichtbarkeit anzeigen; zwischen Andromeda als Sternbild und als Galaxie unterscheiden.
+- [x] Suchtreffer und Einträge der Beobachtungsliste direkt in der Sternkarte öffnen und zentrieren.
+- [x] Optional ein ausgewähltes Objekt in der manuellen Karte nachführen; Nachführen beim manuellen Verschieben beenden und den Zustand klar anzeigen.
+- [x] Auswahl und Suche auch ohne Online-Freigabe nutzbar halten; keine Suchhistorie ohne ausdrückliche Nutzerentscheidung speichern.
+- [x] Tests für alternative Namen, leere Ergebnisse, ausgeblendete Deep-Sky-Ebene und Ziele unter dem Gelände-/Horizont ergänzen.
+
+Umgesetzt in Version 1.1.4. Die Suche umfasst die gebündelten Kataloge und Sternbilder mit einem ausdrücklich benannten Referenzstern. Suchtext bleibt nur während der geöffneten Suche im Arbeitsspeicher. Deep-Sky-Treffer schalten ihre Ebene ein; Nachführen aktualisiert alle fünf Sekunden und endet bei manueller Bedienung, einem neuen Ziel oder Wechsel in AR. Die Höhenlage beschreibt keine Wetter-/Tageslicht-Sichtbarkeitsprognose. Reale Kamera-/Sensortests bleiben bei P2.9.
 
 ### 2. Zeitsteuerung der Sternkarte
 

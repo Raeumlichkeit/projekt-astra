@@ -148,6 +148,34 @@ class SkyRenderingTest {
         assertTrue("Off-screen horizon must not reveal sky", Color.blue(ground) < 23)
     }
 
+    @Test fun selectedTargetHasVisibleRingAtMapCenter() {
+        render { modifier ->
+            SkyCanvas(emptyList(), 0.0, 30.0, 40.0, false, emptyList(), emptyList(),
+                false, null, false, { _, _, _ -> }, {}, modifier,
+                targetPosition = HorizontalCoordinates(0.0, 30.0))
+        }
+        val pixels = capture()
+        val y = pixels.height / 2
+        val goldPixels = (0 until pixels.width).count { x ->
+            val pixel = pixels.getPixel(x, y)
+            Color.red(pixel) > 180 && Color.green(pixel) > 120
+        }
+        assertTrue("Selected target ring should cross the center row twice", goldPixels >= 4)
+    }
+
+    @Test fun selectedTargetRingDoesNotLeakThroughTerrain() {
+        render { modifier ->
+            SkyCanvas(emptyList(), 0.0, 10.0, 40.0, false, emptyList(), emptyList(),
+                false, TerrainProfile(listOf(TerrainSample(0.0, 40.0)), 100.0), false,
+                { _, _, _ -> }, {}, modifier, targetPosition = HorizontalCoordinates(0.0, 10.0))
+        }
+        val pixels = capture()
+        val y = pixels.height / 2
+        assertTrue("Terrain must hide the selected target too", (0 until pixels.width).all { x ->
+            Color.red(pixels.getPixel(x, y)) < 30
+        })
+    }
+
     @Test fun starBeyondZenithIsRenderedInsteadOfAnEmptyTopRegion() {
         // Facing north at 80°: this south-facing star is above the zenith in the view.
         val star = VisibleObject(CelestialObject("Zenittest", "TEST", 0.0, 0.0, 0.0, 1.0, "A1V"),
