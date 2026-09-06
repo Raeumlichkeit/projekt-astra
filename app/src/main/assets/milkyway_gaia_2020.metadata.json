@@ -1,0 +1,35 @@
+{
+  "asset": "milkyway_gaia_2020.jpg",
+  "width": 3840,
+  "height": 1920,
+  "bytes": 1465425,
+  "sha256": "6eb620fff7e4742323b5e291a45844cdaff131c7755b3c8a386574db3febb6dc",
+  "format": "JPEG",
+  "color_space": "sRGB (upstream metadata; embedded ICC profile retained)",
+  "projection": "Plate carree / equirectangular",
+  "coordinates": "ICRF / J2000 geocentric right ascension and declination",
+  "mapping": {
+    "u": "fract(0.5 - right_ascension_degrees / 360.0)",
+    "v": "0.5 - declination_degrees / 180.0",
+    "top": "north celestial pole",
+    "bottom": "south celestial pole",
+    "horizontal_seam": "12h right ascension",
+    "texture_center": "0h right ascension, 0 degrees declination"
+  },
+  "scientific_source": "https://svs.gsfc.nasa.gov/4851/",
+  "scientific_source_original": "https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/milkyway_2020_64k.exr",
+  "source_publication_date": "2020-09-09",
+  "upstream_jpeg_page": "https://commons.wikimedia.org/wiki/File:Deep_Star_Maps_2020_%E2%80%93_Milkyway_2020_64k.jpg",
+  "upstream_jpeg_revision": "2024-11-26T15:56:00Z",
+  "download_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Deep_Star_Maps_2020_%E2%80%93_Milkyway_2020_64k.jpg/3840px-Deep_Star_Maps_2020_%E2%80%93_Milkyway_2020_64k.jpg",
+  "download_date": "2026-09-06",
+  "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio (Ernie Wright). Gaia DR2: ESA/Gaia/DPAC. JPEG conversion provided via Wikimedia Commons (PantheraLeo1359531).",
+  "source_terms": "NASA SVS declares its content public domain unless otherwise noted; the Wikimedia JPEG file page permits redistribution, derivatives and commercial use with attribution.",
+  "source_terms_urls": [
+    "https://svs.gsfc.nasa.gov/help/",
+    "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+    "https://commons.wikimedia.org/wiki/File:Deep_Star_Maps_2020_%E2%80%93_Milkyway_2020_64k.jpg#Licensing"
+  ],
+  "preprocessing": "None by Projekt Astra: the published Wikimedia 3840x1920 JPEG is copied byte-for-byte. Upstream converted the NASA EXR to an sRGB JPEG and Wikimedia generated this thumbnail; the upstream tone-mapping recipe is not documented.",
+  "content_note": "Visualization from measured stellar positions, brightness and colors; not a photographic panorama. Bright Hipparcos and Tycho stars are omitted. Faint Gaia stars, dark dust-lane structure, clusters and the Magellanic Clouds remain. This is a fixed background, not a calibrated surface-brightness measurement or naked-eye visibility prediction."
+}

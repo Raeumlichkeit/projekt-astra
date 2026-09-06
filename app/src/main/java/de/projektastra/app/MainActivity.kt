@@ -543,9 +543,11 @@ private fun SkyScreen(
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
-    var showBoundaries by remember { mutableStateOf(true) }
+    var showBoundaries by remember { mutableStateOf(false) }
     var showIllustrations by remember { mutableStateOf(false) }
     var showLayersPanel by remember { mutableStateOf(false) }
+    var appearance by remember { mutableStateOf(SkyAppearancePreferences.load(context)) }
+    var textureReady by remember { mutableStateOf<Boolean?>(null) }
     var showCalibration by remember { mutableStateOf(false) }
     var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
     var manualAzimuth by remember { mutableFloatStateOf(180f) }
@@ -580,20 +582,13 @@ private fun SkyScreen(
             TerrainRepository.load(observer) { terrainState = it }
         } else terrainState = TerrainState.Unavailable
     }
-    val milkyWay = remember(observer, skyInstant) {
-        MilkyWayModel.horizontalBand(observer, skyInstant)
-    }
-    val horizontalBoundaries = remember(observer, iauBoundaries, skyInstant) {
+    val coordinateFrame = remember(observer, skyInstant) { SkyCoordinateFrame(observer, skyInstant) }
+    val horizontalBoundaries = remember(coordinateFrame, iauBoundaries) {
         iauBoundaries.map { boundary ->
             HorizontalConstellationBoundary(
                 boundary.abbreviation,
                 boundary.points.map { point ->
-                    AstronomyEngine.horizontalCoordinates(
-                        point.raHours,
-                        point.decDegrees,
-                        observer,
-                        skyInstant
-                    )
+                    coordinateFrame.horizontal(point.raHours, point.decDegrees)
                 }
             )
         }
@@ -602,8 +597,13 @@ private fun SkyScreen(
         val solarSystem = SolarSystemCatalog.at(observer, skyInstant)
         val catalog = if (showDeepSky) stars + solarSystem + deepSkyObjects else stars + solarSystem
         catalog.map {
-            VisibleObject(it, coordinatesAt(it, observer, skyInstant))
+            VisibleObject(it, it.solarBody?.let { body -> SolarSystemCatalog.horizontal(body, observer, skyInstant) }
+                ?: coordinateFrame.horizontal(it.raHours, it.decDegrees))
         }
+    }
+    val textureState = remember(coordinateFrame, viewAzimuth, viewAltitude, arEnabled, manualFov, cameraFov, appearance) {
+        SkyTextureState(coordinateFrame, viewAzimuth.toDouble(), viewAltitude.toDouble(),
+            if (arEnabled) cameraFov else manualFov.toDouble(), arEnabled, appearance)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -630,15 +630,18 @@ private fun SkyScreen(
             }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))) {
             if (arEnabled && cameraPermissionGranted) CameraPreview()
+            if (!arEnabled || (appearance.showInAr && appearance.mode != MilkyWayMode.OFF)) {
+                SkyTextureLayer(textureState, Modifier.fillMaxSize(), onStatus = { textureReady = it })
+            }
             SkyCanvas(
                 objects = visible,
                 viewAzimuth = viewAzimuth.toDouble(),
                 viewAltitude = viewAltitude.toDouble(),
                 horizontalFov = if (arEnabled) cameraFov else manualFov.toDouble(),
                 arMode = arEnabled,
-                milkyWay = milkyWay,
+                milkyWay = emptyList(),
                 constellationBoundaries = if (showBoundaries) horizontalBoundaries else emptyList(),
                 showConstellationIllustrations = showIllustrations,
                 terrainProfile = (terrainState as? TerrainState.Ready)?.profile,
@@ -648,7 +651,9 @@ private fun SkyScreen(
                     manualAltitude = altitude.toFloat()
                     manualFov = fov.toFloat()
                 },
-                onSelect = { selected = it }
+                onSelect = { selected = it },
+                drawBackground = arEnabled,
+                showGrid = appearance.showGrid
             )
             Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(cardinalDirection(viewAzimuth), color = StarGold, fontWeight = FontWeight.Bold)
@@ -686,26 +691,6 @@ private fun SkyScreen(
                     )
                 ) {
                     Text(if (showLayersPanel) "Ebenen schließen" else "Ebenen")
-                }
-                if (showLayersPanel) {
-                    Button(
-                        onClick = { showBoundaries = !showBoundaries },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (showBoundaries) AstraBlue else NightBlue.copy(alpha = 0.88f),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Text(if (showBoundaries) "IAU-Grenzen ✓" else "IAU-Grenzen")
-                    }
-                    Button(
-                        onClick = { showIllustrations = !showIllustrations },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (showIllustrations) StarGold else NightBlue.copy(alpha = 0.88f),
-                            contentColor = if (showIllustrations) Night else Color.White
-                        )
-                    ) {
-                        Text(if (showIllustrations) "Bilder ✓" else "Bilder")
-                    }
                 }
                 if (!arEnabled) {
                     Button(
@@ -787,6 +772,27 @@ private fun SkyScreen(
                     pressedCornerRadius = 12.dp
                 )
             }
+        }
+    }
+
+    if (showLayersPanel) {
+        SkySheetTheme(redLightMode) {
+        ModalBottomSheet(onDismissRequest = { showLayersPanel = false }, containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface, scrimColor = Color.Black.copy(alpha = 0.7f)) {
+            SkySheetSystemBars(redLightMode)
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Himmel & Ebenen", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                SkyAppearanceControls(appearance, { updated ->
+                    appearance = updated.normalized()
+                    SkyAppearancePreferences.save(context, appearance)
+                }, showBoundaries, { showBoundaries = it }, showIllustrations, { showIllustrations = it })
+                if (textureReady == false) Text("Die Milchstraßentextur ist auf diesem Gerät gerade nicht verfügbar. Sterne und Objektinformationen bleiben nutzbar.",
+                    color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                Text("Milchstraßenhintergrund: NASA/Goddard SVS (Ernie Wright) · Gaia DR2: ESA/Gaia/DPAC. JPEG-Fassung: Wikimedia Commons / PantheraLeo1359531. Offline gebündelte Visualisierung aus Sterndaten, keine Kameraaufnahme.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            }
+        }
         }
     }
 
@@ -923,7 +929,9 @@ internal fun SkyCanvas(
     gesturesEnabled: Boolean,
     onViewChange: (azimuth: Double, altitude: Double, fov: Double) -> Unit,
     onSelect: (VisibleObject) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    drawBackground: Boolean = true,
+    showGrid: Boolean = false
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val latestAzimuth by rememberUpdatedState(viewAzimuth)
@@ -960,12 +968,13 @@ internal fun SkyCanvas(
                 }
             }
             .then(
-                if (arMode) Modifier.background(Color.Black.copy(alpha = 0.28f))
-                else Modifier.background(Brush.radialGradient(listOf(Color(0xFF142D50), Night)))
+                if (!drawBackground) Modifier
+                else if (arMode) Modifier.background(Color.Black.copy(alpha = 0.28f))
+                else Modifier.background(Color(0xFF03070D))
             )
     ) {
         val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov, perspective = !arMode)
-        drawSkyGrid(viewAzimuth, viewAltitude)
+        if (showGrid) drawSkyGrid(viewAzimuth, viewAltitude)
         drawMilkyWay(milkyWay, projection)
         drawIauBoundaries(constellationBoundaries, projection, arMode)
         val projected = objects.mapNotNull { item ->
@@ -977,7 +986,7 @@ internal fun SkyCanvas(
             val end = objectsByHip[to]?.position
             if (start != null && end != null) {
                 projection.segments(start, end, padding = 1f).forEach { segment ->
-                    drawLine(AstraBlue.copy(alpha = if (arMode) 0.75f else 0.42f), segment.start, segment.end, 2f)
+                    drawLine(AstraBlue.copy(alpha = if (arMode) 0.65f else 0.23f), segment.start, segment.end, if (arMode) 2f else 1.1f)
                 }
             }
         }
@@ -990,7 +999,7 @@ internal fun SkyCanvas(
                     android.graphics.Paint().apply {
                         color = android.graphics.Color.rgb(109, 168, 255)
                         textSize = 24f
-                        alpha = if (arMode) 205 else 135
+                        alpha = if (arMode) 205 else 105
                     }
                 )
             }
@@ -1001,11 +1010,20 @@ internal fun SkyCanvas(
                 CelestialType.SUN -> 14f
                 CelestialType.MOON -> 13f
                 CelestialType.PLANET -> (10f - objectData.magnitude.toFloat() * 0.45f).coerceIn(5f, 12f)
-                CelestialType.STAR -> (7.5f - objectData.magnitude.toFloat()).coerceIn(1.4f, 10f)
+                CelestialType.STAR -> (3.4f * 10.0.pow(-0.10 * objectData.magnitude).toFloat()).coerceIn(0.72f, 5.2f)
                 else -> (6f + (objectData.majorAxisArcMinutes ?: 0.0).toFloat() / 12f).coerceIn(6f, 15f)
             }
             when (objectData.objectType) {
-                CelestialType.STAR -> drawCircle(starColor(objectData.colorIndex), radius, point)
+                CelestialType.STAR -> {
+                    val color = starColor(objectData.colorIndex)
+                    val alpha = (1f - (objectData.magnitude.toFloat() - 1.5f).coerceAtLeast(0f) * 0.115f).coerceIn(0.42f, 1f)
+                    if (objectData.magnitude < 2.0) {
+                        drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0f)),
+                            center = point, radius = radius * 4.5f), radius * 4.5f, point)
+                    }
+                    drawCircle(color, radius, point, alpha = alpha)
+                    if (radius > 2f) drawCircle(Color.White, radius * 0.4f, point, alpha = 0.78f)
+                }
                 CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> {
                     drawCircle(solarSystemColor(objectData.solarBody), radius * 1.8f, point, alpha = 0.18f)
                     drawCircle(solarSystemColor(objectData.solarBody), radius, point)
@@ -1215,7 +1233,7 @@ private fun DrawScope.drawSphericalTerrainHorizon(profile: TerrainProfile?, proj
             }
         }
     }
-    drawPath(ground, Color(0xFF03070D).copy(alpha = 0.97f))
+    drawPath(ground, Color(0xFF03070D))
     drawPath(projectedPath(horizon, projection, padding = 1.1f), StarGold.copy(alpha = 0.72f),
         style = Stroke(2.2f, join = StrokeJoin.Round))
     horizon.mapNotNull { projection.point(it) }.minByOrNull { it.x }?.let { point ->
@@ -2370,6 +2388,7 @@ private fun AboutScreen(
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("Datenquellen und Lizenzen", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text("Sternkatalog: HYG v4.1 · CC BY-SA 4.0", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Milchstraße: NASA/Goddard SVS (Ernie Wright) · Gaia DR2: ESA/Gaia/DPAC · JPEG: Wikimedia Commons / PantheraLeo1359531. Nutzung mit Namensnennung; offline gebündelt.", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Sternbildgrenzen: CDS/VizieR VI/49 · IAU/Delporte", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Deep Sky: OpenNGC · CC BY-SA 4.0", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Himmelsaufnahmen: DSS2 via CDS HiPS2FITS", color = AstraTextMuted, fontSize = 12.sp)
@@ -2600,11 +2619,11 @@ private object ConstellationLines {
     )
 }
 
-private fun starColor(colorIndex: Double): Color = when {
-    colorIndex < -0.05 -> Color(0xFFB8D6FF)
-    colorIndex < 0.45 -> Color(0xFFF4F7FF)
-    colorIndex < 1.0 -> Color(0xFFFFEDC2)
-    else -> Color(0xFFFFBF8A)
+private fun starColor(colorIndex: Double): Color {
+    val index = if (colorIndex.isFinite()) colorIndex.coerceIn(-0.4, 2.0) else 0.45
+    val white = Color(0xFFF5F4EE)
+    return if (index < 0.45) androidx.compose.ui.graphics.lerp(Color(0xFFC7DAFF), white, ((index + 0.4) / 0.85).toFloat())
+    else androidx.compose.ui.graphics.lerp(white, Color(0xFFFFCA94), ((index - 0.45) / 1.55).toFloat())
 }
 
 private fun deepSkyColor(type: CelestialType): Color = when (type) {
@@ -2851,24 +2870,7 @@ internal object AstronomyEngine {
         observer: GeoPoint,
         instant: Instant
     ): HorizontalCoordinates {
-        val jd = instant.epochSecond / 86400.0 + 2440587.5
-        val daysSinceJ2000 = jd - 2451545.0
-        val gmst = normalizeDegrees(280.46061837 + 360.98564736629 * daysSinceJ2000)
-        val localSidereal = normalizeDegrees(gmst + observer.longitude)
-        val hourAngle = Math.toRadians(normalizeSignedDegrees(localSidereal - raHours * 15.0))
-        val latitude = Math.toRadians(observer.latitude)
-        val declination = Math.toRadians(decDegrees)
-        val altitude = asin(
-            sin(declination) * sin(latitude) + cos(declination) * cos(latitude) * cos(hourAngle)
-        )
-        val azimuth = atan2(
-            -sin(hourAngle) * cos(declination),
-            sin(declination) * cos(latitude) - cos(declination) * sin(latitude) * cos(hourAngle)
-        )
-        return HorizontalCoordinates(
-            normalizeDegrees(Math.toDegrees(azimuth)),
-            Math.toDegrees(altitude)
-        )
+        return SkyCoordinateFrame(observer, instant).horizontal(raHours, decDegrees)
     }
 }
 

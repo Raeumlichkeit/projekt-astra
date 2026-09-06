@@ -1,7 +1,7 @@
-Neu in Projekt Astra 1.1.2:
+Neu in Projekt Astra 1.1.3:
 
-• Sternkarte ohne leere Bereiche oberhalb des Zenits
-• Sternbildlinien, Grenzen und Milchstraße bis zum Kartenrand
-• Besser lesbare Sternnamen am Rand
-• Durchgängiger Gelände- und Bodenhorizont
-• Weniger Neuberechnungen beim Schwenken; AR-Ausrichtung unverändert
+• Strukturierte Milchstraße aus offline gebündelten NASA/Gaia-Daten
+• Natürlichere Sterne und dezenter Kartenhintergrund
+• Neue Ebenenauswahl mit natürlicher/verstärkter Ansicht und Helligkeitsregler
+• Optionale dezente Milchstraßenüberlagerung in AR
+• Gemeinsame J2000-Ausrichtung von Sternen, Sternbildgrenzen und Textur

@@ -33,6 +33,24 @@ The generated subset remains available under CC BY-SA 4.0.
 - DSS2 colour survey cutouts: CDS HiPS2FITS service, Observatoire astronomique de Strasbourg,
   https://alasky.u-strasbg.fr/hips-image-services/hips2fits
 
+## Offline Milky Way background
+
+- Asset: `app/src/main/assets/milkyway_gaia_2020.jpg` (3840 × 1920, 1,465,425 bytes).
+- Scientific source: NASA/Goddard Space Flight Center Scientific Visualization Studio,
+  *Deep Star Maps 2020*, https://svs.gsfc.nasa.gov/4851/ . Credit: Ernie Wright;
+  Gaia DR2: ESA/Gaia/DPAC. This background omits the bright Hipparcos/Tycho foreground.
+- JPEG version: Wikimedia Commons / PantheraLeo1359531,
+  https://commons.wikimedia.org/wiki/File:Deep_Star_Maps_2020_%E2%80%93_Milkyway_2020_64k.jpg .
+- NASA SVS identifies its content as public domain unless otherwise stated:
+  https://svs.gsfc.nasa.gov/help/ . The linked JPEG page permits reuse, modification,
+  redistribution and commercial use with attribution. No endorsement is implied.
+- The downloaded JPEG is bundled unchanged. GPU display brightness/saturation varies with
+  the selected style; the source is a visualization from stellar data, not a photograph
+  or a calibrated prediction of what the naked eye will see.
+- Registration: ICRF/J2000, plate carrée; RA increases leftward from RA=0h at image centre.
+  Asset provenance, checksum and reproduction: `scripts/MILKY_WAY_ASSET.md` and adjacent
+  `milkyway_gaia_2020.metadata.json`. No runtime image download is performed.
+
 ## Weather map
 
 - Rain radar tiles and timeline metadata: RainViewer Weather Maps API, free for personal and

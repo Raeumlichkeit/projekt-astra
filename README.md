@@ -14,6 +14,8 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - Sternfarben, Horizont sowie erweiterte Linien und Namen markanter Sternbilder
 - vollständige Grenzen aller 88 IAU-Sternbilder sowie optionale, dezente Illustrationen
 - dynamische Milchstraßenebene, passend zu Uhrzeit, Standort und aktuellem Kartenausschnitt
+- strukturierte, offline gebündelte NASA/Gaia-Milchstraße mit Dunkelwolken, natürlichem/verstärktem Darstellungsstil und Helligkeitsregler (1.1.3)
+- dezente Sterne mit kontinuierlichen Farb-/Helligkeitsabstufungen; gemeinsamer J2000-Koordinatenrahmen für Sterne, Grenzen und Himmelsbild
 - lokales 360°-Geländeprofil aus GLO-90-Höhendaten für einen realistisch verdeckten Horizont, mit Offline-Fallback
 - Sonne, Mond und alle sieben von der Erde sichtbaren Planeten mit topozentrischen Ephemeriden
 - aktuelle Planetenhelligkeit, Phase, Entfernung und berechnete zwölfstündige Bahn
@@ -45,7 +47,17 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 
 ## Offene Aufgaben
 
-Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Objektsuche und Nachführen, Zeitsteuerung, Vollbildmodus und eine visuelle Kartenüberarbeitung mit realistischer Milchstraße (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Objektsuche und Nachführen, Zeitsteuerung und Vollbildmodus (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Die visuelle Kartenüberarbeitung P1.4 ist in 1.1.3 implementiert; eine zusätzliche Prüfung auf echten älteren Geräten steht aus. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+
+## Neue Himmelsdarstellung (1.1.3)
+
+Unter **Sternkarte → Ebenen** lässt sich die Milchstraße ausschalten, natürlich-dezent oder verstärkt darstellen und ihre Helligkeit einstellen. Die verstärkte Ansicht ist keine Vorhersage des tatsächlichen Anblicks. Orientierungsgitter, IAU-Grenzen und Illustrationen bleiben zuschaltbar. In AR bleibt die Milchstraße zunächst aus; eine zusätzliche Freigabe aktiviert eine dezente Überlagerung, ohne die Sensorsteuerung zu ändern. Einstellungen bleiben lokal.
+
+Die registrierte NASA/Gaia-Hintergrundkarte ist keine Fotografie und enthält keine hellen Hipparcos-/Tycho-Vordergrundsterne; diese bleiben separat auswählbare Katalogobjekte. Quelle, Nutzungsbedingungen und reproduzierbare Prüfsumme stehen in [MILKY_WAY_ASSET.md](scripts/MILKY_WAY_ASSET.md). Die JPEG-Datei benötigt rund 1,4 MiB im Paket. Die GPU-Textur benötigt höchstens rund 28,1 MiB; auf speicherarmen Geräten oder bei kleineren Texturgrenzen wird niedriger aufgelöst. Das dekodierte CPU-Bitmap wird nach dem Upload freigegeben. Kein Download beim Start oder beim Gradle-Build.
+
+OpenGL ES 2 zeichnet die Himmelsprojektion bedarfsgesteuert auf einem separaten Renderthread; Sensorbewegungen erfordern keine CPU-Bildkonvertierung. Die Vordergrunddarstellung ist bei einem Texturfehler weiter nutzbar. Die Koordinatenberechnung berücksichtigt jetzt Präzession/Nutation statt des bisherigen vereinfachten GMST-Ansatzes. AR-Blickrichtungssteuerung und Offline-/Standortschutz bleiben unverändert. Geometrische Höhen werden ohne atmosphärische Refraktion gezeichnet.
+
+Prüfnachweise: zusätzliche JVM-Tests für Einstellungen und J2000-Transformation; native GPU-Tests für Texturregistrierung, RA-Naht, Kontrast, AR-Transparenz sowie Pause/Fortsetzen. Assetprüfung ohne Netzwerk: `python scripts/prepare_milky_way.py --check` (Pillow erforderlich, nur Entwicklungswerkzeug). Kamera-/Sensorgenauigkeit und Grafiktreiber auf realen Geräten sind damit nicht vollständig nachgewiesen.
 
 ## Lokal starten
 
