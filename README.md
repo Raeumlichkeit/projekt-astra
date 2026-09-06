@@ -45,7 +45,7 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 
 ## Offene Aufgaben
 
-Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Objektsuche und Nachführen, Zeitsteuerung, Vollbildmodus, Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Objektsuche und Nachführen, Zeitsteuerung, Vollbildmodus und eine visuelle Kartenüberarbeitung mit realistischer Milchstraße (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
 
 ## Lokal starten
 

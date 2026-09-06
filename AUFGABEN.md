@@ -33,9 +33,20 @@ Diese Liste beschreibt offene Arbeit, keine bereits eingebauten Funktionen. Best
 - [ ] Aktuelles Sichtfeld beziehungsweise Zoomstufe anzeigen und eine Ansicht-zurücksetzen-Funktion anbieten.
 - [ ] Große Schrift, TalkBack-Beschriftungen, erreichbare Bedienelemente und Rotlichtmodus für die neuen Oberflächen prüfen.
 
+### 4. Visuelle Überarbeitung und realistischerer Sternenhimmel
+
+- [ ] Die normale Sternkarte optisch überarbeiten: natürlicherer Himmel, feinere Helligkeitsabstufungen und weniger schematischer Gesamteindruck.
+- [ ] Das bisherige einfache Milchstraßenband durch eine strukturierte Darstellung mit Dunkelwolken, unterschiedlichen Sternendichten und erkennbarem galaktischem Zentrum ersetzen.
+- [ ] Eine geeignete astronomisch referenzierte Himmels-/Milchstraßentextur auswählen; Lizenz, Quellenangabe, Koordinatensystem und Offline-Bündelung prüfen. Keine beliebige Landschaftsaufnahme oder unregistrierte Illustration als positionsgenaue Himmelskarte verwenden.
+- [ ] Milchstraßenstruktur passend zu Standort, Datum und Uhrzeit auf die Himmelskugel projizieren; bei Verschieben, Zoomen und späterer Zeitsteuerung korrekt mitführen. Doppelte Sterne aus Textur und Objektkatalog vermeiden.
+- [ ] Sternfarben, Größen und Leuchten dezenter und anhand der Kataloghelligkeiten abstimmen; Auswahl und Objektinformationen unabhängig von der visuellen Darstellung erhalten.
+- [ ] Helligkeit beziehungsweise Kontrast der Milchstraße einstellbar machen. Eine verstärkte Astrofoto-Darstellung von einer natürlich-dezenten Ansicht klar unterscheiden; sie ist keine Zusage der tatsächlichen Sichtbarkeit vor Ort.
+- [ ] Gelände-Verdeckung, Rotlichtmodus und gut lesbare Beschriftungen erhalten. AR-Steuerung unverändert lassen und dort eine dezente, separat schaltbare Milchstraßenüberlagerung vorsehen.
+- [ ] Visuelle Vergleichstests an bekannten Himmelspositionen sowie an Kartenrändern, Zenit und Horizont ergänzen; Texturübergänge, Zoomqualität, Ladezeiten und Speicherbedarf prüfen. Akkutests bleiben P3.
+
 ## P2 – Danach
 
-### 4. „Was lohnt sich heute Nacht?“
+### 5. „Was lohnt sich heute Nacht?“
 
 - [ ] Aus vorhandenen Wetter-, Mond-, Dämmerungs- und Objektdaten geeignete Beobachtungszeitfenster berechnen.
 - [ ] Ziele nach Höhe über dem lokalen Gelände, Mondabstand und geeigneter Beobachtungszeit sortieren.
@@ -43,7 +54,7 @@ Diese Liste beschreibt offene Arbeit, keine bereits eingebauten Funktionen. Best
 - [ ] Ziele aus Empfehlungen direkt zur vorhandenen Beobachtungsliste hinzufügen und auf der Karte öffnen.
 - [ ] Datenalter, Prognosegrenzen und fehlende Wetter-/Geländedaten sichtbar machen; keine sichere Sichtbarkeit versprechen.
 
-### 5. Beobachtungstagebuch
+### 6. Beobachtungstagebuch
 
 - [ ] Objekte als beobachtet markieren; Datum, Notizen und optional eigene Fotos hinzufügen.
 - [ ] Beobachtungen ausschließlich lokal speichern; genaue Standortangaben nur optional und bewusst hinzufügen.
@@ -52,20 +63,20 @@ Diese Liste beschreibt offene Arbeit, keine bereits eingebauten Funktionen. Best
 - [ ] Keine automatische Cloud-Synchronisierung oder Änderung der bestehenden Backup-Ausschlüsse einführen.
 - [ ] Importfehler, Größenlimits, Export/Import-Rundlauf und vollständiges Löschen testen.
 
-### 6. Fernglas- und Teleskop-Sichtfeld
+### 7. Fernglas- und Teleskop-Sichtfeld
 
 - [ ] Sichtfeld als Kreis mit frei eingebbarer Winkelgröße über der Karte anzeigen.
 - [ ] Optional lokale Geräteprofile mit Brennweite, Okularbrennweite und scheinbarem Gesichtsfeld anbieten; berechnete Werte als Näherung kennzeichnen.
 - [ ] Kartenansicht passend zum Instrument drehen oder spiegeln; Zustand sichtbar machen und einfach zurücksetzen können.
 - [ ] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
 
-### 7. AR-Zielhilfe
+### 8. AR-Zielhilfe
 
 - [ ] Für ein ausgewähltes Ziel Richtungspfeile und Winkelabstand zur aktuellen Blickrichtung anzeigen.
 - [ ] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
 - [ ] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
 
-### 8. Robustheit und Darstellung
+### 9. Robustheit und Darstellung
 
 - [ ] Auf echten Geräten AR-Ausrichtung, Kameraüberlagerung, Drehung, Zoom und Touch-Auswahl prüfen, auch auf unterstützten älteren Android-Versionen.
 - [ ] Rendering beim Schwenken profilieren; Framezeiten, kurzzeitige Hänger und Speichernutzung mit und ohne Deep Sky/IAU-Grenzen vergleichen.
