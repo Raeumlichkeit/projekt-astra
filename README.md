@@ -86,6 +86,8 @@ Die vorbereiteten Store-Texte, Grafiken, Datenschutzangaben und die vollständig
 
 ## Daten und Datenschutz
 
+Die GitHub-Aktualisierung des IMO-Kalenders läuft manuell oder jeweils am 15. der Monate Juli bis Dezember. Bei einer erkannten Wartungsseite oder vorübergehend nicht verfügbaren Kalenderdatei bleibt der vorhandene Datensatz unverändert; GitHub zeigt dazu eine Warnung und überspringt das Veröffentlichen neuer Daten. Der nächste geplante oder manuelle Lauf versucht den Abruf erneut. Ungültige PDFs, Parsing- und Schemafehler bleiben fehlgeschlagene Läufe. Der Workflow wurde am 7. September 2026 nach einem YAML-Syntaxfehler korrigiert.
+
 Version 1.1.1 startet offline. GPS bleibt für Himmels- und Ereignisberechnungen lokal. Nach separater Online-Freigabe verwenden Wetter/Karten einen auf 0,01° gerundeten Ort; das genaue Geländeprofil benötigt eine zusätzliche Freigabe unter **Info**. Anbieter erhalten IP-Adresse, Anfragezeit und Ressourcenparameter. Open-Meteo nennt eine Protokollaufbewahrung von bis zu 90 Tagen. Standortantworten bleiben in der App im Arbeitsspeicher. Öffentliche OSM-Kacheln liegen separat im privaten, löschbaren Cache (32 MB, Gültigkeit maximal 30 Tage, Bereinigung beim nächsten Start/Abruf). Kacheln können betrachtete Regionen erkennen lassen.
 
 Favoriten, Beobachtungslisten und Erinnerungseinstellungen bleiben lokal. WebViews verwenden keine Cookies, keinen DOM-Speicher und keinen Browser-Diskcache; alte WebView-Daten werden beim Update entfernt. Android-App-Backups und Geräteübertragung sind ausdrücklich ausgeschlossen. Standortlistener und App-Netzwerkzugriffe enden beim Verlassen des Vordergrunds. Details: [Datenschutzerklärung](play-store/privacy-policy.html).

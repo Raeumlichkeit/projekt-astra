@@ -9,6 +9,7 @@ import json
 import logging
 import multiprocessing
 import re
+import urllib.error
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -18,6 +19,11 @@ from validate_imo_calendar import validate
 MAX_PDF_BYTES = 4 * 1024 * 1024
 MAX_TEXT_CHARS = 131072
 PARSE_SECONDS = 20
+UNAVAILABLE_HTTP_STATUSES = {404, 408, 429, 500, 502, 503, 504}
+
+
+class CalendarSourceUnavailable(Exception):
+    """The official calendar is missing or temporarily unavailable."""
 
 
 MONTHS = {
@@ -106,8 +112,20 @@ def calendar_text(year: int) -> str:
         raise ValueError("Unsupported year")
     url = f"https://www.imo.net/files/meteor-shower/cal{year}.pdf"
     request = urllib.request.Request(url, headers={"User-Agent": "ProjektAstra calendar updater"})
-    with urllib.request.build_opener(NoRedirects).open(request, timeout=15) as response:
-        pdf = response.read(MAX_PDF_BYTES + 1)
+    try:
+        with urllib.request.build_opener(NoRedirects).open(request, timeout=15) as response:
+            pdf = response.read(MAX_PDF_BYTES + 1)
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+    except urllib.error.HTTPError as error:
+        if error.code in UNAVAILABLE_HTTP_STATUSES:
+            raise CalendarSourceUnavailable(f"IMO {year}: calendar unavailable (HTTP {error.code})") from None
+        raise
+    # Some maintenance pages return HTTP 200 at the PDF URL. Only recognize the
+    # known HTML notice; oversized, malformed, or unexpected responses still fail.
+    if len(pdf) <= MAX_PDF_BYTES and content_type == "text/html":
+        notice = pdf[:8192].lower()
+        if b"website maintenance" in notice or b"we will be back soon" in notice:
+            raise CalendarSourceUnavailable(f"IMO {year}: website maintenance")
     return extract_pdf(pdf)
 
 
@@ -147,10 +165,14 @@ def main() -> None:
     parser.add_argument("--years", nargs="+", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    try:
+        years = [parse_year(year, calendar_text(year)) for year in args.years]
+    except CalendarSourceUnavailable as error:
+        parser.exit(75, f"{error}; no calendar data written.\n")
     payload = {
         "source": "International Meteor Organization annual Meteor Shower Calendar",
         "updated": date.today().isoformat(),
-        "years": [parse_year(year, calendar_text(year)) for year in args.years],
+        "years": years,
     }
     validate(payload)
     args.output.parent.mkdir(parents=True, exist_ok=True)

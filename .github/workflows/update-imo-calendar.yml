@@ -16,6 +16,8 @@ jobs:
   extract:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      updated: ${{ steps.calendar.outputs.updated }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -23,15 +25,34 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
-      - run: python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-imo.txt
+      - name: Install pinned PDF dependency
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r scripts/requirements-imo.txt
       - run: python -m unittest discover -s scripts -p 'test_*.py'
       - name: Extract current and next IMO calendars
+        id: calendar
         run: |
+          set +e
           python scripts/update_imo_calendar.py \
             --years "$(date +%Y)" "$(( $(date +%Y) + 1 ))" \
             --output output/imo_meteor_showers.json
+          status=$?
+          set -e
+          if [ "$status" -eq 75 ]; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::IMO calendar source is temporarily unavailable; existing data remains unchanged."
+            echo "### Calendar update deferred" >> "$GITHUB_STEP_SUMMARY"
+            echo "The official IMO source is temporarily unavailable. Existing calendar data was preserved. The next scheduled or manual run will try again." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
           python scripts/validate_imo_calendar.py output/imo_meteor_showers.json
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+          echo "### Calendar data extracted and validated" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.calendar.outputs.updated == 'true'
         with:
           name: imo-json
           path: output/imo_meteor_showers.json
@@ -40,6 +61,7 @@ jobs:
 
   publish:
     needs: extract
+    if: needs.extract.outputs.updated == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
