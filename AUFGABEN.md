@@ -1,8 +1,10 @@
 # Aufgaben und Prioritäten
 
-Stand: 6. September 2026 · Aktueller Ausbau: Version 1.1.4.
+Stand: 7. September 2026 · Aktueller Ausbau: Version 1.1.5.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
+
+**Release-Regel:** Jede größere funktionale, technische oder sicherheitsrelevante Änderung wird zuerst als eigener GitHub-Pre-Release mit Test-APK beziehungsweise Bundle veröffentlicht. Der verbindliche Ablauf steht in [RELEASE_PROCESS.md](RELEASE_PROCESS.md). Nach den Tests auf mehreren Geräten und der Korrektur der Rückmeldungen folgt erst der reguläre Release. Kleine Dokumentations- oder rein interne Teständerungen dürfen gesammelt werden.
 
 ## P1 – Als Nächstes
 
@@ -19,13 +21,15 @@ Umgesetzt in Version 1.1.4. Die Suche umfasst die gebündelten Kataloge und Ster
 
 ### 2. Zeitsteuerung der Sternkarte
 
-- [ ] Datum und Uhrzeit frei wählen sowie Zeit vorwärts und rückwärts laufen lassen; Pause und Geschwindigkeit anbieten.
-- [ ] Simulationszeit deutlich kennzeichnen und jederzeit mit „Zurück zu Jetzt“ zur Live-Ansicht wechseln.
-- [ ] Sterne, Planeten, Mond, Milchstraße, Sternbildgrenzen und Objektinformationen auf dieselbe ausgewählte Zeit beziehen.
-- [ ] Aus Kalenderereignissen die Karte zum Ereigniszeitpunkt öffnen.
-- [ ] Historische oder simulierte Himmelsansichten nicht mit vermeintlich passenden Live-Wetterdaten vermischen; fehlende Vorhersagen ausdrücklich kennzeichnen.
-- [ ] AR standardmäßig live lassen; beim Wechsel aus einer Simulation den Zeitwechsel sichtbar machen.
-- [ ] Zeitzonen, Sommerzeitwechsel, Tageswechsel und Rückkehr aus dem Hintergrund testen.
+- [x] Datum und Uhrzeit frei wählen sowie Zeit vorwärts und rückwärts laufen lassen; Pause und Geschwindigkeit anbieten.
+- [x] Simulationszeit deutlich kennzeichnen und jederzeit mit „Zurück zu Jetzt“ zur Live-Ansicht wechseln.
+- [x] Sterne, Planeten, Mond, Milchstraße, Sternbildgrenzen und Objektinformationen auf dieselbe ausgewählte Zeit beziehen.
+- [x] Aus Kalenderereignissen die Karte zum Ereigniszeitpunkt öffnen.
+- [x] Historische oder simulierte Himmelsansichten nicht mit vermeintlich passenden Live-Wetterdaten vermischen; fehlende Vorhersagen ausdrücklich kennzeichnen.
+- [x] AR standardmäßig live lassen; beim Wechsel aus einer Simulation den Zeitwechsel sichtbar machen.
+- [x] Zeitzonen, Sommerzeitwechsel, Tageswechsel und Rückkehr aus dem Hintergrund testen.
+
+Umgesetzt in Version 1.1.5. Die Simulation läuft nur im Vordergrund, pausiert bei Hintergrund-/Tabwechsel und verwendet eine monotone verstrichene Zeit. Eingaben gelten für 1900–2100; Sommerzeitlücken werden zurückgewiesen, doppelte Ortszeiten können als früherer oder späterer Zeitpunkt ausgewählt werden. Wetter bleibt auf aktuelle Vorhersagedaten bezogen und wird in der Simulation ausdrücklich gekennzeichnet.
 
 ### 3. Vollbild und aufgeräumte Kartenbedienung
 
@@ -50,9 +54,35 @@ Umgesetzt in Version 1.1.3. Die Textur basiert auf NASA/Gaia-Sterndaten; sie ist
 
 - [ ] Nachprüfung auf echten Geräten, besonders Android 9/API 28, kleineren Grafikchips und wenig Arbeitsspeicher: Zoom-/Bildqualität, erste Ladezeit, Drehung und schnelles Öffnen/Schließen. Akkutests bleiben ausdrücklich P3.
 
+### 5. Lichtverschmutzungskarte verbessern
+
+- [ ] Einen klaren Kartenmaßstab mit Legende für VIIRS-Index, geschätzte Himmelshelligkeit und Bortle-Klasse direkt in der Karte anzeigen.
+- [ ] Standortmarker, Suchradius und sichtbare Zoom-/Kartengrenzen ergänzen; die Karte soll Beobachtungsplätze in der Umgebung vergleichbar machen.
+- [ ] Kartenebenen für künstliches Nachtlicht, Bortle-Schätzung und optionalen Beobachtungsplatz-Modus getrennt schaltbar machen.
+- [ ] Datenjahr, Datenalter, Kachelquelle und Unsicherheit verständlich anzeigen; alte Kacheln als veraltet kennzeichnen.
+- [ ] Offline-/Fehlerzustand, Cache-Löschung und erneutes Laden testen; keine genaue Standortübertragung ohne Online-/Geländefreigabe auslösen.
+- [ ] Darstellung bei Rotlicht, kleinen Bildschirmen, Kartenrändern und niedriger Netzwerkqualität prüfen.
+
+### 6. Wetteraktualisierung ohne Datenlücke
+
+- [ ] Beim Pull-to-Refresh die letzte erfolgreiche Wetterantwort, Zeitleiste, Astra-Score-Daten und Kartenebenen sichtbar lassen, bis neue Daten vollständig vorliegen.
+- [ ] Ladezustand als dezente Aktualisierungsanzeige über den alten Daten zeigen; keine leere Ansicht und kein Zurücksetzen auf „Idle“ während des Abrufs.
+- [ ] Bei einem Fehler alte Daten mit Datenalter und Wiederholen-Aktion anzeigen; nur beim ersten Abruf einen leeren Ladezustand verwenden.
+- [ ] Wetter, Regenradar, Bewölkung und Standortaktualisierung getrennt behandeln, damit ein Fehler nicht alle vorhandenen Ebenen entfernt.
+- [ ] Tests für Pull-to-Refresh, langsame Antwort, Fehler, Standortwechsel, Offlinebetrieb und App-Hintergrund während des Abrufs ergänzen.
+
+### 7. Schneller App- und Sternkartenstart
+
+- [ ] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
+- [ ] HYG-/OpenNGC-/IAU-Daten pro Prozess zwischenspeichern und bei wiederholtem Tabwechsel nicht erneut parsen.
+- [ ] Milchstraßen-Textur, GPU-Kontext und optionale Ebenen nach dem ersten sichtbaren Kartenrahmen priorisiert laden; Fehler müssen die Basiskarte nutzbar lassen.
+- [ ] Kaltstart, Warmstart, erster sichtbarer Kartenrahmen und Interaktion auf einem leistungsschwachen Referenzgerät messen und Zielwerte dokumentieren.
+- [ ] Speicherbudget, GC-Pausen, Textur-Upload, Rotation, Prozesswiederherstellung und App-Start ohne Netzwerk prüfen; keine personenbezogenen Daten in Performance-Logs schreiben.
+- [ ] Regressionstests für schnelle Kartenanzeige, wiederholtes Öffnen/Schließen, Karten-/Wetterwechsel und Low-Memory-Verhalten ergänzen. Akkutests bleiben P3.
+
 ## P2 – Danach
 
-### 5. „Was lohnt sich heute Nacht?“
+### 8. „Was lohnt sich heute Nacht?“
 
 - [ ] Aus vorhandenen Wetter-, Mond-, Dämmerungs- und Objektdaten geeignete Beobachtungszeitfenster berechnen.
 - [ ] Ziele nach Höhe über dem lokalen Gelände, Mondabstand und geeigneter Beobachtungszeit sortieren.
@@ -60,7 +90,7 @@ Umgesetzt in Version 1.1.3. Die Textur basiert auf NASA/Gaia-Sterndaten; sie ist
 - [ ] Ziele aus Empfehlungen direkt zur vorhandenen Beobachtungsliste hinzufügen und auf der Karte öffnen.
 - [ ] Datenalter, Prognosegrenzen und fehlende Wetter-/Geländedaten sichtbar machen; keine sichere Sichtbarkeit versprechen.
 
-### 6. Beobachtungstagebuch
+### 9. Beobachtungstagebuch
 
 - [ ] Objekte als beobachtet markieren; Datum, Notizen und optional eigene Fotos hinzufügen.
 - [ ] Beobachtungen ausschließlich lokal speichern; genaue Standortangaben nur optional und bewusst hinzufügen.
@@ -69,20 +99,20 @@ Umgesetzt in Version 1.1.3. Die Textur basiert auf NASA/Gaia-Sterndaten; sie ist
 - [ ] Keine automatische Cloud-Synchronisierung oder Änderung der bestehenden Backup-Ausschlüsse einführen.
 - [ ] Importfehler, Größenlimits, Export/Import-Rundlauf und vollständiges Löschen testen.
 
-### 7. Fernglas- und Teleskop-Sichtfeld
+### 10. Fernglas- und Teleskop-Sichtfeld
 
 - [ ] Sichtfeld als Kreis mit frei eingebbarer Winkelgröße über der Karte anzeigen.
 - [ ] Optional lokale Geräteprofile mit Brennweite, Okularbrennweite und scheinbarem Gesichtsfeld anbieten; berechnete Werte als Näherung kennzeichnen.
 - [ ] Kartenansicht passend zum Instrument drehen oder spiegeln; Zustand sichtbar machen und einfach zurücksetzen können.
 - [ ] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
 
-### 8. AR-Zielhilfe
+### 11. AR-Zielhilfe
 
 - [ ] Für ein ausgewähltes Ziel Richtungspfeile und Winkelabstand zur aktuellen Blickrichtung anzeigen.
 - [ ] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
 - [ ] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
 
-### 9. Robustheit und Darstellung
+### 12. Robustheit und Darstellung
 
 - [ ] Auf echten Geräten AR-Ausrichtung, Kameraüberlagerung, Drehung, Zoom und Touch-Auswahl prüfen, auch auf unterstützten älteren Android-Versionen.
 - [ ] Rendering beim Schwenken profilieren; Framezeiten, kurzzeitige Hänger und Speichernutzung mit und ohne Deep Sky/IAU-Grenzen vergleichen.
@@ -105,5 +135,6 @@ Diese Punkte sind nicht von der Umsetzung aller optionalen Funktionen abhängig.
 - [ ] Dokumentierte Datenschutzprüfung abschließen, freigegebene Datenschutzseite öffentlich bereitstellen und Datensicherheitsangaben mit dem tatsächlichen Release abgleichen.
 - [ ] Store-Texte, Screenshots und Versionsangaben auf den freizugebenden Stand bringen; aktuelle Play-Console-Anforderungen vor dem Upload prüfen.
 - [ ] Funktionale Geräteprüfung und Store-Prelaunch-Bericht abschließen; Akkulaufzeitmessungen bleiben niedrig priorisiert.
+- [ ] Jeden größeren Änderungsstand zuerst als GitHub-Pre-Release auf mindestens einem zusätzlichen Gerät testen und die Freigabe dokumentieren; Ablauf siehe [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
 - [ ] Wiederkehrende Abhängigkeits-/Sicherheitsprüfungen und einen Umgang mit gemeldeten Schwachstellen festlegen.
 - [ ] Organisatorische ISO/IEC-27001-Aufgaben aus dem Sicherheitsmaßnahmenbericht separat bearbeiten, bevor entsprechende Konformitäts- oder Zertifizierungsaussagen erwogen werden. Technische Tests allein sind kein solcher Nachweis.

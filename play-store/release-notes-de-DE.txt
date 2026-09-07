@@ -1,8 +1,7 @@
-Neu in Projekt Astra 1.1.4:
+Neu in Projekt Astra 1.1.5:
 
-• Offline-Suche nach Sternen, Planeten, Deep Sky und Sternbildern
-• Alternativnamen sowie HIP-, Messier- und NGC-Nummern finden
-• Ziele aus Suche und Beobachtungsliste direkt in der Karte öffnen
-• Ausgewählte Objekte optional nachführen; Wischen beendet das Nachführen
-• Höhenlage und Gelände-Verdeckung direkt am Suchtreffer erkennen
-• Keine gespeicherte Suchhistorie
+• Zeitsteuerung der Sternkarte mit Datum, Uhrzeit, Pause und Geschwindigkeiten
+• Vorwärts- und Rückwärtssimulation mit Sommerzeit- und Zeitzonenbehandlung
+• Kalenderereignisse und gespeicherte Beobachtungen zum Ereigniszeitpunkt öffnen
+• AR bleibt live und Wetterdaten werden bei Simulationen ausdrücklich getrennt angezeigt
+• Offline-Suche nach Sternen, Planeten, Deep Sky und Sternbildern mit Nachführen

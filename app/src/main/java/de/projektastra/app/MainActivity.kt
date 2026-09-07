@@ -16,6 +16,7 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -65,6 +66,7 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -97,6 +99,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -271,6 +275,34 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
     var cameraGranted by remember { mutableStateOf(false) }
     var arEnabled by remember { mutableStateOf(false) }
     var pendingSkyObjectId by remember { mutableStateOf<String?>(null) }
+    var pendingSkyPosition by remember { mutableStateOf<HorizontalCoordinates?>(null) }
+    var skyNotice by remember { mutableStateOf<String?>(null) }
+    val skyClock = rememberSaveable(saver = Saver<SkyClock, String>(
+        save = { if (it.state.live) "live" else it.state.instant.toString() },
+        restore = { saved ->
+            SkyClock(Instant::now, SystemClock::elapsedRealtime).also { clock ->
+                if (saved != "live") runCatching { clock.select(Instant.parse(saved)) }
+            }
+        }
+    )) { SkyClock(Instant::now, SystemClock::elapsedRealtime) }
+    LifecycleStartEffect(tab) {
+        val isSkyVisible = tab == AstraTab.SKY
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val tick = object : Runnable {
+            override fun run() {
+                skyClock.tick()
+                handler.postDelayed(this, 250)
+            }
+        }
+        if (isSkyVisible) {
+            skyClock.start()
+            handler.post(tick)
+        }
+        onStopOrDispose {
+            handler.removeCallbacks(tick)
+            if (isSkyVisible) skyClock.stop()
+        }
+    }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     var favoriteObjectIds by remember { mutableStateOf(ObservationStore.favoriteObjectIds(context)) }
@@ -295,7 +327,11 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         cameraGranted = granted
-        if (granted) arEnabled = true
+        if (granted) {
+            if (!skyClock.state.live) skyNotice = "AR verwendet Jetzt. Die Simulation wurde beendet."
+            skyClock.now()
+            arEnabled = true
+        }
     }
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -374,6 +410,15 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     favoriteObjectIds = favoriteObjectIds,
                     requestedObjectId = pendingSkyObjectId,
                     consumeObjectRequest = { pendingSkyObjectId = null },
+                    requestedPosition = pendingSkyPosition,
+                    consumePositionRequest = { pendingSkyPosition = null },
+                    skyTime = skyClock.state,
+                    selectTime = { skyClock.select(it); arEnabled = false; skyNotice = null },
+                    playTime = { skyClock.play(it); skyNotice = null },
+                    pauseTime = { skyClock.pause() },
+                    nowTime = { skyClock.now(); skyNotice = null },
+                    timeNotice = skyNotice,
+                    clearTimeNotice = { skyNotice = null },
                     useManualMap = { arEnabled = false },
                     toggleRedLightMode = { setRedLightMode(!redLightMode) },
                     toggleFavorite = { objectData ->
@@ -386,16 +431,37 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     onLocationPermissionResult = { permissionGranted = it },
                     toggleAr = {
                         if (arEnabled) arEnabled = false
-                        else if (cameraGranted) arEnabled = true
+                        else if (cameraGranted) {
+                            if (!skyClock.state.live) skyNotice = "AR verwendet Jetzt. Die Simulation wurde beendet."
+                            skyClock.now()
+                            arEnabled = true
+                        }
                         else cameraLauncher.launch(Manifest.permission.CAMERA)
                     }
                 )
                     AstraTab.WEATHER -> WeatherScreen(
                         location = location,
+                        simulatedSkyTime = skyClock.state.instant.takeUnless { skyClock.state.live },
                         refreshLocation = { locationRefreshKey++ }
                     )
                     AstraTab.EVENTS -> EventsScreen(
                         location = location,
+                        openInSky = { event ->
+                            skyClock.select(event.instant)
+                            arEnabled = false
+                            val body = when (event.kind) {
+                                SkyEventKind.SOLAR_ECLIPSE -> Body.Sun
+                                SkyEventKind.LUNAR_ECLIPSE -> Body.Moon
+                                else -> null
+                            }
+                            pendingSkyObjectId = body?.let { "Astronomy Engine · $it" }
+                            pendingSkyPosition = event.radiant?.let {
+                                SkyCoordinateFrame(location ?: GeoPoint(52.52, 13.405, 34.0), event.instant)
+                                    .horizontal(it.raHours, it.decDegrees)
+                            }
+                            skyNotice = event.title + if (event.timeIsApproximate) " · Beispielzeit der Maximum-Nacht, kein exakter Peak" else " · zum Maximum"
+                            tab = AstraTab.SKY
+                        },
                         savedEventKeys = savedEvents.mapTo(mutableSetOf()) { it.key },
                         toggleSavedEvent = { event ->
                             val saved = event.key !in savedEvents.map { it.key }.toSet()
@@ -412,6 +478,12 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     AstraTab.PLAN -> ObservationPlanScreen(
                         location = location,
                         favoriteIds = favoriteObjectIds,
+                        openEventTime = { event ->
+                            skyClock.select(Instant.ofEpochSecond(event.instantEpochSeconds))
+                            arEnabled = false
+                            skyNotice = "${event.title} · gespeicherter Ereigniszeitpunkt"
+                            tab = AstraTab.SKY
+                        },
                         openObject = { id ->
                             pendingSkyObjectId = id
                             arEnabled = false
@@ -541,6 +613,15 @@ private fun SkyScreen(
     favoriteObjectIds: Set<String>,
     requestedObjectId: String?,
     consumeObjectRequest: () -> Unit,
+    requestedPosition: HorizontalCoordinates?,
+    consumePositionRequest: () -> Unit,
+    skyTime: SkyTimeState,
+    selectTime: (Instant) -> Unit,
+    playTime: (Int) -> Unit,
+    pauseTime: () -> Unit,
+    nowTime: () -> Unit,
+    timeNotice: String?,
+    clearTimeNotice: () -> Unit,
     useManualMap: () -> Unit,
     toggleRedLightMode: () -> Unit,
     toggleFavorite: (CelestialObject) -> Unit,
@@ -556,6 +637,8 @@ private fun SkyScreen(
     val cameraFov = rememberCameraHorizontalFov()
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showSearch by remember { mutableStateOf(false) }
+    var showTimeControls by remember { mutableStateOf(false) }
+    var displayZone by remember { mutableStateOf(ZoneId.systemDefault()) }
     var selection by remember { mutableStateOf(SkyTargetSelection()) }
     var targetMessage by remember { mutableStateOf<String?>(null) }
     var showDeepSky by remember { mutableStateOf(false) }
@@ -569,17 +652,10 @@ private fun SkyScreen(
     var manualAzimuth by remember { mutableFloatStateOf(180f) }
     var manualAltitude by remember { mutableFloatStateOf(35f) }
     var manualFov by remember { mutableFloatStateOf(95f) }
-    var skyInstant by remember { mutableStateOf(Instant.now()) }
+    val skyInstant = skyTime.instant
     LifecycleStartEffect(Unit) {
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        val tick = object : Runnable {
-            override fun run() {
-                skyInstant = Instant.now()
-                handler.postDelayed(this, 5_000)
-            }
-        }
-        handler.post(tick)
-        onStopOrDispose { handler.removeCallbacks(tick) }
+        displayZone = ZoneId.systemDefault()
+        onStopOrDispose { }
     }
     var wasArEnabled by remember { mutableStateOf(arEnabled) }
     LaunchedEffect(arEnabled) {
@@ -641,6 +717,14 @@ private fun SkyScreen(
             consumeObjectRequest()
         }
     }
+    LaunchedEffect(requestedPosition) {
+        requestedPosition?.let {
+            manualAzimuth = it.azimuth.toFloat()
+            manualAltitude = it.altitude.toFloat()
+            selection = SkyTargetSelection()
+            consumePositionRequest()
+        }
+    }
     val horizontalBoundaries = remember(coordinateFrame, iauBoundaries) {
         iauBoundaries.map { boundary ->
             HorizontalConstellationBoundary(
@@ -671,7 +755,7 @@ private fun SkyScreen(
         ) {
             Column {
                 Text("PROJEKT ASTRA", color = AstraBlue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("Live-Himmel", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Text(if (skyTime.live) "Live-Himmel" else "Simulation", fontSize = 26.sp, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { showSearch = true }) {
@@ -687,6 +771,30 @@ private fun SkyScreen(
                 Icon(Icons.Rounded.GpsFixed, null, tint = if (location != null) Color(0xFF76E0A0) else StarGold)
                 Spacer(Modifier.width(6.dp))
                 Text(if (location != null) "GPS" else "Berlin Demo", fontSize = 12.sp)
+            }
+        }
+
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm:ss XXX", Locale.GERMAN)
+                    .withZone(displayZone).format(skyInstant), fontSize = 12.sp, color = StarGold)
+                Text(when {
+                    arEnabled -> "AR · Live"
+                    skyTime.live -> "Jetzt · ${displayZone.id}"
+                    skyTime.rate == 0 -> "Simulation pausiert · ${displayZone.id}"
+                    else -> "Simulation ${skyTime.rate}× · ${displayZone.id}"
+                }, fontSize = 11.sp, color = AstraTextMuted)
+            }
+            if (!arEnabled) TextButton(onClick = { showTimeControls = true }) {
+                Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(18.dp))
+                Text(" Zeit")
+            }
+            if (!skyTime.live) TextButton(onClick = nowTime) { Text("Zurück zu Jetzt") }
+        }
+        timeNotice?.let { notice ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(notice, Modifier.weight(1f), color = StarGold, fontSize = 12.sp)
+                TextButton(onClick = clearTimeNotice) { Text("OK") }
             }
         }
 
@@ -746,7 +854,7 @@ private fun SkyScreen(
                 ) {
                     Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (arEnabled) "Karte" else "AR")
+                    Text(if (arEnabled) "Karte" else if (skyTime.live) "AR" else "AR · Jetzt")
                 }
                 Button(
                     onClick = { showDeepSky = !showDeepSky },
@@ -904,8 +1012,15 @@ private fun SkyScreen(
         }
     }
 
+    if (showTimeControls) SkyTimeSheet(skyTime, displayZone, redLightMode,
+        onSelect = { selectTime(it); showTimeControls = false }, onRate = playTime,
+        onPause = pauseTime, onNow = { nowTime(); showTimeControls = false },
+        onDismiss = { showTimeControls = false })
+
     if (showSearch) SkySearchSheet(searchIndex, redLightMode, location == null,
         (terrainState as? TerrainState.Ready)?.profile, positionOf,
+        timeLabel = (if (skyTime.live) "Jetzt · " else "Simulation · ") +
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm XXX").withZone(displayZone).format(skyInstant),
         dismiss = { showSearch = false }, open = openTarget)
 
     selected?.let { original ->
@@ -916,6 +1031,8 @@ private fun SkyScreen(
             ObjectDetails(
                 item = item,
                 observer = observer,
+                skyInstant = skyInstant,
+                simulated = !skyTime.live,
                 terrain = (terrainState as? TerrainState.Ready)?.profile,
                 isFavorite = item.celestial.catalogId in favoriteObjectIds,
                 toggleFavorite = { toggleFavorite(item.celestial) }
@@ -1426,14 +1543,16 @@ private fun DrawScope.drawEdgeLabel(text: String, desired: Offset, paint: androi
 private fun ObjectDetails(
     item: VisibleObject,
     observer: GeoPoint,
+    skyInstant: Instant,
+    simulated: Boolean,
     terrain: TerrainProfile?,
     isFavorite: Boolean,
     toggleFavorite: () -> Unit
 ) {
     val objectData = item.celestial
-    val path = remember(item.celestial, observer) {
+    val path = remember(item.celestial, observer, skyInstant) {
         (0..12).map { hours ->
-            val at = Instant.now().plusSeconds(hours * 3600L)
+            val at = skyInstant.plusSeconds(hours * 3600L)
             at to coordinatesAt(item.celestial, observer, at)
         }
     }
@@ -1443,6 +1562,9 @@ private fun ObjectDetails(
     ) {
         Text(objectData.name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(objectData.catalogId, color = AstraBlue)
+        Text((if (simulated) "Simulation · " else "Jetzt · ") +
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss XXX").withZone(ZoneId.systemDefault()).format(skyInstant),
+            fontSize = 12.sp, color = StarGold)
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = toggleFavorite,
@@ -1458,10 +1580,10 @@ private fun ObjectDetails(
         Spacer(Modifier.height(18.dp))
         DetailRow("Objekttyp", objectData.objectType.label)
         DetailRow(
-            if (objectData.solarBody == null) "Koordinaten J2000" else "Aktuelle Koordinaten",
+            if (objectData.solarBody == null) "Koordinaten J2000" else "Koordinaten zur Kartenzeit",
             "RA ${formatRa(objectData.raHours)} · Dec ${formatDec(objectData.decDegrees)}"
         )
-        DetailRow("Aktuelle Position", "Az ${item.position.azimuth.format(1)}° · Höhe ${item.position.altitude.format(1)}°")
+        DetailRow("Position zur Kartenzeit", "Az ${item.position.azimuth.format(1)}° · Höhe ${item.position.altitude.format(1)}°")
         DetailRow("Höhenlage", targetVisibility(item.position, terrain).label)
         DetailRow("Helligkeit", "${objectData.magnitude.format(2)} mag")
         if (objectData.constellation.isNotBlank()) DetailRow("Sternbild", objectData.constellation)
@@ -1508,7 +1630,7 @@ private fun ObjectDetails(
             Spacer(Modifier.height(18.dp))
             Text("DSS2-Himmelsaufnahme", fontWeight = FontWeight.Bold)
             Text(
-                "Echter Himmelsausschnitt an der Objektkoordinate; Sterne erscheinen in Aufnahmen als Lichtpunkte.",
+                "Archivaufnahme an der Objektkoordinate; kein Bild zum gewählten Simulationsdatum. Sterne erscheinen als Lichtpunkte.",
                 color = Color(0xFFAAB8CE),
                 fontSize = 12.sp
             )
@@ -1517,10 +1639,10 @@ private fun ObjectDetails(
             Text("Bild: DSS2 via CDS HiPS2FITS", fontSize = 11.sp, color = Color(0xFFAAB8CE))
         }
         Spacer(Modifier.height(18.dp))
-        Text("Bahn in den nächsten 12 Stunden", fontWeight = FontWeight.Bold)
+        Text("Bahn: 12 Stunden ab Kartenzeit", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         path.forEach { (time, position) ->
-            val localTime = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(time)
+            val localTime = DateTimeFormatter.ofPattern("dd.MM. HH:mm XXX").withZone(ZoneId.systemDefault()).format(time)
             Text("$localTime   Az ${position.azimuth.format(0)}°   Höhe ${position.altitude.format(0)}°", fontSize = 13.sp)
         }
     }
@@ -1622,7 +1744,7 @@ private fun AstraSectionTitle(title: String, subtitle: String? = null) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
+private fun WeatherScreen(location: GeoPoint?, simulatedSkyTime: Instant?, refreshLocation: () -> Unit) {
     var state by remember { mutableStateOf<WeatherState>(WeatherState.Idle) }
     var lightPollution by remember { mutableStateOf<LightPollutionState>(LightPollutionState.Loading) }
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -1669,6 +1791,11 @@ private fun WeatherScreen(location: GeoPoint?, refreshLocation: () -> Unit) {
                 icon = Icons.Rounded.Cloud
             )
             Text("Nach unten ziehen zum Aktualisieren", color = AstraTextMuted, fontSize = 12.sp)
+            simulatedSkyTime?.let {
+                Text("Sternkarte: Simulation vom " + DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm XXX")
+                    .withZone(ZoneId.systemDefault()).format(it) + ". Hier werden Wetter und Astra-Score für Jetzt bzw. die aktuelle Vorhersage angezeigt. Für die Simulationszeit sind hier keine zugeordneten Wetterdaten verfügbar.",
+                    color = StarGold, fontSize = 13.sp)
+            }
             if (!SecureNetwork.options.online) OfflineNotice()
             when (val value = state) {
                 WeatherState.Idle -> Unit
@@ -1815,7 +1942,8 @@ private data class SkyEvent(
     val status: String,
     val statusColor: Color,
     val facts: String,
-    val description: String
+    val description: String,
+    val radiant: EquatorialBoundaryPoint? = null
 ) {
     val key: String get() = "${kind.name}:$title:${instant.atZone(ZoneId.systemDefault()).year}"
 }
@@ -1830,6 +1958,7 @@ private fun SkyEvent.toSavedEvent() = SavedSkyEvent(
 @Composable
 private fun EventsScreen(
     location: GeoPoint?,
+    openInSky: (SkyEvent) -> Unit,
     savedEventKeys: Set<String>,
     toggleSavedEvent: (SkyEvent) -> Unit
 ) {
@@ -1898,6 +2027,7 @@ private fun EventsScreen(
         events.forEach { event ->
             EventCard(
                 event = event,
+                openInSky = { openInSky(event) },
                 saved = event.key in savedEventKeys,
                 toggleSaved = { toggleSavedEvent(event) }
             )
@@ -1912,7 +2042,7 @@ private fun EventsScreen(
 }
 
 @Composable
-private fun EventCard(event: SkyEvent, saved: Boolean, toggleSaved: () -> Unit) {
+private fun EventCard(event: SkyEvent, saved: Boolean, toggleSaved: () -> Unit, openInSky: () -> Unit) {
     val zone = ZoneId.systemDefault()
     val dateFormat = DateTimeFormatter.ofPattern("EEE, d. MMM yyyy", Locale.GERMAN).withZone(zone)
     val timeFormat = DateTimeFormatter.ofPattern("HH:mm 'Uhr'", Locale.GERMAN).withZone(zone)
@@ -1949,6 +2079,9 @@ private fun EventCard(event: SkyEvent, saved: Boolean, toggleSaved: () -> Unit) 
             Text(event.status, color = event.statusColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Text(event.facts, color = StarGold, fontSize = 13.sp)
             Text(event.description, color = Color(0xFFAAB8CE), fontSize = 13.sp)
+            TextButton(onClick = openInSky) {
+                Text(if (event.timeIsApproximate) "Maximum-Nacht in Karte öffnen" else "Maximum in Karte öffnen")
+            }
         }
     }
 }
@@ -1989,7 +2122,8 @@ private fun buildUpcomingEvents(observer: GeoPoint, meteorShowers: List<MeteorDe
                 statusColor = quality.second,
                 facts = "Radiant ca. ${altitude.format(0)}° hoch · Mond ca. ${moon.format(0)} % · " +
                     if (shower.zhr > 0) "ZHR ${shower.zhr}" else "ZHR variabel",
-                description = "${quality.third} Maximum nach dem jährlichen IMO-Kalender; die ZHR gilt nur unter ideal dunklem Himmel."
+                description = "${quality.third} Maximum nach dem jährlichen IMO-Kalender; die ZHR gilt nur unter ideal dunklem Himmel.",
+                radiant = EquatorialBoundaryPoint(shower.radiantRaHours, shower.radiantDecDegrees)
             )
         }
     }
@@ -2306,6 +2440,7 @@ private fun ObservationPlanScreen(
     location: GeoPoint?,
     favoriteIds: Set<String>,
     openObject: (String) -> Unit,
+    openEventTime: (SavedSkyEvent) -> Unit,
     savedEvents: List<SavedSkyEvent>,
     reminderHours: Int,
     notificationsGranted: Boolean,
@@ -2398,6 +2533,7 @@ private fun ObservationPlanScreen(
                         Text(event.title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text(event.kind, color = AstraBlue, fontSize = 12.sp)
                         Text(dateFormat.format(Instant.ofEpochSecond(event.instantEpochSeconds)), color = AstraTextMuted)
+                        TextButton(onClick = { openEventTime(event) }) { Text("Zeit in Karte öffnen") }
                     }
                     IconButton(onClick = { removeEvent(event) }) {
                         Icon(Icons.Rounded.Star, "Vormerkung entfernen", tint = StarGold)

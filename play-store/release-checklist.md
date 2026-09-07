@@ -2,11 +2,15 @@
 
 Die funktionale Ausbauplanung und Testprioritäten stehen in der [Aufgabenliste](../AUFGABEN.md). Akkutests haben niedrige Priorität; funktionale Geräte- und Sicherheitsprüfungen werden davon getrennt behandelt.
 
+## Verbindlicher Pre-Release-Ablauf
+
+Jede größere funktionale, technische oder sicherheitsrelevante Änderung erhält zuerst einen eigenen GitHub-Pre-Release. Dieser enthält die testbare APK beziehungsweise das Bundle und kurze Testhinweise. Erst nach Tests auf mehreren Geräten, dokumentiertem Feedback und behobenen Blockern wird daraus ein regulärer Release. Kleine Dokumentations- und rein interne Teständerungen dürfen gesammelt werden. Der vollständige Ablauf steht in [RELEASE_PROCESS.md](../RELEASE_PROCESS.md).
+
 ## Im Projekt erledigt
 
 - `targetSdk 37` und `compileSdk 37`
 - eindeutige Application-ID `de.projektastra.app`
-- Version 1.1.4 / Version Code 13
+- Version 1.1.5 / Version Code 14
 - Android App Bundle konfiguriert
 - R8-Minifizierung und Ressourcenverkleinerung für Release
 - optionale lokale Upload-Key-Konfiguration ohne Geheimnisse im Repository

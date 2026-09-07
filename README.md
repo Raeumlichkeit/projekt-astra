@@ -39,6 +39,7 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 - lokale Favoriten und Beobachtungslisten mit einstellbaren Ereigniserinnerungen
 - Offline-Objektsuche mit Alternativnamen, HIP-/Messier-/NGC-Nummern und getrennten Sternbild-/Galaxientreffern (1.1.4)
 - Ziele aus Suche und Beobachtungsliste zentrieren, markieren und optional in der manuellen Karte nachführen
+- Zeitsteuerung der Sternkarte mit Datum, Uhrzeit, Vor-/Rücklauf, Pause und Rückkehr zu Jetzt (1.1.5)
 - geführte Kompass-/AR-Kalibrierung mit Android-Sensorgenauigkeit
 - globaler, dauerhaft gespeicherter Rotlichtmodus mit Schnellschalter in der Sternkarte
 - adaptives und monochromes App-Icon sowie Android-12+-Startbildschirm
@@ -49,7 +50,13 @@ Ein Android-MVP für eine sensorgesteuerte Sternkarte und aktuelle astronomische
 
 ## Offene Aufgaben
 
-Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Zeitsteuerung und Vollbildmodus (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Objektsuche/Nachführen P1.1 ist in 1.1.4, die visuelle Kartenüberarbeitung P1.4 in 1.1.3 implementiert; eine zusätzliche Prüfung auf echten älteren Geräten steht aus. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt.
+Die priorisierte [Aufgabenliste](AUFGABEN.md) enthält die nächsten Ausbauschritte: Vollbildmodus sowie die Verbesserungen an Lichtverschmutzungskarte, Wetteraktualisierung und Startgeschwindigkeit (P1); danach Nachtplanung, Beobachtungstagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe. Objektsuche/Nachführen P1.1 ist in 1.1.4, die Zeitsteuerung P1.2 in 1.1.5 und die visuelle Kartenüberarbeitung P1.4 in 1.1.3 implementiert. Eine zusätzliche Prüfung auf echten älteren Geräten steht aus. Akkutests haben ausdrücklich niedrige Priorität (P3). Veröffentlichung und Sicherheitsfreigaben werden separat geführt; der verbindliche Pre-Release-Ablauf steht in [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
+
+## Zeitsteuerung der Sternkarte (1.1.5)
+
+Über **Sternkarte → Zeit** lässt sich eine Ortszeit von 1900 bis 2100 auswählen. Die Karte kann mit 1×, 60×, 600× oder 3600× vorwärts beziehungsweise rückwärts laufen, pausieren und jederzeit zu „Jetzt“ zurückkehren. Die Anzeige nennt den Zeitpunkt, die Zeitzone und den UTC-Offset. Nicht existierende Ortszeiten in einer Sommerzeitlücke werden abgewiesen; bei der Herbst-Doppelstunde kann der frühere oder spätere Offset gewählt werden.
+
+Die gewählte Zeit wird gemeinsam für Sterne, Planeten, Mond, Milchstraße, Sternbildgrenzen, Suche, Objektinformationen und Bahnvorschau verwendet. Kalenderereignisse und gespeicherte Beobachtungen können die Karte zum passenden Zeitpunkt öffnen. Die Simulation pausiert beim Verlassen der App oder des Sternkarten-Tabs und läuft nach der Rückkehr nicht unbemerkt weiter. AR verwendet immer Live-Zeit; Wetter und Wetterkarte bleiben aktuelle Daten und werden während einer Simulation als solche gekennzeichnet. Einstellungen zur Simulationszeit werden nicht als personenbezogene Historie gespeichert.
 
 ## Objektsuche und Nachführen (1.1.4)
 
@@ -59,7 +66,7 @@ Antippen öffnet das Ziel in der manuellen Karte. Deep-Sky-Treffer schalten bei 
 
 Suche und Auswahl benötigen keine Online-Freigabe. Suchtext wird beim Schließen verworfen; es gibt keine Suchhistorie, Synchronisierung oder zusätzliche Berechtigung. Höhenlage und Gelände-Verdeckung sind geometrische Hinweise; Wetter, Tageslicht und Mondhelligkeit sind keine Suchfilter. Ohne Standortfreigabe ist Berlin deutlich als Demo angegeben. Automatisierte Tests decken Suchbegriffe, Katalognummern, Ebenenbedarf, Nachführzustand, Gelände-Verdeckung und den tatsächlich gebündelten Katalog ab; Kartensprung, Plan-Navigation, Wisch-Abbruch und Rotlicht wurden zusätzlich im Emulator bedient.
 
-Prüfstand 1.1.4: 53 JVM-Tests und 18 Android-Instrumentationstests erfolgreich (Android-17-Emulator), Lint ohne Befund; Debug-APK und technisches Release-Bundle gebaut. Der Katalogtest prüft auch Suchziele für alle 88 Sternbilder. Tests auf echten Geräten und die separate Store-Freigabe stehen weiterhin aus.
+Prüfstand 1.1.5: 71 JVM-Tests und 18 Android-Instrumentationstests erfolgreich (Android-17-Emulator), Lint ohne Befund; Debug-APK und technisches Release-Bundle gebaut. Der Katalogtest prüft auch Suchziele für alle 88 Sternbilder. Größere Änderungen werden vor einer regulären Veröffentlichung als eigener GitHub-Pre-Release zum Testen auf mehreren Geräten bereitgestellt. Tests auf echten Geräten und die separate Store-Freigabe stehen weiterhin aus.
 
 ## Neue Himmelsdarstellung (1.1.3)
 
@@ -82,7 +89,7 @@ Auf einem Emulator funktioniert die Oberfläche, die automatische Ausrichtung be
 
 ## Google-Play-Release
 
-Die vorbereiteten Store-Texte, Grafiken, Datenschutzangaben und die vollständige Veröffentlichungsliste liegen unter `play-store/`. Ein Release-Bundle lässt sich auch ohne Schlüssel zur technischen Prüfung mit `gradlew bundleRelease` erstellen. Für den Upload muss einmalig ein privater Upload-Key eingerichtet werden; die Anleitung steht in `play-store/release-checklist.md`.
+Die vorbereiteten Store-Texte, Grafiken, Datenschutzangaben und die vollständige Veröffentlichungsliste liegen unter `play-store/`. Größere Änderungen werden zunächst als GitHub-Pre-Release mit testbarer APK beziehungsweise Bundle veröffentlicht; erst nach Gerätefeedback folgt die reguläre Veröffentlichung. Der verbindliche Ablauf steht in [RELEASE_PROCESS.md](RELEASE_PROCESS.md). Ein Release-Bundle lässt sich auch ohne Schlüssel zur technischen Prüfung mit `gradlew bundleRelease` erstellen. Für den Upload muss einmalig ein privater Upload-Key eingerichtet werden; die Anleitung steht in `play-store/release-checklist.md`.
 
 ## Daten und Datenschutz
 

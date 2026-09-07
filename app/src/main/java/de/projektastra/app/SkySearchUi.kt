@@ -37,6 +37,7 @@ internal fun SkySearchSheet(
     demoLocation: Boolean,
     terrain: TerrainProfile?,
     positionOf: (SkySearchTarget) -> HorizontalCoordinates,
+    timeLabel: String,
     dismiss: () -> Unit,
     open: (SkySearchTarget) -> Unit
 ) {
@@ -62,6 +63,7 @@ internal fun SkySearchSheet(
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Offline · keine Suchhistorie" + if (demoLocation) " · Standort: Berlin Demo" else "",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Text(timeLabel, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 Text("Die Höhenlage allein garantiert keine Sichtbarkeit bei Tageslicht, Wolken oder hellem Mond."
                     + if (terrain == null) " Geländeprofil nicht verfügbar." else "",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
