@@ -12,6 +12,7 @@ class SkyAppearanceTest {
         assertEquals(1f, appearance.intensity, 0f)
         assertFalse(appearance.showInAr)
         assertFalse(appearance.showGrid)
+        assertEquals(SkyLabelDensity.NORMAL, appearance.labelDensity)
     }
 
     @Test fun everyStoredModeRestoresWithoutChangingItsMeaning() {
@@ -23,6 +24,18 @@ class SkyAppearanceTest {
     @Test fun absentOrUnknownModesFallBackToNatural() {
         listOf(null, "", "UNKNOWN", "photo", " NATURAL ").forEach { stored ->
             assertEquals(MilkyWayMode.NATURAL, SkyAppearance.restore(stored).mode)
+        }
+    }
+
+    @Test fun everyStoredLabelDensityRestoresWithoutChangingItsMeaning() {
+        SkyLabelDensity.entries.forEach { density ->
+            assertEquals(density, SkyAppearance.restore(labelDensityName = density.name).labelDensity)
+        }
+    }
+
+    @Test fun absentOrUnknownLabelDensityFallsBackToNormal() {
+        listOf(null, "", "UNKNOWN", "rich", " NORMAL ").forEach { stored ->
+            assertEquals(SkyLabelDensity.NORMAL, SkyAppearance.restore(labelDensityName = stored).labelDensity)
         }
     }
 
@@ -46,11 +59,14 @@ class SkyAppearanceTest {
     }
 
     @Test fun normalizationDoesNotResetIndependentPreferences() {
-        val appearance = SkyAppearance(MilkyWayMode.PHOTO, -1f, showInAr = true, showGrid = true).normalized()
+        val appearance = SkyAppearance(
+            MilkyWayMode.PHOTO, -1f, showInAr = true, showGrid = true, labelDensity = SkyLabelDensity.RICH
+        ).normalized()
         assertEquals(MilkyWayMode.PHOTO, appearance.mode)
         assertEquals(0.25f, appearance.intensity, 0f)
         assertTrue(appearance.showInAr)
         assertTrue(appearance.showGrid)
+        assertEquals(SkyLabelDensity.RICH, appearance.labelDensity)
     }
 
     @Test fun switchingOffPreservesTheChosenIntensityForLater() {

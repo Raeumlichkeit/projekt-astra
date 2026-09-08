@@ -74,7 +74,8 @@ internal data class SkyAppearance(
     val mode: MilkyWayMode = MilkyWayMode.NATURAL,
     val intensity: Float = 1f,
     val showInAr: Boolean = false,
-    val showGrid: Boolean = false
+    val showGrid: Boolean = false,
+    val labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL
 ) {
     fun normalized(): SkyAppearance = copy(
         intensity = if (intensity.isFinite()) intensity.coerceIn(MIN_INTENSITY, MAX_INTENSITY) else 1f
@@ -88,12 +89,15 @@ internal data class SkyAppearance(
             modeName: String? = null,
             intensity: Float = 1f,
             showInAr: Boolean = false,
-            showGrid: Boolean = false
+            showGrid: Boolean = false,
+            labelDensityName: String? = null
         ): SkyAppearance = SkyAppearance(
             mode = MilkyWayMode.entries.firstOrNull { it.name == modeName } ?: MilkyWayMode.NATURAL,
             intensity = intensity,
             showInAr = showInAr,
-            showGrid = showGrid
+            showGrid = showGrid,
+            labelDensity = SkyLabelDensity.entries.firstOrNull { it.name == labelDensityName }
+                ?: SkyLabelDensity.NORMAL
         ).normalized()
     }
 }
@@ -103,6 +107,7 @@ internal object SkyAppearancePreferences {
     private const val INTENSITY = "sky_appearance_intensity"
     private const val SHOW_IN_AR = "sky_appearance_show_in_ar"
     private const val SHOW_GRID = "sky_appearance_show_grid"
+    private const val LABEL_DENSITY = "sky_appearance_label_density"
 
     fun load(context: Context): SkyAppearance {
         val preferences = context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE)
@@ -111,7 +116,8 @@ internal object SkyAppearancePreferences {
             modeName = runCatching { preferences.getString(MODE, null) }.getOrNull(),
             intensity = runCatching { preferences.getFloat(INTENSITY, 1f) }.getOrDefault(1f),
             showInAr = runCatching { preferences.getBoolean(SHOW_IN_AR, false) }.getOrDefault(false),
-            showGrid = runCatching { preferences.getBoolean(SHOW_GRID, false) }.getOrDefault(false)
+            showGrid = runCatching { preferences.getBoolean(SHOW_GRID, false) }.getOrDefault(false),
+            labelDensityName = runCatching { preferences.getString(LABEL_DENSITY, null) }.getOrNull()
         )
     }
 
@@ -122,6 +128,7 @@ internal object SkyAppearancePreferences {
             putFloat(INTENSITY, normalized.intensity)
             putBoolean(SHOW_IN_AR, normalized.showInAr)
             putBoolean(SHOW_GRID, normalized.showGrid)
+            putString(LABEL_DENSITY, normalized.labelDensity.name)
         }
     }
 }
@@ -190,6 +197,30 @@ internal fun SkyAppearanceControls(
         )
         Text(
             "Die Himmelsdarstellung ist offline verfügbar und basiert auf astronomischen Daten. Sie ist kein Livebild; Wetter, Mondlicht und Lichtverschmutzung verändern den tatsächlichen Anblick.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        HorizontalDivider()
+        Text("Beschriftungen", style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                SkyLabelDensity.MINIMAL to "Wenige",
+                SkyLabelDensity.NORMAL to "Normal",
+                SkyLabelDensity.RICH to "Viele"
+            ).forEach { (density, label) ->
+                FilterChip(
+                    selected = current.labelDensity == density,
+                    onClick = { onChange(current.copy(labelDensity = density)) },
+                    label = { Text(label, maxLines = 1) },
+                    modifier = Modifier.semantics { contentDescription = "Beschriftungen: $label" }
+                )
+            }
+        }
+        Text(
+            "Ausgewählte Objekte und Orientierungspunkte haben Vorrang. Wenn es eng wird, erscheinen weniger Namen, damit die Karte lesbar bleibt.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -176,6 +176,21 @@ class SkyRenderingTest {
         })
     }
 
+    @Test fun objectAndTargetLabelsRemainHiddenBehindTerrain() {
+        val star = VisibleObject(CelestialObject("Verdeckter Stern", "TEST", 0.0, 0.0, 0.0, 1.0, "A1V"),
+            HorizontalCoordinates(0.0, 10.0))
+        render { modifier ->
+            SkyCanvas(listOf(star), 0.0, 10.0, 40.0, false, emptyList(), emptyList(),
+                false, TerrainProfile(listOf(TerrainSample(0.0, 40.0)), 100.0), false,
+                { _, _, _ -> }, {}, modifier, targetPosition = star.position,
+                labelDensity = SkyLabelDensity.RICH, targetLabel = star.celestial.name)
+        }
+        val pixels = capture()
+        assertTrue("Object names must not appear over the ground", (0 until pixels.height).all { y ->
+            (0 until pixels.width).all { x -> Color.red(pixels.getPixel(x, y)) < 30 }
+        })
+    }
+
     @Test fun starBeyondZenithIsRenderedInsteadOfAnEmptyTopRegion() {
         // Facing north at 80°: this south-facing star is above the zenith in the view.
         val star = VisibleObject(CelestialObject("Zenittest", "TEST", 0.0, 0.0, 0.0, 1.0, "A1V"),

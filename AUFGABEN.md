@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 7. September 2026 · Aktueller Ausbau: Version 1.1.5.
+Stand: 8. September 2026 · Aktueller Ausbau: Version 1.1.6-pre.1.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -17,7 +17,7 @@ Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bes
 - [x] Auswahl und Suche auch ohne Online-Freigabe nutzbar halten; keine Suchhistorie ohne ausdrückliche Nutzerentscheidung speichern.
 - [x] Tests für alternative Namen, leere Ergebnisse, ausgeblendete Deep-Sky-Ebene und Ziele unter dem Gelände-/Horizont ergänzen.
 
-Umgesetzt in Version 1.1.4. Die Suche umfasst die gebündelten Kataloge und Sternbilder mit einem ausdrücklich benannten Referenzstern. Suchtext bleibt nur während der geöffneten Suche im Arbeitsspeicher. Deep-Sky-Treffer schalten ihre Ebene ein; Nachführen aktualisiert alle fünf Sekunden und endet bei manueller Bedienung, einem neuen Ziel oder Wechsel in AR. Die Höhenlage beschreibt keine Wetter-/Tageslicht-Sichtbarkeitsprognose. Reale Kamera-/Sensortests bleiben bei P2.9.
+Umgesetzt in Version 1.1.4. Die Suche umfasst die gebündelten Kataloge und Sternbilder mit einem ausdrücklich benannten Referenzstern. Suchtext bleibt nur während der geöffneten Suche im Arbeitsspeicher. Deep-Sky-Treffer schalten ihre Ebene ein; Nachführen aktualisiert alle fünf Sekunden und endet bei manueller Bedienung, einem neuen Ziel oder Wechsel in AR. Die Höhenlage beschreibt keine Wetter-/Tageslicht-Sichtbarkeitsprognose. Reale Kamera-/Sensortests bleiben bei P2.12.
 
 ### 2. Zeitsteuerung der Sternkarte
 
@@ -33,11 +33,13 @@ Umgesetzt in Version 1.1.5. Die Simulation läuft nur im Vordergrund, pausiert b
 
 ### 3. Vollbild und aufgeräumte Kartenbedienung
 
-- [ ] Kartenbedienelemente einklappbar machen und einen leicht beendbaren Vollbildmodus anbieten.
-- [ ] Beschriftungsdichte einstellen; überlappende Namen und Beschriftungen hinter Bedienelementen vermeiden.
-- [ ] Ausgewählte Objekte und wichtige Orientierungsangaben gegenüber anderen Beschriftungen bevorzugen.
-- [ ] Aktuelles Sichtfeld beziehungsweise Zoomstufe anzeigen und eine Ansicht-zurücksetzen-Funktion anbieten.
+- [x] Kartenbedienelemente einklappbar machen und einen leicht beendbaren Vollbildmodus anbieten.
+- [x] Beschriftungsdichte einstellen; überlappende Namen und Beschriftungen hinter Bedienelementen vermeiden.
+- [x] Ausgewählte Objekte und wichtige Orientierungsangaben gegenüber anderen Beschriftungen bevorzugen.
+- [x] Aktuelles Sichtfeld beziehungsweise Zoomstufe anzeigen und eine Ansicht-zurücksetzen-Funktion anbieten.
 - [ ] Große Schrift, TalkBack-Beschriftungen, erreichbare Bedienelemente und Rotlichtmodus für die neuen Oberflächen prüfen.
+
+Implementiert in 1.1.6-pre.1. Bedienung und Objektbereich liegen außerhalb des Himmels und erhalten begrenzte, scrollbar bleibende Flächen. Das Vollbild endet mit der sichtbaren Taste oder Android-Zurück. Beschriftungen berücksichtigen Priorität, Schriftgröße, Kartenränder und Gelände. Reset zeigt Süden / 35° Höhe / 95° Sichtfeld und beendet das Nachführen. Das AR-Sichtfeld berücksichtigt Größenänderungen des tatsächlichen Kameraausschnitts. Gerätefeedback wird anhand der [Pre-Release-Testhinweise](play-store/pre-release-1.1.6.md) gesammelt.
 
 ### 4. Visuelle Überarbeitung und realistischerer Sternenhimmel
 

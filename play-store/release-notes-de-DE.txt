@@ -1,7 +1,7 @@
-Neu in Projekt Astra 1.1.5:
+Neu in Projekt Astra 1.1.6 (Vorabversion):
 
-• Zeitsteuerung der Sternkarte mit Datum, Uhrzeit, Pause und Geschwindigkeiten
-• Vorwärts- und Rückwärtssimulation mit Sommerzeit- und Zeitzonenbehandlung
-• Kalenderereignisse und gespeicherte Beobachtungen zum Ereigniszeitpunkt öffnen
-• AR bleibt live und Wetterdaten werden bei Simulationen ausdrücklich getrennt angezeigt
-• Offline-Suche nach Sternen, Planeten, Deep Sky und Sternbildern mit Nachführen
+• Vollbild für die Sternkarte, beendbar über Taste oder Android-Zurück
+• Einklappbare Kartenbedienung, Sichtfeldanzeige, Zoomtasten und Ansicht zurücksetzen
+• Einstellbare Namensdichte mit Vorrang für ausgewählte Objekte
+• Lesbare Beschriftungen ohne gegenseitige Überlappung
+• AR-Sichtfeld passt sich dem Kameraausschnitt an

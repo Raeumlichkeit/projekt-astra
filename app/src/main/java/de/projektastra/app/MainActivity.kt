@@ -22,6 +22,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -34,7 +36,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -67,6 +74,13 @@ import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -77,6 +91,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -118,6 +133,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -131,6 +149,7 @@ import androidx.core.locationbutton.compose.LocationButton
 import androidx.core.locationbutton.compose.LocationButtonTextType
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.LifecycleStartEffect
 import io.github.cosinekitty.astronomy.Aberration
@@ -207,14 +226,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AstraRoot() {
     val context = LocalContext.current
+    val window = LocalActivity.current?.window
     val preferences = remember { context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE) }
     var redLightMode by remember { mutableStateOf(preferences.getBoolean("red_light_mode", false)) }
+    var skyFullscreen by rememberSaveable { mutableStateOf(false) }
     val setRedLightMode: (Boolean) -> Unit = {
         redLightMode = it
         preferences.edit { putBoolean("red_light_mode", it) }
     }
     SideEffect {
-        (context as? android.app.Activity)?.window?.let { window ->
+        window?.let { window ->
             val systemBarColor = if (redLightMode) android.graphics.Color.rgb(24, 0, 0)
             else android.graphics.Color.rgb(7, 16, 31)
             @Suppress("DEPRECATION")
@@ -222,7 +243,8 @@ private fun AstraRoot() {
             @Suppress("DEPRECATION")
             window.navigationBarColor = systemBarColor
             WindowCompat.getInsetsController(window, window.decorView).let { controller ->
-                if (redLightMode) controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (redLightMode || skyFullscreen) controller.hide(WindowInsetsCompat.Type.systemBars())
                 else controller.show(WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -236,7 +258,7 @@ private fun AstraRoot() {
                 }
             }
         ) {
-            AstraApp(redLightMode, setRedLightMode)
+            AstraApp(redLightMode, setRedLightMode, skyFullscreen) { skyFullscreen = it }
         }
     }
 }
@@ -268,7 +290,12 @@ private fun AstraTheme(redLightMode: Boolean, content: @Composable () -> Unit) {
 private enum class AstraTab { SKY, WEATHER, EVENTS, PLAN, ABOUT }
 
 @Composable
-private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) {
+private fun AstraApp(
+    redLightMode: Boolean,
+    setRedLightMode: (Boolean) -> Unit,
+    skyFullscreen: Boolean,
+    setSkyFullscreen: (Boolean) -> Unit
+) {
     var tab by remember { mutableStateOf(AstraTab.SKY) }
     var location by remember { mutableStateOf<GeoPoint?>(null) }
     var permissionGranted by remember { mutableStateOf(false) }
@@ -348,10 +375,13 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
     }
 
     LocationEffect(permissionGranted, locationRefreshKey) { location = it }
+    LaunchedEffect(tab) { if (tab != AstraTab.SKY) setSkyFullscreen(false) }
 
     Scaffold(
         containerColor = Night,
+        contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
+            if (!skyFullscreen) {
             val navigationColors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Night,
                 selectedTextColor = StarGold,
@@ -396,6 +426,7 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     colors = navigationColors
                 )
             }
+            }
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
@@ -407,6 +438,8 @@ private fun AstraApp(redLightMode: Boolean, setRedLightMode: (Boolean) -> Unit) 
                     cameraPermissionGranted = cameraGranted,
                     arEnabled = arEnabled,
                     redLightMode = redLightMode,
+                    fullscreen = skyFullscreen,
+                    setFullscreen = setSkyFullscreen,
                     favoriteObjectIds = favoriteObjectIds,
                     requestedObjectId = pendingSkyObjectId,
                     consumeObjectRequest = { pendingSkyObjectId = null },
@@ -604,12 +637,14 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SkyScreen(
+internal fun SkyScreen(
     location: GeoPoint?,
     locationPermissionGranted: Boolean,
     cameraPermissionGranted: Boolean,
     arEnabled: Boolean,
     redLightMode: Boolean,
+    fullscreen: Boolean,
+    setFullscreen: (Boolean) -> Unit,
     favoriteObjectIds: Set<String>,
     requestedObjectId: String?,
     consumeObjectRequest: () -> Unit,
@@ -634,10 +669,13 @@ private fun SkyScreen(
     val stars = remember { StarCatalog.load(context) }
     val deepSkyObjects = remember { DeepSkyCatalog.load(context) }
     val iauBoundaries = remember { IauBoundaryCatalog.load(context) }
-    val cameraFov = rememberCameraHorizontalFov()
+    val initialCameraFov = rememberCameraHorizontalFov()
+    var cameraFov by remember { mutableStateOf(initialCameraFov) }
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     var showTimeControls by remember { mutableStateOf(false) }
+    var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = fullscreen) { setFullscreen(false) }
     var displayZone by remember { mutableStateOf(ZoneId.systemDefault()) }
     var selection by remember { mutableStateOf(SkyTargetSelection()) }
     var targetMessage by remember { mutableStateOf<String?>(null) }
@@ -649,9 +687,9 @@ private fun SkyScreen(
     var textureReady by remember { mutableStateOf<Boolean?>(null) }
     var showCalibration by remember { mutableStateOf(false) }
     var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
-    var manualAzimuth by remember { mutableFloatStateOf(180f) }
-    var manualAltitude by remember { mutableFloatStateOf(35f) }
-    var manualFov by remember { mutableFloatStateOf(95f) }
+    var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
+    var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
+    var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
     val skyInstant = skyTime.instant
     LifecycleStartEffect(Unit) {
         displayZone = ZoneId.systemDefault()
@@ -747,15 +785,24 @@ private fun SkyScreen(
             if (arEnabled) cameraFov else manualFov.toDouble(), arEnabled, appearance)
     }
 
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val compactHeight = maxHeight < 420.dp
+    // Bound the combined chrome, including notices, so short landscape screens retain sky space.
+    val headerMaxHeight = maxHeight * 0.12f
+    val orientationMaxHeight = (maxHeight * 0.18f).coerceAtMost(110.dp)
+    val controlsMaxHeight = (maxHeight * 0.34f).coerceAtMost(270.dp)
+    val targetMaxHeight = (maxHeight * 0.18f).coerceAtMost(148.dp)
     Column(Modifier.fillMaxSize()) {
+        if (!fullscreen && !compactHeight) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().heightIn(max = headerMaxHeight).verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text("PROJEKT ASTRA", color = AstraBlue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text(if (skyTime.live) "Live-Himmel" else "Simulation", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f)) {
+                Text(if (skyTime.live) "Sternkarte" else "Simulation", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(if (location != null) "GPS-Standort" else "Standort: Berlin Demo", fontSize = 12.sp, color = AstraTextMuted)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { showSearch = true }) {
@@ -768,28 +815,123 @@ private fun SkyScreen(
                         tint = if (redLightMode) StarGold else AstraTextMuted
                     )
                 }
-                Icon(Icons.Rounded.GpsFixed, null, tint = if (location != null) Color(0xFF76E0A0) else StarGold)
-                Spacer(Modifier.width(6.dp))
-                Text(if (location != null) "GPS" else "Berlin Demo", fontSize = 12.sp)
             }
         }
+        }
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm:ss XXX", Locale.GERMAN)
-                    .withZone(displayZone).format(skyInstant), fontSize = 12.sp, color = StarGold)
-                Text(when {
-                    arEnabled -> "AR · Live"
-                    skyTime.live -> "Jetzt · ${displayZone.id}"
-                    skyTime.rate == 0 -> "Simulation pausiert · ${displayZone.id}"
-                    else -> "Simulation ${skyTime.rate}× · ${displayZone.id}"
-                }, fontSize = 11.sp, color = AstraTextMuted)
+        Row(Modifier.fillMaxWidth().background(NightBlue).padding(start = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).heightIn(max = orientationMaxHeight)
+                .verticalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
+                Text("${cardinalDirection(viewAzimuth)} ${viewAzimuth.toInt()}° · Höhe ${viewAltitude.toInt()}°",
+                    color = StarGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("Sichtfeld ${(if (arEnabled) cameraFov else manualFov.toDouble()).format(0)}° horizontal",
+                    fontSize = 12.sp, color = AstraTextMuted, modifier = Modifier.testTag("sky-fov"))
+                if ((fullscreen || compactHeight) && location == null) Text("Berlin Demo", fontSize = 11.sp, color = AstraTextMuted)
             }
-            if (!arEnabled) TextButton(onClick = { showTimeControls = true }) {
-                Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(18.dp))
-                Text(" Zeit")
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row {
+            IconButton(onClick = { controlsExpanded = !controlsExpanded },
+                modifier = Modifier.testTag("sky-controls-toggle").semantics {
+                    stateDescription = if (controlsExpanded) "Ausgeklappt" else "Eingeklappt"
+                }) {
+                Icon(if (controlsExpanded) Icons.Rounded.Close else Icons.Rounded.Tune,
+                    if (controlsExpanded) "Kartenbedienung einklappen" else "Kartenbedienung ausklappen")
             }
-            if (!skyTime.live) TextButton(onClick = nowTime) { Text("Zurück zu Jetzt") }
+            IconButton(onClick = { controlsExpanded = false; setFullscreen(!fullscreen) },
+                modifier = Modifier.testTag("sky-fullscreen-toggle")) {
+                Icon(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                    if (fullscreen) "Vollbild beenden" else "Sternkarte im Vollbild")
+            }
+            }
+            Text(if (!skyTime.live) "Simulation" else if (arEnabled) "AR · Jetzt" else "Jetzt",
+                fontSize = 11.sp, maxLines = 1, color = if (skyTime.live) AstraTextMuted else StarGold,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+        }
+        Column(Modifier.fillMaxWidth().heightIn(max = controlsMaxHeight)
+            .verticalScroll(rememberScrollState()).testTag("sky-controls-panel")) {
+        Row(Modifier.fillMaxWidth().background(NightBlue).padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text((when {
+                arEnabled -> "AR · Jetzt"
+                skyTime.live -> "Jetzt"
+                skyTime.rate == 0 -> "Simulation · Pause"
+                else -> "Simulation · ${skyTime.rate}×"
+            }) + " · " + DateTimeFormatter.ofPattern("dd.MM.yy HH:mm XXX", Locale.GERMAN)
+                .withZone(displayZone).format(skyInstant), Modifier.weight(1f),
+                color = if (skyTime.live) AstraTextMuted else StarGold, fontSize = 11.sp)
+            if (!skyTime.live) TextButton(onClick = nowTime) { Text("Jetzt") }
+        }
+        if (controlsExpanded) {
+            Column(Modifier.fillMaxWidth().background(NightBlue).padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { showSearch = true }) {
+                        Icon(Icons.Rounded.Search, null, Modifier.size(18.dp)); Text(" Suchen")
+                    }
+                    if (!arEnabled) TextButton(onClick = { showTimeControls = true }) {
+                        Icon(Icons.Rounded.Schedule, null, Modifier.size(18.dp)); Text(" Zeit")
+                    }
+                    TextButton(onClick = { showLayersPanel = true }) { Text("Ebenen & Namen") }
+                    TextButton(onClick = { showDeepSky = !showDeepSky },
+                        modifier = Modifier.semantics { stateDescription = if (showDeepSky) "Ein" else "Aus" }) {
+                        Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
+                    }
+                    TextButton(onClick = {
+                        manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
+                        selection = selection.release(); toggleAr()
+                    }) {
+                        Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
+                        Text(if (arEnabled) " Karte" else " AR · Jetzt")
+                    }
+                    if (!arEnabled) {
+                        TextButton(onClick = {
+                            selection = selection.release()
+                            manualAzimuth = orientation.azimuth; manualAltitude = orientation.altitude
+                            manualFov = 95f
+                        }) { Text("Ausrichten") }
+                        TextButton(onClick = {
+                            selection = SkyTargetSelection(); targetMessage = null
+                            manualAzimuth = 180f; manualAltitude = 35f; manualFov = 95f
+                        }, modifier = Modifier.testTag("sky-reset")) {
+                            Icon(Icons.Rounded.RestartAlt, null, Modifier.size(18.dp)); Text(" Ansicht zurücksetzen")
+                        }
+                        IconButton(onClick = {
+                            manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
+                            selection = selection.release(); manualFov = (manualFov / 1.25f).coerceAtLeast(25f)
+                        }, enabled = manualFov > 25f) { Icon(Icons.Rounded.Add, "Sternkarte vergrößern") }
+                        IconButton(onClick = {
+                            manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
+                            selection = selection.release(); manualFov = (manualFov * 1.25f).coerceAtMost(150f)
+                        }, enabled = manualFov < 150f) { Icon(Icons.Rounded.Remove, "Sternkarte verkleinern") }
+                    }
+                    TextButton(onClick = { showCalibration = true }) { Text("Kalibrieren") }
+                    TextButton(onClick = toggleRedLightMode) {
+                        Text(if (redLightMode) "Rotlicht ausschalten" else "Rotlicht einschalten")
+                    }
+                }
+                Text(when (terrainState) {
+                    TerrainState.Loading -> "Geländeprofil wird geladen …"
+                    is TerrainState.Ready -> "Geländehorizont · GLO-90"
+                    TerrainState.Unavailable -> "Flacher Horizont · Gelände offline"
+                }, color = AstraTextMuted, fontSize = 11.sp)
+                if (!orientation.available && arEnabled) Text("Kein Richtungssensor – statische Ansicht",
+                    color = StarGold, fontSize = 12.sp)
+                if (!arEnabled) Text("Wischen zum Bewegen · Zwei Finger zum Zoomen · Zurücksetzen: Süden, 35° Höhe, 95° Sichtfeld",
+                    color = AstraTextMuted, fontSize = 11.sp)
+                if (!locationPermissionGranted) {
+                    Text("Ohne Standortfreigabe zeigt die Karte Berlin als Demo. Dein Standort richtet den Himmel auf dem Gerät aus.",
+                        color = AstraTextMuted, fontSize = 12.sp)
+                    LocationButton(onPermissionResult = onLocationPermissionResult,
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        textType = LocationButtonTextType.UsePreciseLocation,
+                        backgroundColor = if (redLightMode) Color(0xFF5A0000) else AstraBlue,
+                        textColor = if (redLightMode) Color(0xFFFF7868) else Night,
+                        iconTint = if (redLightMode) Color(0xFFFF7868) else Night,
+                        cornerRadius = 20.dp, pressedCornerRadius = 12.dp)
+                }
+            }
         }
         timeNotice?.let { notice ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -797,9 +939,11 @@ private fun SkyScreen(
                 TextButton(onClick = clearTimeNotice) { Text("OK") }
             }
         }
+        }
 
-        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))) {
-            if (arEnabled && cameraPermissionGranted) CameraPreview()
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))
+            .testTag("sky-viewport")) {
+            if (arEnabled && cameraPermissionGranted) CameraPreview { cameraFov = it }
             if (!arEnabled || (appearance.showInAr && appearance.mode != MilkyWayMode.OFF)) {
                 SkyTextureLayer(textureState, Modifier.fillMaxSize(), onStatus = { textureReady = it })
             }
@@ -830,112 +974,15 @@ private fun SkyScreen(
                 },
                 drawBackground = arEnabled,
                 showGrid = appearance.showGrid,
-                targetPosition = targetPosition.takeUnless { selection.target?.needsDeepSky == true && !showDeepSky }
+                targetPosition = targetPosition.takeUnless { selection.target?.needsDeepSky == true && !showDeepSky },
+                targetLabel = selection.target?.name,
+                labelDensity = appearance.labelDensity
             )
-            Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(cardinalDirection(viewAzimuth), color = StarGold, fontWeight = FontWeight.Bold)
-                Text("${viewAzimuth.toInt()}° · ${viewAltitude.toInt()}° Höhe", fontSize = 12.sp)
-            }
-            Column(
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                Button(
-                    onClick = {
-                        manualAzimuth = viewAzimuth
-                        manualAltitude = viewAltitude
-                        selection = selection.release()
-                        toggleAr()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (arEnabled) StarGold else NightBlue.copy(alpha = 0.88f),
-                        contentColor = if (arEnabled) Night else Color.White
-                    )
-                ) {
-                    Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (arEnabled) "Karte" else if (skyTime.live) "AR" else "AR · Jetzt")
-                }
-                Button(
-                    onClick = { showDeepSky = !showDeepSky },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (showDeepSky) AstraBlue else NightBlue.copy(alpha = 0.88f),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
-                }
-                Button(
-                    onClick = { showLayersPanel = !showLayersPanel },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (showLayersPanel) AstraSurfaceHigh else NightBlue.copy(alpha = 0.88f),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(if (showLayersPanel) "Ebenen schließen" else "Ebenen")
-                }
-                if (!arEnabled) {
-                    Button(
-                        onClick = {
-                            selection = selection.release()
-                            manualAzimuth = orientation.azimuth
-                            manualAltitude = orientation.altitude
-                            manualFov = 95f
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = NightBlue.copy(alpha = 0.88f),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Icon(Icons.Rounded.GpsFixed, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Ausrichten")
-                    }
-                }
-                Button(
-                    onClick = { showCalibration = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NightBlue.copy(alpha = 0.88f),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Rounded.Explore, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Kalibrieren")
-                }
-            }
-            if (!arEnabled && selection.target == null) {
-                Text(
-                    "Wischen zum Bewegen · Zwei Finger zum Zoomen",
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
-                        .background(Night.copy(alpha = 0.78f), RoundedCornerShape(12.dp)).padding(9.dp),
-                    color = Color(0xFFD8E4F7),
-                    fontSize = 12.sp
-                )
-            }
-            Text(
-                when (terrainState) {
-                    TerrainState.Loading -> "Geländeprofil wird geladen …"
-                    is TerrainState.Ready -> "Geländehorizont · GLO-90"
-                    TerrainState.Unavailable -> "Flacher Horizont · Gelände offline"
-                },
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
-                    .background(Night.copy(alpha = 0.72f), RoundedCornerShape(10.dp)).padding(7.dp),
-                color = Color(0xFFAAB8CE),
-                fontSize = 10.sp
-            )
-            if (!orientation.available && arEnabled) {
-                Text(
-                    "Kein Richtungssensor – statische Ansicht",
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
-                    color = StarGold,
-                    fontSize = 12.sp
-                )
-            }
         }
 
         selection.target?.let { target ->
-            Column(Modifier.fillMaxWidth().background(NightBlue).padding(horizontal = 16.dp, vertical = 8.dp),
+            Column(Modifier.fillMaxWidth().heightIn(max = targetMaxHeight).verticalScroll(rememberScrollState())
+                .background(NightBlue).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("${target.name} · ${target.typeLabel}", fontWeight = FontWeight.Bold)
                 targetPosition?.let { position ->
@@ -967,38 +1014,23 @@ private fun SkyScreen(
         }
         if (selection.target == null) targetMessage?.let { Text(it, Modifier.padding(12.dp), color = StarGold) }
 
-        if (!locationPermissionGranted) {
-            Column(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    "Dein Standort richtet den Himmel auf dem Gerät aus. Online-Wetter nutzt nach separater Freigabe einen gerundeten Ort. Ohne Standortfreigabe bleibt Berlin als Demo aktiv.",
-                    color = Color(0xFFAAB8CE),
-                    fontSize = 12.sp
-                )
-                LocationButton(
-                    onPermissionResult = onLocationPermissionResult,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    textType = LocationButtonTextType.UsePreciseLocation,
-                    backgroundColor = if (redLightMode) Color(0xFF5A0000) else AstraBlue,
-                    textColor = if (redLightMode) Color(0xFFFF7868) else Night,
-                    iconTint = if (redLightMode) Color(0xFFFF7868) else Night,
-                    cornerRadius = 20.dp,
-                    pressedCornerRadius = 12.dp
-                )
-            }
-        }
+    }
     }
 
     if (showLayersPanel) {
         SkySheetTheme(redLightMode) {
         ModalBottomSheet(onDismissRequest = { showLayersPanel = false }, containerColor = MaterialTheme.colorScheme.surface,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             contentColor = MaterialTheme.colorScheme.onSurface, scrimColor = Color.Black.copy(alpha = 0.7f)) {
             SkySheetSystemBars(redLightMode)
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Himmel & Ebenen", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Himmel & Ebenen", Modifier.weight(1f), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { showLayersPanel = false }) {
+                        Icon(Icons.Rounded.Close, "Ebenen schließen")
+                    }
+                }
                 SkyAppearanceControls(appearance, { updated ->
                     appearance = updated.normalized()
                     SkyAppearancePreferences.save(context, appearance)
@@ -1086,10 +1118,12 @@ private fun CalibrationStep(number: String, text: String) {
     }
 }
 
+@androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
 @Composable
-private fun CameraPreview() {
+private fun CameraPreview(onHorizontalFov: (Double) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val latestOnHorizontalFov by rememberUpdatedState(onHorizontalFov)
     val previewView = remember(context) {
         PreviewView(context).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -1103,26 +1137,94 @@ private fun CameraPreview() {
         val providerFuture = ProcessCameraProvider.getInstance(context)
         var provider: ProcessCameraProvider? = null
         var disposed = false
+        var preview: Preview? = null
+        var boundCharacteristics: CameraCharacteristics? = null
+        var focalLength: Float? = null
+        var lastReportedFov: Double? = null
+        val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val lastCaptureFocalLength = java.util.concurrent.atomic.AtomicReference<Float?>(null)
+        val reportFieldOfView: () -> Unit = report@{
+            if (disposed || previewView.width <= 0 || previewView.height <= 0) return@report
+            // Keep dimensions in the same bound-camera coordinate system as CameraX's matrix.
+            val characteristics = boundCharacteristics ?: return@report
+            val sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE) ?: return@report
+            val pixelSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE) ?: return@report
+            val focal = focalLength ?: characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                ?.firstOrNull() ?: return@report
+            // CameraX owns this transform: do not assume that sensor height means portrait width.
+            val sensorToView = previewView.sensorToViewTransform ?: return@report
+            val viewToSensor = android.graphics.Matrix()
+            if (!sensorToView.invert(viewToSensor)) return@report
+            val edges = floatArrayOf(0f, previewView.height / 2f,
+                previewView.width.toFloat(), previewView.height / 2f)
+            viewToSensor.mapPoints(edges)
+            val fov = cameraHorizontalFovDegrees(
+                (edges[2] - edges[0]).toDouble(), (edges[3] - edges[1]).toDouble(),
+                sensorSize.width.toDouble(), sensorSize.height.toDouble(),
+                pixelSize.width, pixelSize.height, focal.toDouble()
+            ) ?: return@report
+            if (lastReportedFov == null || kotlin.math.abs(fov - lastReportedFov!!) > 0.05) {
+                lastReportedFov = fov
+                latestOnHorizontalFov(fov)
+            }
+        }
+        val layoutListener = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            previewView.display?.let { preview?.targetRotation = it.rotation }
+            previewView.post { reportFieldOfView() }
+        }
+        val streamObserver = androidx.lifecycle.Observer<PreviewView.StreamState> {
+            if (it == PreviewView.StreamState.STREAMING) reportFieldOfView()
+        }
+        previewView.addOnLayoutChangeListener(layoutListener)
+        previewView.previewStreamState.observe(lifecycleOwner, streamObserver)
         providerFuture.addListener({
             if (!disposed) {
                 runCatching {
                     provider = providerFuture.get().also { cameraProvider ->
-                        val preview = Preview.Builder().build().also {
+                        provider = cameraProvider
+                        val builder = Preview.Builder()
+                        previewView.display?.let { builder.setTargetRotation(it.rotation) }
+                        // Only optical metadata is read; no camera frame is copied or stored.
+                        androidx.camera.camera2.interop.Camera2Interop.Extender(builder)
+                            .setSessionCaptureCallback(object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
+                                override fun onCaptureCompleted(
+                                    session: android.hardware.camera2.CameraCaptureSession,
+                                    request: android.hardware.camera2.CaptureRequest,
+                                    result: android.hardware.camera2.TotalCaptureResult
+                                ) {
+                                    val measuredFocalLength = result.get(android.hardware.camera2.CaptureResult.LENS_FOCAL_LENGTH)
+                                    if (lastCaptureFocalLength.getAndSet(measuredFocalLength) == measuredFocalLength) return
+                                    previewView.post {
+                                        if (!disposed) {
+                                            focalLength = measuredFocalLength
+                                            reportFieldOfView()
+                                        }
+                                    }
+                                }
+                            })
+                        val boundPreview = builder.build().also {
                             it.surfaceProvider = previewView.surfaceProvider
                         }
-                        cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
+                        preview = boundPreview
+                        val camera = cameraProvider.bindToLifecycle(
                             lifecycleOwner,
                             CameraSelector.DEFAULT_BACK_CAMERA,
-                            preview
+                            boundPreview
                         )
+                        boundCharacteristics = runCatching {
+                            val cameraInfo = androidx.camera.camera2.interop.Camera2CameraInfo.from(camera.cameraInfo)
+                            manager.getCameraCharacteristics(cameraInfo.cameraId)
+                        }.getOrNull()
+                        previewView.post { reportFieldOfView() }
                     }
                 }
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
             disposed = true
-            provider?.unbindAll()
+            previewView.removeOnLayoutChangeListener(layoutListener)
+            previewView.previewStreamState.removeObserver(streamObserver)
+            preview?.let { provider?.unbind(it) }
         }
     }
 }
@@ -1165,7 +1267,9 @@ internal fun SkyCanvas(
     modifier: Modifier = Modifier,
     drawBackground: Boolean = true,
     showGrid: Boolean = false,
-    targetPosition: HorizontalCoordinates? = null
+    targetPosition: HorizontalCoordinates? = null,
+    labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL,
+    targetLabel: String? = null
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val latestAzimuth by rememberUpdatedState(viewAzimuth)
@@ -1208,8 +1312,33 @@ internal fun SkyCanvas(
             )
     ) {
         val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov, perspective = !arMode)
+        val labels = mutableListOf<SkyLabelCandidate>()
+        val labelPaints = mutableMapOf<String, android.graphics.Paint>()
+        fun addLabel(
+            id: String, text: String, point: Offset, kind: SkyLabelKind,
+            textSize: Float, color: Int, alpha: Int = 225, rank: Double = 0.0,
+            anchorGap: Float = 6.dp.toPx()
+        ) {
+            if (!projection.contains(point)) return
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                this.textSize = textSize
+                this.color = color
+                this.alpha = alpha
+                setShadowLayer(1.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
+            }
+            val metrics = paint.fontMetrics
+            labels += SkyLabelCandidate(id, text, point.x, point.y, kind, textSize,
+                metrics.top, metrics.bottom, anchorGap, rank)
+            labelPaints[id] = paint
+        }
         if (showGrid) drawSkyGrid(viewAzimuth, viewAltitude)
         drawMilkyWay(milkyWay, projection)
+        milkyWay.asSequence().filterIndexed { index, _ -> index % 20 == 0 }
+            .filter { targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE }
+            .mapNotNull { projection.point(it) }.firstOrNull()?.let { point ->
+                addLabel("milky-way", "MILCHSTRASSE", point, SkyLabelKind.MILKY_WAY,
+                    10.sp.toPx(), android.graphics.Color.rgb(184, 210, 255), 180)
+            }
         drawIauBoundaries(constellationBoundaries, projection, arMode)
         val projected = objects.mapNotNull { item ->
             projection.point(item.position, padding = 32f)?.let { item to it }
@@ -1227,15 +1356,12 @@ internal fun SkyCanvas(
         ConstellationLines.labels.forEach { label ->
             byHip[label.anchorHip]?.let { point ->
                 if (showConstellationIllustrations) drawConstellationIllustration(label.name, point, arMode)
-                if (projection.contains(point)) drawEdgeLabel(
-                    label.name.uppercase(Locale.GERMAN),
-                    point + Offset(14f, 34f),
-                    android.graphics.Paint().apply {
-                        color = android.graphics.Color.rgb(109, 168, 255)
-                        textSize = 24f
-                        alpha = if (arMode) 205 else 105
-                    }
-                )
+                val position = objectsByHip[label.anchorHip]?.position
+                if (position != null && targetVisibility(position, terrainProfile) == TargetVisibility.ABOVE) {
+                    addLabel("constellation-${label.name}", label.name.uppercase(Locale.GERMAN), point,
+                        SkyLabelKind.CONSTELLATION, 10.sp.toPx(), android.graphics.Color.rgb(109, 168, 255),
+                        if (arMode) 220 else 160, anchorGap = 12.dp.toPx())
+                }
             }
         }
         projected.forEach { (item, point) ->
@@ -1273,28 +1399,70 @@ internal fun SkyCanvas(
                 }
             }
             val shouldLabel = when (objectData.objectType) {
-                CelestialType.STAR -> objectData.magnitude < 1.5 && !objectData.name.startsWith("HIP ")
+                CelestialType.STAR -> objectData.magnitude < (if (labelDensity == SkyLabelDensity.RICH) 4.0 else 1.5) &&
+                    !objectData.name.startsWith("HIP ")
                 CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> true
-                else -> objectData.messierId.isNotBlank() || objectData.magnitude < 7.0
+                else -> objectData.messierId.isNotBlank() || objectData.magnitude <
+                    (if (labelDensity == SkyLabelDensity.RICH) 10.0 else 7.0)
             }
-            if (shouldLabel && projection.contains(point)) {
-                drawEdgeLabel(
-                    objectData.name,
-                    point + Offset(10f, -8f),
-                    android.graphics.Paint().apply {
-                        color = android.graphics.Color.WHITE
-                        textSize = 30f
-                        alpha = 210
+            if (shouldLabel && targetVisibility(item.position, terrainProfile) == TargetVisibility.ABOVE &&
+                !(targetPosition != null && objectData.name == targetLabel)) {
+                val kind = when (objectData.objectType) {
+                    CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> SkyLabelKind.SOLAR_SYSTEM
+                    CelestialType.STAR -> if (objectData.magnitude < 1.5) SkyLabelKind.BRIGHT_STAR else SkyLabelKind.STAR
+                    else -> SkyLabelKind.DEEP_SKY
+                }
+                addLabel("object-${objectData.catalogId}", objectData.name, point, kind,
+                    12.sp.toPx(), android.graphics.Color.WHITE, rank = objectData.magnitude)
+            }
+        }
+        val horizonPoints = (0..120).mapNotNull { step ->
+            val azimuth = step * 3.0
+            projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0))
+        }
+        val orientationColor = android.graphics.Color.rgb(255, 217, 138)
+        horizonPoints.minByOrNull { it.x }?.let { point ->
+            addLabel("horizon", if (terrainProfile == null) "HORIZONT" else "GELÄNDEHORIZONT", point,
+                SkyLabelKind.ORIENTATION, 10.sp.toPx(), orientationColor, rank = 1.0)
+        }
+        listOf(0.0 to "N", 90.0 to "O", 180.0 to "S", 270.0 to "W").forEach { (azimuth, name) ->
+            projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0))?.let { point ->
+                addLabel("direction-$name", name, point, SkyLabelKind.ORIENTATION, 13.sp.toPx(), orientationColor)
+            }
+        }
+        val selectedPoint = targetPosition?.takeIf {
+            targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE
+        }?.let { projection.point(it) }
+        if (selectedPoint != null && !targetLabel.isNullOrBlank()) {
+            addLabel("selected-target", targetLabel, selectedPoint, SkyLabelKind.TARGET,
+                13.sp.toPx(), orientationColor, anchorGap = 22.dp.toPx())
+        }
+        val placedLabels = layoutSkyLabels(labels, size.width, size.height, labelDensity,
+            padding = 8.dp.toPx(), separation = 5.dp.toPx(),
+            measureText = { label, text -> labelPaints.getValue(label.id).measureText(text) },
+            canPlace = { label, bounds ->
+                label.kind == SkyLabelKind.ORIENTATION ||
+                    listOf(bounds.left, (bounds.left + bounds.right) / 2f, bounds.right).all { x ->
+                        listOf(bounds.top, bounds.bottom).all { y ->
+                            projection.coordinates(Offset(x, y))?.let {
+                                targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE
+                            } == true
+                        }
                     }
-                )
-            }
+            })
+        // Celestial labels remain below the ground layer, including narrow terrain peaks between samples.
+        placedLabels.filter { it.candidate.kind != SkyLabelKind.ORIENTATION }.forEach { label ->
+            drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
+                labelPaints.getValue(label.candidate.id))
         }
         if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
         else drawSphericalTerrainHorizon(terrainProfile, projection)
-        targetPosition?.takeIf { targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE }?.let { target ->
-            projection.point(target)?.let { point ->
-                drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
-            }
+        selectedPoint?.let { point ->
+            drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
+        }
+        placedLabels.filter { it.candidate.kind == SkyLabelKind.ORIENTATION }.forEach { label ->
+            drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
+                labelPaints.getValue(label.candidate.id))
         }
     }
 }
@@ -1393,21 +1561,6 @@ private fun DrawScope.drawMilkyWay(
         style = Stroke(34f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     drawPath(path, Color(0xFFD5E3FF).copy(alpha = 0.23f),
         style = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    band.asSequence().filterIndexed { index, _ -> index % 20 == 0 }
-        .mapNotNull { projection.point(it) }
-        .firstOrNull { it.x in 70f..size.width - 210f && it.y in 40f..size.height - 40f }
-        ?.let { point ->
-            drawContext.canvas.nativeCanvas.drawText(
-                "MILCHSTRASSE",
-                point.x,
-                point.y - 18f,
-                android.graphics.Paint().apply {
-                    color = android.graphics.Color.rgb(184, 210, 255)
-                    textSize = 23f
-                    alpha = 165
-                }
-            )
-        }
 }
 
 private fun DrawScope.drawTerrainHorizon(
@@ -1441,19 +1594,6 @@ private fun DrawScope.drawTerrainHorizon(
     points.zipWithNext().forEach { (start, end) ->
         drawLine(StarGold.copy(alpha = 0.72f), start, end, 2.2f)
     }
-    val labelPoint = points[3]
-    if (labelPoint.y in 20f..size.height - 10f) {
-        drawContext.canvas.nativeCanvas.drawText(
-            if (profile == null) "HORIZONT" else "GELÄNDEHORIZONT",
-            18f,
-            labelPoint.y - 10f,
-            android.graphics.Paint().apply {
-                color = android.graphics.Color.rgb(255, 217, 138)
-                textSize = 24f
-                alpha = 200
-            }
-        )
-    }
 }
 
 private fun DrawScope.drawSphericalTerrainHorizon(profile: TerrainProfile?, projection: SkyProjection) {
@@ -1475,14 +1615,6 @@ private fun DrawScope.drawSphericalTerrainHorizon(profile: TerrainProfile?, proj
     drawPath(ground, Color(0xFF03070D))
     drawPath(projectedPath(horizon, projection, padding = 1.1f), StarGold.copy(alpha = 0.72f),
         style = Stroke(2.2f, join = StrokeJoin.Round))
-    horizon.mapNotNull { projection.point(it) }.minByOrNull { it.x }?.let { point ->
-        drawEdgeLabel(if (profile == null) "HORIZONT" else "GELÄNDEHORIZONT", point + Offset(18f, -10f),
-            android.graphics.Paint().apply {
-                color = android.graphics.Color.rgb(255, 217, 138)
-                textSize = 24f
-                alpha = 200
-            })
-    }
 }
 
 private fun DrawScope.drawSkyGrid(viewAzimuth: Double, viewAltitude: Double) {
@@ -1517,26 +1649,6 @@ private fun projectedPath(
             previousEnd = segment.end
         }
     }
-}
-
-private fun DrawScope.drawEdgeLabel(text: String, desired: Offset, paint: android.graphics.Paint) {
-    val padding = 8f
-    val availableWidth = size.width - padding * 2
-    val metrics = paint.fontMetrics
-    val minBaseline = padding - metrics.ascent
-    val maxBaseline = size.height - padding - metrics.descent
-    if (availableWidth <= 0f || minBaseline > maxBaseline) return
-    val label = if (paint.measureText(text) <= availableWidth) text else {
-        val remaining = availableWidth - paint.measureText("…")
-        if (remaining <= 0f) return
-        text.take(paint.breakText(text, true, remaining, null)) + "…"
-    }
-    drawContext.canvas.nativeCanvas.drawText(
-        label,
-        desired.x.coerceIn(padding, (size.width - padding - paint.measureText(label)).coerceAtLeast(padding)),
-        desired.y.coerceIn(minBaseline, maxBaseline),
-        paint
-    )
 }
 
 @Composable

@@ -10,7 +10,7 @@ Jede größere funktionale, technische oder sicherheitsrelevante Änderung erhä
 
 - `targetSdk 37` und `compileSdk 37`
 - eindeutige Application-ID `de.projektastra.app`
-- Version 1.1.5 / Version Code 14
+- Testversion 1.1.6-pre.1 / Version Code 15
 - Android App Bundle konfiguriert
 - R8-Minifizierung und Ressourcenverkleinerung für Release
 - optionale lokale Upload-Key-Konfiguration ohne Geheimnisse im Repository
