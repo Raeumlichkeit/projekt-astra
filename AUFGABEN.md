@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 11. September 2026 · Aktueller Ausbau: Version 1.1.7-pre.1.
+Stand: 11. September 2026 · Aktueller Ausbau: Version 1.1.7-pre.2.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -62,6 +62,7 @@ Umgesetzt in Version 1.1.3. Die Textur basiert auf NASA/Gaia-Sterndaten; sie ist
 - [x] Gerundeten Standortmarker, Umkreis von 10/25/50 km und Zoom-/Kartengrenzen ergänzen; Beobachtungsorte mit Entfernung und Bildlichtdifferenz vergleichbar machen.
 - [x] Künstliches Nachtlicht, punktuelle Raster-Klassen und Beobachtungsplatzvergleich getrennt schaltbar machen.
 - [x] Datenjahr, Datenalter, Kachelquelle und Unsicherheit verständlich anzeigen; die historischen Daten von 2016 ausdrücklich kennzeichnen.
+- [x] Veraltete NASA-Lichtdaten von 2016 direkt am Astra-Score und über der internen Karte kennzeichnen, ohne erst Details öffnen zu müssen (1.1.7-pre.2). Berechnung unverändert lassen.
 - [x] Offline-/Fehlerzustand, Cache-Löschung und erneutes Laden mit automatisierten Android-Fixtures testen; Lichtkarten erhalten nur den gerundeten GPS-Startort und benötigen Online-Freigabe.
 - [x] Astra-Karte bei Rotlicht, kleiner Fläche, großer Schrift, Mercator-Grenzen und teilweisen Kachelfehlern im Emulator prüfen.
 - [x] Offizielle LightPollutionMap.app-Einbettung nach gesonderter Ladefreigabe ergänzen; Empfänger und Einschränkungen erläutern, Standortdetails innerhalb der Anbieterkarte belassen.

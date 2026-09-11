@@ -1929,7 +1929,7 @@ private fun WeatherScreen(location: GeoPoint?, simulatedSkyTime: Instant?, refre
                     }
                     (lightPollution as? LightPollutionState.Ready)?.estimate?.let {
                         WeatherTile(
-                            "Lichtverschmutzung",
+                            "Lichtverschmutzung · NASA ${it.sourceYear}",
                             "Index ${it.index}/100 · Bortle ≈ ${it.bortleClass}",
                             Modifier.fillMaxWidth()
                         )
@@ -2378,7 +2378,7 @@ internal object AstraScoreCalculator {
                 "Lichtverschmutzung",
                 lightPollution?.let { (it.index * 0.20).roundToInt().coerceIn(0, 20) } ?: 0,
                 lightPollution?.let {
-                    "Astra-Bildlichtindex ${it.index}/100 · Bortle-Hinweis ≈ ${it.bortleClass} (unvalidiert) · maximal −20"
+                    "NASA ${it.sourceYear} (veraltet) · Astra-Bildlichtindex ${it.index}/100 · Bortle-Hinweis ≈ ${it.bortleClass} (unvalidiert) · maximal −20"
                 } ?: "Noch kein Bildlichtindex verfügbar · kein Abzug"
             )
         )
@@ -2423,6 +2423,14 @@ private fun ObservationScore(
                     Text("Astra-Score von 100 Punkten", color = Color(0xFFAAB8CE))
                 }
             }
+            Text(
+                "Veraltete Lichtdaten · NASA ${lightPollution?.sourceYear ?: LightPollutionModel.sourceMetadata.dataYear}\n" +
+                    "Die Datenbasis für den Lichtanteil ist keine aktuelle Erfassung. Die heutige Beleuchtung kann abweichen. " +
+                    "Werte der externen Lichtkarte fließen nicht in den Score ein.",
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp),
+                color = StarGold,
+                fontSize = 13.sp
+            )
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             Row(
                 Modifier.fillMaxWidth().clickable { detailsVisible = !detailsVisible }.padding(16.dp),

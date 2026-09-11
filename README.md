@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Status:** `1.1.7-pre.1` · Version Code `16` · Android 9 / API 28 bis Android 17 / API 37<br>
-Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.7-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.7-pre.1).
+**Status:** `1.1.7-pre.2` · Version Code `17` · Android 9 / API 28 bis Android 17 / API 37<br>
+Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.7-pre.2 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.7-pre.2).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -23,7 +23,11 @@ Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: 
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.7-pre.1
+## Neu in 1.1.7-pre.2
+
+Ein sichtbarer Hinweis direkt am Astra-Score und oberhalb der internen Lichtkarte kennzeichnet die NASA-Lichtdaten von **2016 als veraltet**. Der Hinweis bleibt bei eingeklappter Score-Erklärung und im Karten-Vollbild sichtbar. Neuladen liefert keine neueren Beobachtungen; heutige Beleuchtung kann abweichen. Die Score-Berechnung bleibt unverändert, die Werte der externen Karte werden weiterhin nicht übernommen. Testhinweise: [1.1.7-pre.2](play-store/pre-release-1.1.7-pre.2.md).
+
+## Lichtkarten seit 1.1.7-pre.1
 
 Im Kalender lässt sich zusätzlich die offizielle deutsche Einbettung von [LightPollutionMap.app](https://lightpollutionmap.app/de/) öffnen. Vor dem Laden steht ein eigener Hinweis zu den externen Anbietern und dem gerundeten Startort. Die externe Ansicht benötigt die bewusste Aktion **Externe Karte laden**; sie erhält keinen GPS-, Kamera- oder Dateizugriff. Ihre Modellwerte bleiben innerhalb der Anbieterkarte und werden nicht in den Astra-Score übernommen. Zusätzliche Website-Funktionen wie Wetter, Adresssuche und Foto-Upload sind nicht freigeschaltet.
 
@@ -79,9 +83,9 @@ adb install -r app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk
 adb shell am instrument -w de.projektastra.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.7.md](play-store/pre-release-1.1.7.md).
+Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.7-pre.2.md](play-store/pre-release-1.1.7-pre.2.md).
 
-Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.7.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
+Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.7-pre.2.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
 
 ## Release und Pre-Releases
 

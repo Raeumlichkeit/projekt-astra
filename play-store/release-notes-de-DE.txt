@@ -1,8 +1,6 @@
-Neu in Projekt Astra 1.1.7 (Vorabversion):
+Neu in Projekt Astra 1.1.7-pre.2:
 
-• LightPollutionMap.app nach eigenem Anbieterhinweis direkt öffnen
-• Verbesserte Lichtkarte mit Maßstab, Umkreis und Ortsvergleich
-• Vergrößerbare Ansicht und getrennt schaltbare Kartenebenen
-• Datenalter, Quellen und Grenzen der Helligkeitsnäherung sichtbar
-• Karten bei Ladefehlern behalten und gezielt erneut laden
-• Fehlende Bilddaten werden nicht als dunkler Himmel gewertet
+• Deutlicher Hinweis auf veraltete NASA-Lichtdaten von 2016 direkt am Astra-Score
+• Warnung auch über der internen Lichtkarte, einschließlich Vollbild
+• Neuladen ändert den historischen Datenstand nicht
+• Score-Berechnung und externe Karte unverändert

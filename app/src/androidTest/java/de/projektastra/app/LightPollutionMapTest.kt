@@ -66,6 +66,40 @@ class LightPollutionMapTest {
         assertEquals("true", js("!!window.astraMap && !!window.astraLightMap"))
     }
 
+    @Test fun outdatedDataWarningIsVisibleBeforeOpeningDetailsOnSmallViewport() {
+        SecureNetwork.configure(PrivacyOptions())
+        SecureNetwork.setForeground(true)
+        launch(fixtures = false, widthDp = 320, heightDp = 480)
+        awaitJs("!!window.astraLightMap")
+        assertFalse(SecureNetwork.available)
+        assertEquals("true", js("document.querySelectorAll('details[open]').length === 0"))
+        assertEquals("true", js("""
+            (() => {
+                const notice = document.getElementById('outdated-data-notice');
+                if (!notice || !notice.closest('.toolbar') || notice.closest('details')) return false;
+                const text = notice.innerText;
+                return text.includes('Veraltete Lichtdaten') && text.includes('NASA 2016') &&
+                    text.includes('Neuere Beleuchtung ist nicht erfasst') &&
+                    text.includes('Neuladen ändert den Datenstand nicht');
+            })()
+        """.trimIndent()))
+        assertEquals("The data warning must be visible without expanding or scrolling the toolbar", "true", js("""
+            (() => {
+                const notice = document.getElementById('outdated-data-notice');
+                const toolbar = notice.closest('.toolbar');
+                const bounds = notice.getBoundingClientRect();
+                const toolbarBounds = toolbar.getBoundingClientRect();
+                const style = getComputedStyle(notice);
+                return style.display !== 'none' && style.visibility === 'visible' &&
+                    Number(style.opacity) > 0 && bounds.height > 0 &&
+                    bounds.top >= Math.max(0, toolbarBounds.top) - 1 &&
+                    bounds.bottom <= Math.min(window.innerHeight, toolbarBounds.bottom) + 1 &&
+                    bounds.left >= -1 && bounds.right <= window.innerWidth + 1 &&
+                    toolbar.scrollTop === 0;
+            })()
+        """.trimIndent()))
+    }
+
     @Test fun controlsAndLegendFitSmallViewportAndLargeText() {
         launch(widthDp = 320, heightDp = 480)
         awaitJs("!!window.astraLightMap")

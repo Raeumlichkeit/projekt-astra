@@ -20,4 +20,4 @@ Reine Dokumentationsänderungen, interne Testanpassungen und unveränderte Forma
 5. Den Pre-Release auf mindestens einem weiteren Android-Gerät testen und Rückmeldungen sowie Blocker dokumentieren.
 6. Nach Korrektur und Freigabe den stabilen Release ohne `-pre.<n>` veröffentlichen. Der stabile Release erhält einen neuen, höheren `versionCode`.
 
-Der aktuelle Entwicklungsstand der Lichtverschmutzungskarte ist `1.1.7-pre.1` (Version Code 16). Die Kartenbedienung wurde als `v1.1.6-pre.1`, die Zeitsteuerung als `v1.1.5-pre.1` veröffentlicht. Ein Pre-Release ist kein Play-Store-Produktivstand; Datenschutz-, Signatur- und Store-Prüfungen bleiben vor der stabilen Veröffentlichung erforderlich.
+Der aktuelle Entwicklungsstand ist `1.1.7-pre.2` (Version Code 17), mit sichtbaren Hinweisen auf die alten Lichtdaten. Die Lichtkarten wurden als `v1.1.7-pre.1`, die Kartenbedienung als `v1.1.6-pre.1` und die Zeitsteuerung als `v1.1.5-pre.1` veröffentlicht. Ein Pre-Release ist kein Play-Store-Produktivstand; Datenschutz-, Signatur- und Store-Prüfungen bleiben vor der stabilen Veröffentlichung erforderlich.
