@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Status:** `1.1.6-pre.1` · Version Code `15` · Android 9 / API 28 bis Android 17 / API 37<br>
-Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.6-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.6-pre.1).
+**Status:** `1.1.7-pre.1` · Version Code `16` · Android 9 / API 28 bis Android 17 / API 37<br>
+Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.7-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.7-pre.1).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -20,10 +20,20 @@ Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: 
 | AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
 | Wetter | Open-Meteo-Vorhersage, Wolken, Regenwahrscheinlichkeit, Wind, Sicht, Radar- und Wetterkarte |
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
-| Licht | NASA-VIIRS-Nachtlichtkarte, numerischer Lichtindex, Bortle-Schätzung und Astra-Score-Abzug |
+| Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.6-pre.1
+## Neu in 1.1.7-pre.1
+
+Im Kalender lässt sich zusätzlich die offizielle deutsche Einbettung von [LightPollutionMap.app](https://lightpollutionmap.app/de/) öffnen. Vor dem Laden steht ein eigener Hinweis zu den externen Anbietern und dem gerundeten Startort. Die externe Ansicht benötigt die bewusste Aktion **Externe Karte laden**; sie erhält keinen GPS-, Kamera- oder Dateizugriff. Ihre Modellwerte bleiben innerhalb der Anbieterkarte und werden nicht in den Astra-Score übernommen. Zusätzliche Website-Funktionen wie Wetter, Adresssuche und Foto-Upload sind nicht freigeschaltet.
+
+Die Lichtverschmutzungskarte im Kalender bietet einen Kilometermaßstab, einen Umkreis von 10, 25 oder 50 km und getrennte Schalter für Nachtlicht, Raster-Klassen und Ortsvergleich. Ein angetippter Vergleichsort wird dem gerundeten Beobachtungsort gegenübergestellt. Mit **Karte vergrößern** erhält sie mehr Platz; Zoom und Vergleich bleiben beim Öffnen und Schließen erhalten.
+
+Die Legende zeigt den Bildlichtindex, Quellen und das Alter der NASA-Daten von **2016**. Ein neuer Kachelabruf ist keine neue Satellitenbeobachtung. Die Bortle- und Helligkeitsangaben sind unvalidierte Näherungen aus dem dargestellten Kartenbild, keine kalibrierten Strahldichten, SQM-Messungen oder Zusagen eines dunklen Himmels. Eine wissenschaftlich kalibrierte Himmelshelligkeitskarte bleibt ein eigener weiterer Schritt.
+
+Fehlende oder transparente Pixel werden als fehlende Daten behandelt. Bei Ladefehlern bleibt bereits geladenes Kartenmaterial sichtbar; **Neu laden** versucht den Abruf erneut. Den privaten Grundkartencache kannst du direkt an der Karte löschen. Online-Freigabe, Standort-Rundung und Rotlichtmodus gelten auch für die vergrößerte Ansicht; Vergleichsorte werden nicht gespeichert.
+
+## Sternkartenbedienung seit 1.1.6
 
 Die Sternkarte hat eine eigene Kartenfläche und eine einklappbare Bedienung. Die Vollbildtaste blendet Navigation und Kopfbereich aus; dieselbe Taste oder Androids Zurück-Geste beendet den Modus. **Ansicht zurücksetzen** stellt Süden, 35° Höhe und ein horizontales Sichtfeld von 95° wieder her und beendet das Nachführen.
 
@@ -64,12 +74,14 @@ Die wichtigsten Prüfungen:
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest :app:lint
 .\gradlew.bat :app:assembleDebugAndroidTest
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+adb install -r app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk
 adb shell am instrument -w de.projektastra.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.6.md](play-store/pre-release-1.1.6.md).
+Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.7.md](play-store/pre-release-1.1.7.md).
 
-Letzter Prüfstand dieses Pre-Releases: 87 JVM-Tests, 19 Android-Instrumentationstests und Lint ohne Befund. Die Test-APK wurde auf dem Android-17-Emulator installiert und ausgeführt; die Prüfung auf echten Geräten bleibt Teil des Pre-Release-Feedbacks.
+Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.7.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
 
 ## Release und Pre-Releases
 
@@ -87,7 +99,6 @@ Für eine Veröffentlichung im Play Store müssen zusätzlich ein außerhalb des
 
 Die vollständige, priorisierte Liste steht in [AUFGABEN.md](AUFGABEN.md). Als nächste P1-Schritte sind geplant:
 
-- **P1.5 Lichtverschmutzungskarte:** Legende, Maßstab, Datenalter, Unsicherheit, getrennte Ebenen sowie robuste Offline- und Fehlerzustände.
 - **P1.6 Wetteraktualisierung:** alte erfolgreiche Wetterdaten während Pull-to-Refresh sichtbar lassen, Ladeanzeige darüberlegen und Fehler mit Datenalter und Wiederholen anzeigen.
 - **P1.7 Startgeschwindigkeit:** Kataloge und Suchindex gestuft beziehungsweise aus dem UI-Thread laden, Caches nutzen und den ersten Kartenrahmen priorisieren.
 
@@ -99,7 +110,7 @@ Nachtplanung, Tagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe folgen unter P2.
 - GPS wird für Himmels- und Ereignisberechnungen lokal verwendet. Erst nach gesonderter Online-Freigabe erhält der Wetter-/Kartenanbieter einen auf 0,01° gerundeten Ort; das genaue Geländeprofil hat eine weitere Freigabe.
 - Kamera- und Bewegungssensoren werden lokal verarbeitet. Es werden keine Kameraaufnahmen gespeichert oder hochgeladen.
 - Es gibt kein Konto, keine automatische Cloud-Synchronisierung, keine Suchhistorie und keine automatische Geräte- oder Android-App-Sicherung.
-- WebViews deaktivieren Cookies, DOM-Speicher und Browser-Cache. Kartenkacheln liegen in einem privaten, löschbaren Cache.
+- WebViews deaktivieren Cookies, DOM-Speicher und Browser-Cache. OSM-Kacheln der Astra-Karte liegen in einem privaten, löschbaren Cache. Die freiwillig eingebettete Anbieterkarte hat eigene Empfänger; ihr Hinweis steht vor dem Laden und in der Datenschutzerklärung.
 - Die externen Dienste und Lösch-/Aufbewahrungshinweise stehen in der [Datenschutzerklärung](play-store/privacy-policy.html) und in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Die Anwendung besitzt keinen Nachweis einer ISO/IEC-27001-Zertifizierung. Diese Norm umfasst neben technischen Kontrollen auch ein organisatorisches Informationssicherheitsmanagement. Prüfstatus und offene Maßnahmen stehen in [SECURITY_REVIEW.md](SECURITY_REVIEW.md) und [SECURITY_REMEDIATION.md](SECURITY_REMEDIATION.md).

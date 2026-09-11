@@ -1,5 +1,17 @@
 # Sicherheitsmaßnahmen – Version 1.1.1 / Code 10
 
+**Nachtrag 1.1.7-pre.1 / Code 16, 11. September 2026:** Die historische Prüfung unten beschreibt weiterhin 1.1.1. Die neue externe Lichtkarte ist eine bewusst aktivierte Ausnahme vom damaligen ausschließlich lokalen WebView-Inhalt; sie erweitert nicht die normale `NetworkPolicy`.
+
+- Offizieller Embed-Endpunkt in einer getrennten WebView erst nach dem eigenen Anbieterhinweis und Betätigung von „Externe Karte laden“. Allgemeine Online-Freigabe und Vordergrund bleiben erforderlich; die zusätzliche Freigabe wird nicht dauerhaft gespeichert.
+- GPS-Startort auf 0,01° gerundet, ohne Höhenwert. Vom Nutzer angetippte Kartenpunkte werden durch die externe Website verarbeitet. IP-Adresse, Anfragezeit, Browser-/Android-/gegebenenfalls Geräteangaben und betrachteter Bereich erreichen die genannten Anbieter. Deren Aufbewahrungsfristen bleiben ungeklärt; die vorhandene rechtliche Freigabesperre bleibt bestehen.
+- Nur freigegebene HTTPS-Hosts und Kartenpfade. Das externe Hauptdokument wird größenbegrenzt und ohne Weiterleitungen abgerufen; eine zusätzliche Antwort-CSP begrenzt auch Browser-Weiterleitungsziele. Sandboxed iframe, keine nativen JavaScript-Brücken, Cookies, DOM-Speicherung, Browser-Diskcache, Autofill oder gespeicherter View-Zustand. JavaScript-Konsole wird nicht ins Android-Systemlog weitergereicht, da Fehlermeldungen Kartenkoordinaten enthalten können.
+- Geräteberechtigungen, Dateiauswahl, Downloads, Popups und nicht freigegebene Zusatzdienste gesperrt. Service-Worker-Netzzugriff deaktiviert. Beim Hintergrundwechsel wird das Dokument entladen und der eigene laufende Dokumentabruf abgebrochen; Schließen verwirft die WebView. Das löscht keine Protokolle bei Anbietern.
+- Eigene NASA-Karte: transparente/fehlende Bildpixel nicht als dunkler Himmel bewerten, Caches gegen verspätete Antworten nach Löschung absichern, Vergleichsorte nicht dauerhaft speichern. Die Bildlicht-/Bortle-Näherung ist ausdrücklich unvalidiert.
+
+Automatisierte Policy-/Chromium-/Layouttests und der begrenzte Live-Test sind in den [Pre-Release-Hinweisen](play-store/pre-release-1.1.7.md) dokumentiert. Keine vollständige Netzwerkanalyse, unabhängige Sicherheitsprüfung oder ISO-Zertifizierung; Änderungen an der live gelieferten Website erfordern erneute Prüfung. Das öffentliche GitHub-Pre-Release ist keine Play-Store-Freigabe.
+
+## Historischer Prüfstand 1.1.1
+
 Stand: 6. September 2026. Ausgangspunkt: Commit `72cf296e208707f98646d80271eeab33dba94ff9`, Version 1.1.0. Der [ursprüngliche Prüfbericht](SECURITY_REVIEW.md) bleibt als Befundhistorie erhalten; seine Zeilenverweise beziehen sich auf diesen Ausgangsstand.
 
 ## Ergebnis und Grenzen

@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 8. September 2026 · Aktueller Ausbau: Version 1.1.6-pre.1.
+Stand: 11. September 2026 · Aktueller Ausbau: Version 1.1.7-pre.1.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -58,12 +58,21 @@ Umgesetzt in Version 1.1.3. Die Textur basiert auf NASA/Gaia-Sterndaten; sie ist
 
 ### 5. Lichtverschmutzungskarte verbessern
 
-- [ ] Einen klaren Kartenmaßstab mit Legende für VIIRS-Index, geschätzte Himmelshelligkeit und Bortle-Klasse direkt in der Karte anzeigen.
-- [ ] Standortmarker, Suchradius und sichtbare Zoom-/Kartengrenzen ergänzen; die Karte soll Beobachtungsplätze in der Umgebung vergleichbar machen.
-- [ ] Kartenebenen für künstliches Nachtlicht, Bortle-Schätzung und optionalen Beobachtungsplatz-Modus getrennt schaltbar machen.
-- [ ] Datenjahr, Datenalter, Kachelquelle und Unsicherheit verständlich anzeigen; alte Kacheln als veraltet kennzeichnen.
-- [ ] Offline-/Fehlerzustand, Cache-Löschung und erneutes Laden testen; keine genaue Standortübertragung ohne Online-/Geländefreigabe auslösen.
-- [ ] Darstellung bei Rotlicht, kleinen Bildschirmen, Kartenrändern und niedriger Netzwerkqualität prüfen.
+- [x] Kilometermaßstab und Legende für den Astra-Bildlichtindex sowie ausdrücklich unvalidierte Bortle-Einordnung anzeigen; Helligkeitsnäherung am Beobachtungsort erläutern.
+- [x] Gerundeten Standortmarker, Umkreis von 10/25/50 km und Zoom-/Kartengrenzen ergänzen; Beobachtungsorte mit Entfernung und Bildlichtdifferenz vergleichbar machen.
+- [x] Künstliches Nachtlicht, punktuelle Raster-Klassen und Beobachtungsplatzvergleich getrennt schaltbar machen.
+- [x] Datenjahr, Datenalter, Kachelquelle und Unsicherheit verständlich anzeigen; die historischen Daten von 2016 ausdrücklich kennzeichnen.
+- [x] Offline-/Fehlerzustand, Cache-Löschung und erneutes Laden mit automatisierten Android-Fixtures testen; Lichtkarten erhalten nur den gerundeten GPS-Startort und benötigen Online-Freigabe.
+- [x] Astra-Karte bei Rotlicht, kleiner Fläche, großer Schrift, Mercator-Grenzen und teilweisen Kachelfehlern im Emulator prüfen.
+- [x] Offizielle LightPollutionMap.app-Einbettung nach gesonderter Ladefreigabe ergänzen; Empfänger und Einschränkungen erläutern, Standortdetails innerhalb der Anbieterkarte belassen.
+
+Implementierung in 1.1.7-pre.1: Vergrößerbare Karte mit erhaltenem Ausschnitt, begrenzten parallelen Wiederholungen und direkter Cache-Löschung. Transparente Pixel und Orte außerhalb der Mercator-Abdeckung ergeben keine Dunkelheitswertung. Beobachtungs- und Vergleichsort werden auf 0,01° gerundet; Vergleiche bleiben im Arbeitsspeicher. Die vorhandene Score-Skala bleibt erhalten.
+
+Die zusätzliche Anbieterkarte verwendet eine getrennte, flüchtige WebView mit eingeschränkten Netzwerkzielen und ohne Geräteberechtigungen. Nur ihr GPS-Startort wird gerundet; selbst angetippte Kartenpunkte werden durch die Website ausgewertet. Sie ändert nicht den Astra-Score und ersetzt nicht die eigene Karte.
+
+- [ ] Beide Lichtkarten auf älteren realen Geräten, mit TalkBack und gedrosselter/wechselnder Mobilfunkverbindung nachprüfen. Externe Zusatzfunktionen außerhalb der Lichtkarte sind bewusst nicht vollständig freigegeben.
+
+- [ ] Für Astras eigene Karte und Score eine wissenschaftlich kalibrierte, flächendeckende Himmelshelligkeits-/Bortle-Datenquelle mit passenden Nachnutzungsrechten ergänzen. Das bisherige NASA-Kartenbild erlaubt nur einen relativen Bildlichtvergleich; seine Bortle-/Helligkeitsnäherung ist nicht validiert. Die externe Einbettung ist keine Freigabe zum Übernehmen ihrer internen API-Daten.
 
 ### 6. Wetteraktualisierung ohne Datenlücke
 

@@ -1,7 +1,8 @@
-Neu in Projekt Astra 1.1.6 (Vorabversion):
+Neu in Projekt Astra 1.1.7 (Vorabversion):
 
-• Vollbild für die Sternkarte, beendbar über Taste oder Android-Zurück
-• Einklappbare Kartenbedienung, Sichtfeldanzeige, Zoomtasten und Ansicht zurücksetzen
-• Einstellbare Namensdichte mit Vorrang für ausgewählte Objekte
-• Lesbare Beschriftungen ohne gegenseitige Überlappung
-• AR-Sichtfeld passt sich dem Kameraausschnitt an
+• LightPollutionMap.app nach eigenem Anbieterhinweis direkt öffnen
+• Verbesserte Lichtkarte mit Maßstab, Umkreis und Ortsvergleich
+• Vergrößerbare Ansicht und getrennt schaltbare Kartenebenen
+• Datenalter, Quellen und Grenzen der Helligkeitsnäherung sichtbar
+• Karten bei Ladefehlern behalten und gezielt erneut laden
+• Fehlende Bilddaten werden nicht als dunkler Himmel gewertet

@@ -1,75 +1,246 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__SCRIPT_NONCE__'; style-src 'unsafe-inline'; img-src data: https://tile.openstreetmap.org https://gibs.earthdata.nasa.gov; base-uri 'none'; form-action 'none'">
-  <meta name="referrer" content="no-referrer">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <style>__LEAFLET_CSS__</style>
-  <style>
-    html, body { height: 100%; width: 100%; margin: 0; background: #02050a; overflow: hidden; }
-    #map { position: absolute; inset: 0; min-height: 100vh; min-width: 100vw; }
-    body { font-family: system-ui, sans-serif; color: #edf3ff; }
-    .leaflet-control-attribution { background: rgba(7,16,31,.86) !important; color: #dbe8ff; }
-    .leaflet-control-attribution a { color: #8eb8ff; }
-    .reference-map { filter: grayscale(.55) brightness(.92); }
-    .legend {
-      position: fixed; z-index: 10000; left: 55px; right: 10px; top: 10px;
-      padding: 10px 12px; border-radius: 14px; background: rgba(7,16,31,.91);
-      box-shadow: 0 6px 24px rgba(0,0,0,.42); backdrop-filter: blur(9px);
-      font-size: 12px;
-    }
-    .legend strong { display: block; margin-bottom: 6px; color: #ffd98a; }
-    .scale { height: 7px; border-radius: 5px; background: linear-gradient(90deg,#000,#241a3e,#8d4c32,#ffd787,#fff); }
-    .labels { display:flex; justify-content:space-between; margin-top:4px; color:#c8d5e8; }
-    .location-dot { background:#6da8ff; border:3px solid white; border-radius:50%; box-shadow:0 0 0 7px rgba(109,168,255,.25); }
-  </style>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__SCRIPT_NONCE__'; style-src 'unsafe-inline'; img-src data: https://tile.openstreetmap.org https://gibs.earthdata.nasa.gov; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>__LEAFLET_CSS__</style>
+<style>
+:root{color-scheme:dark;--bg:#08111e;--panel:#101e30;--text:#edf4ff;--muted:#b4c6dd;--accent:#acd5ff;--edge:#40536c;--warn:#ffe0a1}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,sans-serif}body{display:flex;flex-direction:column}
+body.red-light{--bg:#100000;--panel:#220303;--text:#f47b70;--muted:#d7635b;--accent:#ff8579;--edge:#78332e;--warn:#f89176}
+.toolbar{flex:0 0 auto;max-height:36%;overflow:auto;background:var(--panel);border-bottom:1px solid var(--edge);padding:7px 9px}.tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button,select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--edge);border-radius:9px;min-height:40px;padding:7px 10px;touch-action:manipulation}button[aria-pressed="true"]{color:var(--bg);background:var(--accent);border-color:var(--accent)}button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}label{display:inline-flex;gap:5px;align-items:center}
+.map-frame{flex:1 1 0;min-height:0;position:relative}#map{width:100%;height:100%;background:#020509}.status{position:absolute;z-index:800;top:8px;right:8px;left:52px;pointer-events:none;background:rgba(8,17,30,.93);border:1px solid var(--edge);border-radius:9px;padding:5px 8px;font-size:11px}.red-light .status{background:rgba(25,0,0,.96)}
+.info{flex:0 1 auto;max-height:37%;overflow:auto;padding:8px 10px;border-top:1px solid var(--edge);background:var(--panel);scrollbar-gutter:stable}.info p{margin:5px 0}.heading{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-bottom:6px}.badge{color:var(--warn);border:1px solid var(--edge);border-radius:20px;padding:2px 7px;font-size:11px}.muted{color:var(--muted);font-size:12px}.warning{color:var(--warn)}
+.scale{height:8px;border-radius:5px;background:linear-gradient(90deg,#000,#1b1b1b,#535353,#a0a0a0,#fff);border:1px solid var(--edge)}.red-light .scale{background:linear-gradient(90deg,#100000,#451010,#802020,#bd3930,#fa7162)}.labels{display:flex;justify-content:space-between;gap:8px;margin-top:3px;font-size:11px;color:var(--muted)}.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(185px,100%),1fr));gap:6px;margin:7px 0}[hidden]{display:none!important}.readout{border:1px solid var(--edge);border-radius:9px;padding:7px 8px}.readout strong{display:block}details{margin-top:7px}summary{cursor:pointer;min-height:32px;padding:5px 0;color:var(--accent)}
+.info a,.leaflet-control-attribution a{color:var(--accent)}.leaflet-control-attribution{background:var(--bg)!important;color:var(--muted);font-size:9px}.leaflet-control-scale-line{background:var(--bg);color:var(--text);border-color:var(--muted)}.leaflet-bar a{background:var(--panel);color:var(--text);border-color:var(--edge)}.leaflet-bar a:hover,.leaflet-bar a:focus{background:var(--bg);color:var(--text)}.reference-map{filter:grayscale(.8) brightness(.65)}.red-light .leaflet-tile-pane{filter:grayscale(1) sepia(1) saturate(7) hue-rotate(320deg) brightness(.65)}
+.red-light .leaflet-reference-labels-pane{filter:grayscale(1) sepia(1) saturate(7) hue-rotate(320deg) brightness(.65)}.location-dot{background:var(--accent);border:2px solid var(--text);border-radius:50%;box-shadow:0 0 0 5px #6da8ff30}.sample-label{width:100px!important;background:var(--panel);border:1px solid var(--accent);border-radius:8px;padding:4px 6px;color:var(--text);font:bold 11px/1.3 system-ui,sans-serif;text-align:center}
+.leaflet-tooltip{background:var(--panel);color:var(--text);border-color:var(--edge);box-shadow:none}.leaflet-tooltip-top:before{border-top-color:var(--edge)}.leaflet-tooltip-bottom:before{border-bottom-color:var(--edge)}.leaflet-tooltip-left:before{border-left-color:var(--edge)}.leaflet-tooltip-right:before{border-right-color:var(--edge)}.red-light .location-dot{box-shadow:0 0 0 5px #c54c4230}
+#comparison-card{order:-1}
+.reference-map{filter:grayscale(1) invert(1) contrast(1.3) brightness(.95)}
+@media(max-height:400px){.toolbar{padding:3px 6px;max-height:31%}button,select{min-height:34px;padding:4px 7px}.info{max-height:31%;padding:5px 8px}}
+</style>
 </head>
 <body>
-<div id="map"></div>
-<div class="legend">
-  <strong>Künstliches Nachtlicht</strong>
-  <div class="scale"></div>
-  <div class="labels"><span>dunkler</span><span>heller</span></div>
-</div>
+<div class="toolbar" aria-label="Lichtkarte bedienen"><div class="tools">
+<button id="night-toggle" type="button" aria-pressed="true">Nachtlicht</button>
+<button id="class-toggle" type="button" aria-pressed="false">Raster-Klassen</button>
+<button id="compare-toggle" type="button" aria-pressed="false">Ort vergleichen</button>
+<label for="radius">Umkreis <select id="radius"><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option></select></label>
+<button id="recenter" type="button">Zum Standort</button><button id="retry" type="button">Neu laden</button>
+</div></div>
+<div class="map-frame"><div id="map" role="region" aria-label="Verschiebbare Lichtverschmutzungskarte"></div><div id="status" class="status" role="status" aria-live="polite">Kartenkacheln werden geladen …</div></div>
+<section class="info" aria-label="Legende und Vergleich">
+<div class="heading"><strong>Astra-Lichtindex (VIIRS-Bild)</strong><span id="age" class="badge"></span></div>
+<div id="readouts" class="readouts" hidden><div class="readout"><strong>Beobachtungsort (gerundet)</strong><div id="observer-value">Noch nicht ausgewertet</div></div><div id="comparison-card" class="readout" hidden><strong>Vergleichsort</strong><div id="comparison-value">Tippe auf einen Ort in der Karte.</div></div></div>
+<div class="scale" aria-hidden="true"></div><div class="labels"><span>0 · wenig Rasterlicht</span><span>50</span><span>100 · viel Rasterlicht</span></div>
+<p class="muted">Helligkeitsindex des Satellitenbilds. Keine gemessene Himmelshelligkeit, keine SQM-Werte.</p>
+<p id="mode-hint" class="muted">Karte verschieben und zoomen. Der Kreis zeigt den gewählten Umkreis um deinen ungefähren Standort.</p>
+<p id="coverage-warning" class="warning" hidden>Der Beobachtungsort liegt außerhalb der Kartenabdeckung (±85,05°). Angezeigt wird der Kartenrand; eine Ortsauswertung ist hier nicht möglich.</p>
+<details id="legend-details"><summary>Einordnung, Datenstand und Quellen</summary>
+<p id="class-explanation">Raster-Klassen sind eine <strong>unvalidierte Orientierung</strong> aus dem dargestellten Nachtlicht: Index &lt;3 → 1, &lt;7 → 2, &lt;13 → 3, &lt;22 → 4, &lt;35 → 5, &lt;50 → 6, &lt;68 → 7, &lt;85 → 8, sonst → 9. Die grobe Zuordnung zum Bortle-Schema ist keine gemessene Bortle-Klasse.</p>
+<p>Wenig Licht im Bild garantiert keinen dunklen Himmel. Lichtglocken aus der Umgebung, Wolken, Mond, Schnee, Gelände und neuere Bebauung können die Bedingungen stark ändern. Schwarze gültige Bildpixel zählen als Index 0; transparente oder fehlende Pixel sind „Keine Daten“.</p>
+<p>Eine Auswertung mittelt gültige Pixel in einem 9 × 9-Fenster einer NASA-Kachel auf Datenzoom 8. Bei starkem Zoom werden Bildpixel nur vergrößert; die Datengenauigkeit steigt dadurch nicht. Raster-Klassen erscheinen nur an ausgewerteten Punkten.</p>
+<p id="data-age" class="warning"></p><p id="fetched" class="muted">Abruf: noch keine Kachel empfangen. Abrufzeit und Beobachtungsjahr sind verschieden.</p>
+<p class="muted">Bilddaten: <a href="https://earthdata.nasa.gov/gibs">NASA GIBS / VIIRS Night Lights (2016)</a>. Orientierungskarte: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>. Bei „Neu laden“ bleiben bereits geladene Kacheln während des erneuten Abrufs sichtbar.</p>
+</details></section>
 <script nonce="__SCRIPT_NONCE__">__LEAFLET_JS__</script>
 <script nonce="__SCRIPT_NONCE__">
 (() => {
-  const lat = __ASTRA_LAT__;
-  const lon = __ASTRA_LON__;
-  const mapElement = document.getElementById('map');
-  function fitViewport() {
-    const width = Math.max(window.innerWidth, 320);
-    const height = Math.max(window.innerHeight, 360);
-    document.documentElement.style.width = width + 'px';
-    document.documentElement.style.height = height + 'px';
-    document.body.style.width = width + 'px';
-    document.body.style.height = height + 'px';
-    mapElement.style.width = width + 'px';
-    mapElement.style.height = height + 'px';
+  'use strict';
+  const observer = {lat:__ASTRA_LAT__,lon:__ASTRA_LON__}, currentYear = __ASTRA_YEAR__, redLight = __ASTRA_RED_LIGHT__;
+  const dataYear = 2016, maxLatitude = 85.0511287798066, nativeZoom = 8;
+  const nasaPrefix = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Night_Lights/default/2016-01-01/GoogleMapsCompatible_Level8/';
+  const byId = id => document.getElementById(id);
+  if(redLight)document.body.classList.add('red-light');
+  const dataAge = Math.max(0,currentYear-dataYear);
+  byId('age').textContent='Historisch · '+dataYear+' · ca. '+dataAge+' Jahre alt';
+  byId('data-age').textContent='Beobachtungsdaten: 2016 (ca. '+dataAge+' Jahre alt). Erneutes Laden liefert keine neueren Beobachtungen.';
+  function boundedLocation(lat,lon){
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+    return {lat:Math.max(-maxLatitude,Math.min(maxLatitude,lat)),lon:((lon+180)%360+360)%360-180};
   }
-  fitViewport();
-  const map = L.map('map', { zoomControl: true }).setView([lat, lon], 7);
-  window.astraMap = map;
-  window.addEventListener('resize', () => { fitViewport(); map.invalidateSize(false); });
-  setTimeout(() => map.invalidateSize(false), 350);
-
-  L.tileLayer(
-    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Night_Lights/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
-    {
-      minZoom: 1, maxNativeZoom: 8, maxZoom: 13,
-      attribution: 'Nachtlicht: <a href="https://earthdata.nasa.gov/gibs">NASA GIBS / VIIRS</a>'
+  function tilePoint(lat,lon,zoom=nativeZoom){
+    const location=boundedLocation(lat,lon);
+    if(!location||!Number.isInteger(zoom)||zoom<0||zoom>nativeZoom)return null;
+    const count=Math.pow(2,zoom),pixels=count*256,phi=location.lat*Math.PI/180;
+    const px=Math.min(pixels-1,Math.max(0,Math.floor((location.lon+180)/360*pixels)));
+    const py=Math.min(pixels-1,Math.max(0,Math.floor((1-Math.log(Math.tan(phi)+1/Math.cos(phi))/Math.PI)/2*pixels)));
+    return{x:Math.floor(px/256),y:Math.floor(py/256),pixelX:px%256,pixelY:py%256,z:zoom};
+  }
+  function indexFromLuminance(value){return Math.floor(Math.pow(Math.max(0,Math.min(1,value/255)),.62)*100);}
+  function proxyFromRgba(r,g,b,a){
+    if(![r,g,b,a].every(value=>Number.isFinite(value)&&value>=0&&value<=255)||a===0)return null;
+    const index=indexFromLuminance((2126*r+7152*g+722*b)/10000);
+    return{index:index,classHint:classHint(index)};
+  }
+  function classHint(index){
+    if(!Number.isFinite(index)||index<0||index>100)return null;
+    return index<3?'1':index<7?'2':index<13?'3':index<22?'4':index<35?'5':index<50?'6':index<68?'7':index<85?'8':'9';
+  }
+  function brightnessHint(index){return index<22?'wenig Nachtlicht im Kartenbild':index<50?'mäßiges Nachtlicht im Kartenbild':index<85?'viel Nachtlicht im Kartenbild':'sehr viel Nachtlicht im Kartenbild';}
+  const key=coords=>coords.z+'/'+coords.y+'/'+coords.x, tileUrl=coords=>nasaPrefix+key(coords)+'.png';
+  const safeObserver=boundedLocation(observer.lat,observer.lon)||{lat:0,lon:0};
+  const observerCovered=Number.isFinite(observer.lat)&&Math.abs(observer.lat)<=maxLatitude;
+  byId('coverage-warning').hidden=observerCovered;
+  const bounds=L.latLngBounds([-maxLatitude,-180],[maxLatitude,180]);
+  const map=L.map('map',{minZoom:2,maxZoom:13,maxBounds:bounds,maxBoundsViscosity:1,worldCopyJump:false,zoomControl:true}).setView([safeObserver.lat,safeObserver.lon],7);
+  window.astraMap=map;L.control.scale({imperial:false,maxWidth:110}).addTo(map);
+  const settings={minZoom:2,maxZoom:13,noWrap:true,bounds:bounds,keepBuffer:1,updateWhenIdle:true};
+  const referencePane=map.createPane('reference-labels');referencePane.style.zIndex='250';
+  const reference=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',Object.assign({},settings,{opacity:.22,crossOrigin:'anonymous',className:'reference-map',pane:'reference-labels',attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}));
+  const night=L.tileLayer(nasaPrefix+'{z}/{y}/{x}.png',Object.assign({},settings,{maxNativeZoom:nativeZoom,opacity:.91,crossOrigin:'anonymous',attribution:'<a href="https://earthdata.nasa.gov/gibs">NASA GIBS · 2016</a>'}));
+  const color=redLight?'#ed786b':'#a4ceff';
+  const circle=L.circle([safeObserver.lat,safeObserver.lon],{radius:25000,color:color,weight:1.5,fillOpacity:.035,interactive:false}).addTo(map);
+  L.marker([safeObserver.lat,safeObserver.lon],{icon:L.divIcon({className:'location-dot',iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map).bindTooltip('Ungefährer Beobachtungsort (gerundet)');
+  const hintMarkers=L.layerGroup();
+  let selectedMarker=null,compare=false,classes=false,radiusKm=25,selected=null;
+  let observerSample=null,selectedSample=null,lastFetched=null,selectedGeneration=0,observerGeneration=0,loadingSamples=0;
+  const loadedImages=new Map(),loadingTiles=new Set(),visibleTiles=new Map(),sampleImages=new Map();
+  let retrying=false,refreshGeneration=0;
+  function currentTileUrl(coords){return tileUrl(coords)+(refreshGeneration?'?astra_refresh='+refreshGeneration:'');}
+  function updateStatus(){
+    let loaded=0,failed=0;visibleTiles.forEach(entry=>{if(entry.ready)loaded++;if(entry.failed||entry.refreshFailed)failed++;});
+    const busy=loadingTiles.size+loadingSamples;let message;
+    if(navigator.onLine===false)message='Offline · vorhandene Kacheln bleiben sichtbar. Verbinde dich und tippe auf „Neu laden“.';
+    else if(retrying)message='Kacheln werden erneut abgerufen · bisherige Karte bleibt sichtbar …';
+    else if(failed)message=loaded?'Karte teilweise geladen · '+failed+' Kacheln fehlen/konnten nicht erneuert werden. „Neu laden“ versucht es erneut.':'Keine Kartenkacheln verfügbar. Netzwerk oder Kartendienst prüfen und „Neu laden“ wählen.';
+    else if(busy)message='Lädt …'+(loaded?' · vorhandene Karte bleibt sichtbar':'');
+    else if(loaded)message='Karte geladen · Bilddaten 2016'+(map.getZoom()>nativeZoom&&map.hasLayer(night)?' · Raster wird vergrößert':'');
+    else message='Karte noch nicht verfügbar · „Neu laden“ versucht den Abruf erneut.';
+    byId('status').textContent=message;
+  }
+  function recordFetched(){lastFetched=new Date().toISOString();byId('fetched').textContent='Zuletzt Kacheln abgerufen: '+new Date(lastFetched).toLocaleString('de-DE')+'. Beobachtungsjahr bleibt 2016.';}
+  function rememberImage(id,image){loadedImages.set(id,image);if(loadedImages.size>96)loadedImages.delete(loadedImages.keys().next().value);}
+  function trackLayer(layer,name){
+    layer.on('tileloadstart',event=>{const id=name+'/'+key(event.coords);visibleTiles.set(id,{tile:event.tile,name:name,coords:event.coords,ready:false,failed:false});loadingTiles.add(id);updateStatus();});
+    layer.on('tileload',event=>{const id=name+'/'+key(event.coords),entry=visibleTiles.get(id);loadingTiles.delete(id);if(entry){entry.ready=true;entry.failed=false;entry.refreshFailed=false;}if(name==='night')rememberImage(key(event.coords),event.tile);recordFetched();updateStatus();});
+    layer.on('tileerror',event=>{const id=name+'/'+key(event.coords),entry=visibleTiles.get(id);loadingTiles.delete(id);if(entry)entry.failed=true;updateStatus();});
+    layer.on('tileunload',event=>{const id=name+'/'+key(event.coords);loadingTiles.delete(id);visibleTiles.delete(id);updateStatus();});
+  }
+  trackLayer(reference,'reference');trackLayer(night,'night');night.addTo(map);reference.addTo(map);
+  function sampleRaster(image,point){
+    try{
+      const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+      const context=canvas.getContext('2d',{willReadFrequently:true});
+      if(!context||!image.naturalWidth||!image.naturalHeight)return{status:'no-data'};
+      context.drawImage(image,0,0,256,256);
+      const x=Math.max(0,point.pixelX-4),y=Math.max(0,point.pixelY-4),width=Math.min(256,point.pixelX+5)-x,height=Math.min(256,point.pixelY+5)-y;
+      const rgba=context.getImageData(x,y,width,height).data;let luminance=0,count=0,alpha=0;
+      for(let i=0;i<rgba.length;i+=4){if(!rgba[i+3])continue;luminance+=(2126*rgba[i]+7152*rgba[i+1]+722*rgba[i+2])/10000*rgba[i+3];alpha+=rgba[i+3];count++;}
+      if(!count)return{status:'no-data'};
+      const index=indexFromLuminance(luminance/alpha);return{status:'ready',index:index,classHint:classHint(index),validPixels:count};
+    }catch(_){return{status:'unavailable'};}
+  }
+  function getSample(location){
+    if(!Number.isFinite(location.lat)||Math.abs(location.lat)>maxLatitude)return Promise.resolve({status:'no-data',reason:'coverage'});
+    const point=tilePoint(location.lat,location.lon),id=key(point),image=loadedImages.get(id),requestGeneration=refreshGeneration,requestId=id+'@'+requestGeneration;
+    if(image&&image.complete&&image.naturalWidth)return Promise.resolve(sampleRaster(image,point));
+    if(sampleImages.has(requestId))return sampleImages.get(requestId).then(result=>result?sampleRaster(result,point):{status:'unavailable'});
+    loadingSamples++;updateStatus();
+    const request=new Promise(resolve=>{
+      const tile=new Image();tile.crossOrigin='anonymous';let settled=false;
+      const finish=success=>{if(settled)return;settled=true;clearTimeout(timeout);tile.onload=null;tile.onerror=null;if(success&&requestGeneration===refreshGeneration){rememberImage(id,tile);recordFetched();}loadingSamples--;sampleImages.delete(requestId);updateStatus();resolve(success?tile:null);};
+      const timeout=setTimeout(()=>finish(false),12000);tile.onload=()=>finish(true);tile.onerror=()=>finish(false);tile.src=currentTileUrl(point);
+    });
+    sampleImages.set(requestId,request);return request.then(result=>result?sampleRaster(result,point):{status:'unavailable'});
+  }
+  function sampleText(value){
+    if(!value||value.status==='loading')return'Wird ausgewertet …';
+    if(value.status==='no-data')return value.reason==='coverage'?'Keine Daten · außerhalb der Kartenabdeckung (±85,05°)':'Keine Daten · transparente/fehlende Bildpixel';
+    if(value.status!=='ready')return'Keine Auswertung verfügbar · Abruf fehlgeschlagen oder Bild nicht lesbar';
+    return'Index '+value.index+'/100 · '+brightnessHint(value.index)+'. Bortle-Hinweis '+value.classHint+' (unvalidiert)';
+  }
+  function renderSamples(){
+    byId('readouts').hidden=!classes&&!compare;byId('comparison-card').hidden=!compare;
+    byId('observer-value').textContent=sampleText(observerSample);byId('comparison-value').textContent=selected?sampleText(selectedSample):'Tippe auf einen Ort in der Karte.';
+    if(selected){const distance=map.distance([observer.lat,observer.lon],[selected.lat,selected.lon])/1000;byId('comparison-value').textContent+=' · '+distance.toLocaleString('de-DE',{maximumFractionDigits:1})+' km entfernt'+(distance>radiusKm?' (außerhalb des '+radiusKm+'-km-Umkreises)':'');}
+    if(selected&&selectedSample&&observerSample&&selectedSample.status==='ready'&&observerSample.status==='ready'){
+      const difference=selectedSample.index-observerSample.index;
+      byId('comparison-value').textContent+='. '+(difference===0?'Gleicher Rasterindex.':Math.abs(difference)+' Indexpunkte '+(difference>0?'heller':'dunkler')+' als am Beobachtungsort.');
     }
-  ).addTo(map);
-
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    minZoom: 1, maxZoom: 19, opacity: .18, className: 'reference-map',
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
-
-  L.marker([lat, lon], {
-    icon: L.divIcon({ className: 'location-dot', iconSize: [16,16], iconAnchor: [8,8] })
-  }).addTo(map).bindPopup('Ungefährer Beobachtungsort (gerundet)');
+    hintMarkers.clearLayers();
+    if(classes)[[safeObserver,observerSample],[compare?selected:null,selectedSample]].forEach(pair=>{
+      if(!pair[0]||!pair[1]||pair[1].status!=='ready')return;
+      const label=document.createElement('div');label.textContent=pair[1].index+'/100 · Hinweis '+pair[1].classHint;
+      L.marker([pair[0].lat,pair[0].lon],{interactive:false,icon:L.divIcon({html:label,className:'sample-label',iconSize:[100,26],iconAnchor:[50,-12]})}).addTo(hintMarkers);
+    });
+  }
+  function ensureObserver(force=false){
+    if(!observerCovered){observerSample={status:'no-data',reason:'coverage'};renderSamples();return;}
+    if(!force&&observerSample&&(observerSample.status==='ready'||observerSample.status==='loading'))return;
+    const generation=++observerGeneration;observerSample={status:'loading'};renderSamples();
+    getSample(safeObserver).then(result=>{if(generation!==observerGeneration)return;observerSample=result;renderSamples();});
+  }
+  let queuedSelection=null,selectionBusy=false;
+  function processSelection(){
+    if(selectionBusy||!queuedSelection)return;
+    const next=queuedSelection;queuedSelection=null;selectionBusy=true;
+    getSample(next.location).then(result=>{selectionBusy=false;if(next.generation===selectedGeneration){selectedSample=result;renderSamples();}processSelection();});
+  }
+  function selectPlace(lat,lon){
+    const location=boundedLocation(lat,lon);if(!location)return false;
+    if(!compare)setLayer('compare',true);
+    if(Math.abs(lat)>maxLatitude){selectedGeneration++;queuedSelection=null;selected={lat:Math.round(lat*100)/100,lon:location.lon};selectedSample={status:'no-data',reason:'coverage'};if(selectedMarker)map.removeLayer(selectedMarker);selectedMarker=null;renderSamples();return true;}
+    selected=boundedLocation(Math.round(location.lat*100)/100,Math.round(location.lon*100)/100);
+    selectedGeneration++;selectedSample={status:'loading'};
+    if(selectedMarker)map.removeLayer(selectedMarker);
+    selectedMarker=L.circleMarker([selected.lat,selected.lon],{radius:7,color:color,fillOpacity:.6,weight:2}).addTo(map).bindTooltip('Vergleichsort (gerundet)');
+    queuedSelection={location:selected,generation:selectedGeneration};renderSamples();processSelection();return true;
+  }
+  function setLayer(name,enabled){
+    if(name==='night'){if(enabled)night.addTo(map);else map.removeLayer(night);reference.setOpacity(enabled?.22:.9);byId('night-toggle').setAttribute('aria-pressed',String(Boolean(enabled)));}
+    else if(name==='classes'){classes=Boolean(enabled);byId('class-toggle').setAttribute('aria-pressed',String(classes));if(classes){hintMarkers.addTo(map);ensureObserver();}else map.removeLayer(hintMarkers);}
+    else if(name==='compare'){compare=Boolean(enabled);byId('compare-toggle').setAttribute('aria-pressed',String(compare));if(compare)ensureObserver();else{selectedGeneration++;queuedSelection=null;selected=null;selectedSample=null;if(selectedMarker)map.removeLayer(selectedMarker);selectedMarker=null;}}
+    else return false;
+    byId('mode-hint').textContent=compare?'Vergleich aktiv: Tippe auf einen Ort. Verglichen wird nur das historische Bildlicht; ein niedriger Index garantiert keinen dunklen Himmel.':classes?'Raster-Klassen zeigen nur ausgewertete Punkte, keine flächendeckende Bortle-Messung. Mit „Ort vergleichen“ kannst du einen weiteren Punkt prüfen.':'Karte verschieben und zoomen. Der Kreis zeigt den gewählten Umkreis um deinen ungefähren Standort.';
+    renderSamples();updateStatus();return true;
+  }
+  function setRadius(km){if(![10,25,50].includes(Number(km)))return false;radiusKm=Number(km);circle.setRadius(radiusKm*1000);byId('radius').value=String(radiusKm);renderSamples();return true;}
+  function recenter(){map.setView([safeObserver.lat,safeObserver.lon],map.getZoom(),{animate:false});}
+  function refreshTile(entry){
+    return new Promise(resolve=>{
+      const fresh=new Image();fresh.crossOrigin='anonymous';let settled=false;
+      const finish=success=>{if(settled)return;settled=true;clearTimeout(timeout);fresh.onload=null;fresh.onerror=null;
+        // Keep the old tile until a replacement has loaded successfully.
+        if(success){
+          try{
+            const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+            canvas.getContext('2d').drawImage(fresh,0,0,256,256);
+            entry.tile.src=canvas.toDataURL('image/png');entry.ready=true;entry.failed=false;entry.refreshFailed=false;
+            if(entry.name==='night')rememberImage(key(entry.coords),fresh);recordFetched();
+          }catch(_){success=false;}
+        }
+        if(!success)entry.refreshFailed=true;resolve(success);
+      };
+      const timeout=setTimeout(()=>finish(false),12000);fresh.onload=()=>finish(true);fresh.onerror=()=>finish(false);
+      fresh.src=entry.name==='night'?currentTileUrl(entry.coords):'https://tile.openstreetmap.org/'+entry.coords.z+'/'+entry.coords.x+'/'+entry.coords.y+'.png';
+    });
+  }
+  async function retry(){
+    if(retrying)return false;retrying=true;refreshGeneration++;updateStatus();
+    // Limit refreshes to two requests in parallel on slower devices/connections.
+    const queue=Array.from(visibleTiles.values()).filter(entry=>entry.name==='night'||!entry.ready);
+    async function worker(){while(queue.length){await refreshTile(queue.shift());}}
+    await Promise.all([worker(),worker()]);
+    if(classes||compare){loadedImages.delete(key(tilePoint(safeObserver.lat,safeObserver.lon)));if(selected)loadedImages.delete(key(tilePoint(selected.lat,selected.lon)));observerSample=null;ensureObserver(true);if(selected)selectPlace(selected.lat,selected.lon);}
+    retrying=false;updateStatus();return true;
+  }
+  map.on('click',event=>{if(compare)selectPlace(event.latlng.lat,event.latlng.lng);});map.on('zoomend',updateStatus);
+  byId('night-toggle').addEventListener('click',()=>setLayer('night',!map.hasLayer(night)));
+  byId('class-toggle').addEventListener('click',()=>setLayer('classes',!classes));byId('compare-toggle').addEventListener('click',()=>setLayer('compare',!compare));
+  byId('radius').addEventListener('change',event=>setRadius(event.target.value));byId('recenter').addEventListener('click',recenter);byId('retry').addEventListener('click',retry);
+  window.addEventListener('online',updateStatus);window.addEventListener('offline',updateStatus);
+  function resize(){map.invalidateSize({animate:false,pan:false});}
+  window.addEventListener('resize',resize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(byId('map'));requestAnimationFrame(resize);
+  window.astraLightMap=Object.freeze({
+    state:()=>({radiusKm:radiusKm,night:map.hasLayer(night),classes:classes,compare:compare,selected:selected,observer:safeObserver,observerSample:observerSample,selectedSample:selectedSample,
+      dataYear:dataYear,dataAge:dataAge,lastFetched:lastFetched,observerCovered:observerCovered,loadedTiles:Array.from(visibleTiles.values()).filter(entry=>entry.ready).length,
+      failedTiles:Array.from(visibleTiles.values()).filter(entry=>entry.failed||entry.refreshFailed).length,loadingTiles:loadingTiles.size,retrying:retrying,zoom:map.getZoom(),status:byId('status').textContent,redLight:redLight}),
+    setLayer:setLayer,setRadius:setRadius,selectPlace:selectPlace,retry:retry,recenter:recenter,proxyFromRgba:proxyFromRgba,classHint:classHint,tilePoint:tilePoint
+  });
 })();
 </script>
 </body>

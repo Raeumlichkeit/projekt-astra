@@ -1,10 +1,11 @@
-# Datensicherheit – Prüfentwurf 1.1.1
+# Datensicherheit – Prüfentwurf 1.1.7-pre.1
 
 Nicht unverändert in Play Console übernehmen: Anbieterrollen und Drittland-/Rechtsgrundlagenprüfung sind noch offen. Verantwortlicher: Jeremy Grez; Support/Datenschutz: jeregrez@gmail.com. Keine ISO-Zertifizierung und keine unabhängige Sicherheitsprüfung behaupten.
 
 - Ungefährer Standort: optional nach separater Online-Freigabe, für Wetter/Wolken und Karten auf 0,01° gerundet.
+- Externe Lichtkarte: erst nach zusätzlicher bewusster Ladeaktion in der Ansicht. Empfänger LightPollutionMap.app samt Karten-API, jsDelivr und optional OSM/CARTO/Esri. Startort gerundet, sonst Berlin-Demo; angefragte Kartenbereiche und IP-Adresse sind personenbezogen auswertbar. Anbieterfristen offen. Keine Übernahme der Modellwerte in den Astra-Score; kein GPS-/Kamera-/Dateizugriff der Website.
 - Genauer Standort: nur bei zusätzlicher Freigabe des Online-Geländeprofils an Open-Meteo.
-- Auch IP-Adresse, Zeit, App-Version und angefragte Kartenbereiche/Objektbilder/Jahreskalender erreichen Dienstleister.
+- Auch IP-Adresse, Zeit, App-Version und angefragte Kartenbereiche/Objektbilder/Jahreskalender erreichen Dienstleister. Die externe Lichtkarte sendet statt Astras Versionskennung den Browser-User-Agent mit Browser-/Android- und gegebenenfalls Geräteangaben.
 - Open-Meteo nennt Protokolle einschließlich Standort/IP für bis zu 90 Tage. Daher **nicht pauschal „nur flüchtige Verarbeitung“ oder „keine Datenerhebung“ ankreuzen**.
 - Für andere Anbieter sind die Aufbewahrung und die Einordnung als Weitergabe/Dienstleister vor Veröffentlichung einzeln zu prüfen.
 - Keine Werbung, Analyse-SDKs, eigene Konten oder eigener Backend-Server. HTTPS ist erzwungen.

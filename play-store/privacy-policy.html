@@ -14,7 +14,7 @@
 </head>
 <body>
   <h1>Datenschutzerklärung für Projekt Astra</h1>
-  <p class="meta">Entwurf für Version 1.1.1 · Stand: 6. September 2026</p>
+  <p class="meta">Entwurf für Version 1.1.7-pre.1 · Stand: 11. September 2026</p>
   <!-- LEGAL_REVIEW_PENDING: Anbieterrollen, Rechtsgrundlagen und Drittlandübermittlungen vor Veröffentlichung abschließend prüfen. -->
   <p class="pending">Datenschutzinformation für die private Testversion. Verantwortlich: Jeremy Grez. Kontakt: <a href="mailto:jeregrez@gmail.com">jeregrez@gmail.com</a>. Die rechtliche Prüfung für eine öffentliche Veröffentlichung steht noch aus.</p>
 
@@ -26,7 +26,7 @@
   <p>Nur nach zusätzlicher Freigabe von „Genaues Online-Geländeprofil“ erhält Open-Meteo den genauen Standort und umliegende Geländepunkte mit fünf Dezimalstellen. Ohne diese Freigabe bleibt der Horizont flach. Die Kamera dient nur der AR-Vorschau: keine Foto-/Videoaufzeichnung, kein Upload. Kompass- und Bewegungssensoren werden lokal verarbeitet.</p>
 
   <h2>Empfänger und technische Protokolle</h2>
-  <p>Bei jedem erlaubten Online-Abruf erhalten der jeweilige Anbieter und gegebenenfalls dessen Hosting-/CDN-Dienstleister die IP-Adresse, Anfragezeit, angefragte Ressource und die App-Version im User-Agent. Die Übertragung erfolgt über HTTPS. Kartenkacheln und Ausschnittparameter lassen Rückschlüsse auf den betrachteten Bereich zu; sie sind nicht durch bloßes Weglassen einer Benutzerkennung anonym.</p>
+  <p>Bei jedem erlaubten Online-Abruf erhalten der jeweilige Anbieter und gegebenenfalls dessen Hosting-/CDN-Dienstleister die IP-Adresse, Anfragezeit und angefragte Ressource. Astra-eigene Abrufe enthalten die App-Version im User-Agent; die externe Lichtkarte verwendet stattdessen den Browser-User-Agent mit Browser-/Android- und gegebenenfalls Geräteangaben. Die Übertragung erfolgt über HTTPS. Kartenkacheln und Ausschnittparameter lassen Rückschlüsse auf den betrachteten Bereich zu; sie sind nicht durch bloßes Weglassen einer Benutzerkennung anonym.</p>
   <ul>
     <li><a href="https://open-meteo.com/en/terms">Open-Meteo</a>: gerundete Wetter-/Wolkenkoordinaten, bei gesonderter Freigabe genaue Geländepunkte. Laut Anbieter werden technische Protokolle einschließlich Standort und IP-Adresse bis zu 90 Tage aufbewahrt.</li>
     <li><a href="https://osmfoundation.org/wiki/Privacy_Policy">OpenStreetMap / OSM Foundation</a>: angeforderte Grundkarten-Kacheln und damit Kartenbereiche.</li>
@@ -37,9 +37,14 @@
   </ul>
   <p>Für die übrigen Anbieter ist keine einheitliche, hier verifizierte Löschfrist bekannt; es gelten deren jeweilige Datenschutzhinweise. Die App kann deren Protokolle nicht löschen. Internationale Dienste können Anfragen auch außerhalb der EU verarbeiten. Anbieterrollen, Rechtsgrundlagen und mögliche Drittlandübermittlungen müssen vor einer öffentlichen Veröffentlichung abschließend geprüft werden.</p>
 
+  <h2>Freiwillige externe Lichtkarte</h2>
+  <p>Im Kalender kann zusätzlich die offiziell angebotene Einbettung von <a href="https://lightpollutionmap.app/about-data/">LightPollutionMap.app (Stargazing Hub Team)</a> geladen werden. Der eigene Hinweis vor „Externe Karte laden“ nennt die Empfänger und Übertragung. Erst diese bewusste Aktion öffnet die externe Ansicht; die Freigabe wird nicht dauerhaft gespeichert. Die allgemeine Online-Freigabe bleibt Voraussetzung.</p>
+  <p>LightPollutionMap.app und api.lightpollutionmap.app erhalten den auf 0,01° gerundeten Startort beziehungsweise den markierten Kartenbereich, IP-Adresse und Anfragezeit. Ohne Standortfreigabe wird Berlin verwendet. Für das eingebettete Angebot können außerdem jsDelivr (Diagramm-Bibliothek), OpenStreetMap, CARTO und Esri (Grundkarten) angefragt werden. Auch diese Anbieter sehen IP-Adresse, Anfragezeit und angefragte Ressourcen; Grundkarten lassen den betrachteten Bereich erkennen. Löschfristen der zusätzlichen Anbieter wurden nicht verifiziert.</p>
+  <p>Die Ansicht hat keinen Zugriff auf Android-GPS, Kamera, Mikrofon oder Dateien. Cookies, DOM-Speicher und Browser-Diskcache sind ausgeschaltet; die App stellt keine JavaScript-Schnittstelle zu App-Daten bereit. Nicht freigeschaltete Netzwerkquellen, Uploads, Downloads und zusätzliche Wetter-/Adresssuchdienste werden gesperrt. Der Inhalt selbst stammt vom Anbieter und kann dessen eigene App-Hinweise enthalten. Beim Schließen wird die WebView verworfen; im Hintergrund wird die externe Seite entladen. Bereits übermittelte Anbieterprotokolle werden dadurch nicht gelöscht.</p>
+
   <h2>Was lokal gespeichert wird</h2>
   <p>Im privaten App-Speicher liegen Online-Auswahl, Rotlichtmodus, Objektfavoriten, gespeicherte Ereignisse, Erinnerungsvorlauf, Android-Aufträge für lokale Erinnerungen und der zuletzt gültige öffentliche IMO-Kalender. Diese Daten bleiben bis zur Änderung, Löschung der App-Daten oder Deinstallation. Es werden keine Standortparameter in diesen Einstellungen gespeichert.</p>
-  <p>WebViews verwenden weder Cookies noch DOM-Speicher noch den Browser-Diskcache. Wetterantworten, Geländeantworten, Objektbilder und Radar-/Nachtlichtkacheln verarbeitet die App nur im Arbeitsspeicher. Öffentliche OSM-Grundkarten werden zur Einhaltung der Anbietervorgaben separat im privaten, von Backups ausgeschlossenen Cache gespeichert: höchstens 32 MB, Gültigkeit maximal 30 Tage. Abgelaufene Dateien werden beim nächsten App-Start oder Kartenabruf entfernt. Kachelbilder und gehashte Dateinamen können betrachtete Regionen erkennen lassen; der Cache ist keine Anonymisierung.</p>
+  <p>WebViews verwenden weder Cookies noch DOM-Speicher noch den Browser-Diskcache. Wetterantworten, Geländeantworten, Objektbilder und Radar-/Nachtlichtkacheln verarbeitet die App nur im Arbeitsspeicher. Öffentliche OSM-Grundkarten der Astra-eigenen Karte werden zur Einhaltung der Anbietervorgaben separat im privaten, von Backups ausgeschlossenen Cache gespeichert: höchstens 32 MB, Gültigkeit maximal 30 Tage. Abgelaufene Dateien werden beim nächsten App-Start oder Kartenabruf entfernt. Kachelbilder und gehashte Dateinamen können betrachtete Regionen erkennen lassen; der Cache ist keine Anonymisierung. Vergleichsorte und Inhalte der externen Anbieterkarte werden nicht als App-Beobachtungen oder Standortverlauf gespeichert.</p>
   <p>„Info → Kartencache löschen“ entfernt diese Kartenbilder. Favoriten bleiben dabei erhalten. Beim ersten Update auf 1.1.1 entfernt die App alte WebView-Daten, die zuvor Standortabfragen enthalten konnten. Cloud-Backups und Android-Geräteübertragung sind für App-Daten gesperrt. Das ersetzt keinen Schutz eines entsperrten, gerooteten oder kompromittierten Geräts.</p>
 
   <h2>Erinnerungen und Löschung</h2>

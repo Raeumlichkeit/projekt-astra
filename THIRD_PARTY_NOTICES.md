@@ -103,4 +103,27 @@ Source: https://github.com/TomRoush/PdfBox-Android · License: Apache-2.0.
   Browse Services (GIBS), layer `VIIRS_Night_Lights`, https://earthdata.nasa.gov/gibs
 
 Rendered pixel luminance near the observer is converted into an explicitly labelled 0–100 proxy,
-estimated Bortle class and approximate sky brightness. These values are not an SQM measurement.
+with an unvalidated Bortle and sky-brightness interpretation. The historical display image is not
+a calibrated radiance product, and the heuristic does not model atmospheric scattering or light
+from surrounding cities. It must not be presented as a physical conversion, an SQM measurement,
+or a guarantee of observing conditions. Native and map calculations use the same 9×9 pixel
+sampling at source zoom 8; transparent pixels are excluded and missing tiles yield no estimate.
+The map's comparison points remain in memory and introduce no additional network providers.
+
+Source context: [NASA Black Marble products](https://viirsland.gsfc.nasa.gov/Products/NASA/BlackMarble.html).
+The distinction between satellite radiance and modeled sky brightness is also described by the
+[Light Pollution Map developer](https://www.lightpollutionmap.info/help.html), questions 22–23.
+
+## Optional LightPollutionMap.app embed
+
+Astra displays the live German iframe offered by the site's own Share / Embed feature:
+[LightPollutionMap.app](https://lightpollutionmap.app/de/) and [German embed](https://lightpollutionmap.app/de/embed/).
+The service is operated by the Stargazing Hub Team. Its source attribution and app links remain
+part of the embedded document. Astra does not bundle or redistribute the provider's tiles or
+model and does not use an undocumented data API for its own score.
+
+According to [About & Data](https://lightpollutionmap.app/about-data/) (checked 11 September 2026),
+2025 is the latest completed annual model layer and 2026 is provisional. The EOG inputs are
+identified as CC BY 4.0 by the site; this does not establish a reuse license for the site's own
+processed tiles or model. The embed is loaded only after an explicit session-level action and
+is restricted to the required map resources. Additional website features may be unavailable.

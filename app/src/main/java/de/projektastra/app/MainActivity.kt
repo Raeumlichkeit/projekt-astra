@@ -479,6 +479,7 @@ private fun AstraApp(
                     )
                     AstraTab.EVENTS -> EventsScreen(
                         location = location,
+                        redLightMode = redLightMode,
                         openInSky = { event ->
                             skyClock.select(event.instant)
                             arEnabled = false
@@ -2070,6 +2071,7 @@ private fun SkyEvent.toSavedEvent() = SavedSkyEvent(
 @Composable
 private fun EventsScreen(
     location: GeoPoint?,
+    redLightMode: Boolean,
     openInSky: (SkyEvent) -> Unit,
     savedEventKeys: Set<String>,
     toggleSavedEvent: (SkyEvent) -> Unit
@@ -2077,10 +2079,8 @@ private fun EventsScreen(
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
     val context = LocalContext.current
     var meteorCalendar by remember { mutableStateOf(MeteorCalendarRepository.bundled(context)) }
-    var lightPollution by remember { mutableStateOf<LightPollutionState>(LightPollutionState.Loading) }
     LaunchedEffect(observer) {
         MeteorCalendarRepository.refresh(context) { meteorCalendar = it }
-        LightPollutionRepository.load(observer) { lightPollution = it }
     }
     val events = remember(observer, meteorCalendar) { buildUpcomingEvents(observer, meteorCalendar.showers) }
     Column(
@@ -2113,27 +2113,16 @@ private fun EventsScreen(
 
         AstraSectionTitle("Lichtverschmutzung", "Dunkle Beobachtungsplätze in deiner Umgebung finden")
         Text(
-            "Helle Flächen zeigen starkes künstliches Nachtlicht. Verschiebe und zoome die Karte, " +
-                "um einen dunkleren Beobachtungsplatz in deiner Nähe zu finden.",
+            "Vergleiche künstliches Nachtlicht in deiner Umgebung. Über die Kartenebenen kannst du " +
+                "eine grobe Bortle-Einordnung und den Platzvergleich einblenden.",
             color = Color(0xFFAAB8CE),
             fontSize = 13.sp
         )
-        when (val estimate = lightPollution) {
-            LightPollutionState.Loading -> Text("Numerische VIIRS-Schätzung wird geladen …", color = AstraTextMuted)
-            is LightPollutionState.Ready -> LightPollutionEstimateCard(estimate.estimate)
-            LightPollutionState.Unavailable -> Text(
-                "Numerische Schätzung derzeit nicht verfügbar.",
-                color = StarGold,
-                fontSize = 12.sp
-            )
-        }
-        if (SecureNetwork.options.online) LightPollutionMap(observer) else OfflineNotice()
-        Text(
-            "NASA-VIIRS-Nachtlichtkomposit (2016). Index, Bortle-Klasse und Himmelshelligkeit " +
-                "sind standortbezogene Schätzwerte, keine Vor-Ort-Messung.",
-            color = Color(0xFFAAB8CE),
-            fontSize = 11.sp
-        )
+        if (SecureNetwork.options.online) {
+            ExternalLightMapEntry(observer, demoLocation = location == null, redLight = redLightMode)
+            Text("Astra-Karte · NASA-Nachtlicht 2016", fontWeight = FontWeight.Bold)
+            LightPollutionSection(observer, demoLocation = location == null, redLight = redLightMode)
+        } else OfflineNotice()
 
         AstraSectionTitle("Kommende Ereignisse", "Finsternisse und Meteorschauer chronologisch sortiert")
         events.forEach { event ->
@@ -2249,28 +2238,6 @@ private fun buildUpcomingEvents(observer: GeoPoint, meteorShowers: List<MeteorDe
         .take(18)
 }
 
-@Composable
-private fun LightPollutionEstimateCard(estimate: LightPollutionEstimate) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = AstraSurface),
-        border = BorderStroke(1.dp, StarGold.copy(alpha = 0.28f)),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("VIIRS-Index ${estimate.index}/100", fontWeight = FontWeight.Bold, color = StarGold)
-                Text("Bortle ≈ ${estimate.bortleClass}", fontWeight = FontWeight.Bold)
-            }
-            Text(estimate.qualityLabel.replaceFirstChar { it.uppercase() }, color = AstraTextMuted)
-            Text(
-                "Himmelshelligkeit ≈ ${estimate.skyBrightnessMag.format(1)} mag/arcsec² · Datenjahr ${estimate.sourceYear}",
-                color = AstraTextMuted,
-                fontSize = 12.sp
-            )
-        }
-    }
-}
-
 private fun exactLocalEclipseEvents(observer: GeoPoint): List<SkyEvent> {
     val start = Instant.now().toAstroTime()
     val place = observer.toAstroObserver()
@@ -2334,40 +2301,6 @@ private fun moonIlluminationPercent(instant: Instant): Double {
     val cycles = (julianDate - 2451550.1) / 29.53058867
     val phase = cycles - floor(cycles)
     return (1.0 - cos(2.0 * PI * phase)) * 50.0
-}
-
-@Composable
-@SuppressLint("SetJavaScriptEnabled")
-private fun LightPollutionMap(observer: GeoPoint) {
-    val context = LocalContext.current
-    val webView = remember(context) { PrivateWebViews.create(context, javascript = true) }
-
-    LaunchedEffect(observer) {
-        val approximate = NetworkPolicy.roundedLocation(observer)
-        val leafletCss = context.assets.open("leaflet-1.9.4.css").bufferedReader().use { it.readText() }
-        val leafletJs = context.assets.open("leaflet-1.9.4.js").bufferedReader().use { it.readText() }
-        val html = context.assets.open("light_pollution_map.html").bufferedReader().use { it.readText() }
-            .replace("__LEAFLET_CSS__", leafletCss)
-            .replace("__LEAFLET_JS__", leafletJs)
-            .replace("__ASTRA_LAT__", approximate.latitude.toString())
-            .replace("__ASTRA_LON__", approximate.longitude.toString())
-            .replace("__SCRIPT_NONCE__", java.util.UUID.randomUUID().toString())
-        PrivateWebViews.loadHtml(webView, html)
-    }
-
-    DisposableEffect(webView) {
-        onDispose {
-            PrivateWebViews.dispose(webView)
-        }
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth().height(400.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = NightBlue)
-    ) {
-        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
-    }
 }
 
 internal data class ScorePenalty(
@@ -2445,8 +2378,8 @@ internal object AstraScoreCalculator {
                 "Lichtverschmutzung",
                 lightPollution?.let { (it.index * 0.20).roundToInt().coerceIn(0, 20) } ?: 0,
                 lightPollution?.let {
-                    "VIIRS-Index ${it.index}/100 · Bortle ≈ ${it.bortleClass} · maximal −20"
-                } ?: "Noch kein VIIRS-Wert verfügbar · kein Abzug"
+                    "Astra-Bildlichtindex ${it.index}/100 · Bortle-Hinweis ≈ ${it.bortleClass} (unvalidiert) · maximal −20"
+                } ?: "Noch kein Bildlichtindex verfügbar · kein Abzug"
             )
         )
         return AstraScoreBreakdown(
@@ -2521,7 +2454,7 @@ private fun ObservationScore(
                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                     Text("Ergebnis: $score / 100", fontWeight = FontWeight.Bold, color = AstraBlue)
                     Text(
-                        "Der Lichtabzug basiert auf dem NASA-VIIRS-Komposit von 2016 und ist eine Satellitenschätzung, keine SQM-Messung. Das Geländeprofil beeinflusst die sichtbare Horizontlinie, aber nicht das Wetter.",
+                        "Der Lichtabzug nutzt die Bildhelligkeit des NASA-VIIRS-Komposits von 2016. Index und Bortle-Einordnung sind unvalidierte Näherungen, keine SQM-Messung. Das Geländeprofil beeinflusst die sichtbare Horizontlinie, aber nicht das Wetter.",
                         color = Color(0xFFAAB8CE),
                         fontSize = 12.sp
                     )

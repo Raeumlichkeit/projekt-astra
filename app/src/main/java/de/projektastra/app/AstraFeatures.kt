@@ -29,15 +29,11 @@ import java.time.ZoneOffset
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
-import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sin
-import kotlin.math.tan
 
 internal data class EquatorialBoundaryPoint(val raHours: Double, val decDegrees: Double)
 
@@ -108,15 +104,15 @@ internal data class LightPollutionEstimate(
     val index: Int,
     val bortleClass: Int,
     val skyBrightnessMag: Double,
-    val sourceYear: Int = 2016
+    val sourceYear: Int = 2016,
+    val sampleCoverageFraction: Double = 1.0
 ) {
+    val sourceMetadata: LightPollutionSourceMetadata
+        get() = LightPollutionModel.sourceMetadata.copy(dataYear = sourceYear)
+    val interpretation: LightPollutionInterpretation
+        get() = LightPollutionModel.interpretation(index)
     val qualityLabel: String
-        get() = when (bortleClass) {
-            1, 2 -> "sehr dunkler Himmel"
-            3, 4 -> "ländlicher Himmel"
-            5, 6 -> "Vorstadt-Himmel"
-            else -> "stark aufgehellter Himmel"
-        }
+        get() = interpretation.label
 }
 
 internal sealed interface LightPollutionState {
@@ -126,28 +122,29 @@ internal sealed interface LightPollutionState {
 }
 
 internal object LightPollutionRepository {
-    private var cachedPoint: GeoPoint? = null
-    private var cachedEstimate: LightPollutionEstimate? = null
+    private val cache = LightPollutionMemoryCache()
 
-    fun clear() { cachedPoint = null; cachedEstimate = null }
+    fun clear() = cache.clear()
 
-    fun load(point: GeoPoint, callback: (LightPollutionState) -> Unit) {
-        if (!SecureNetwork.available) {
+    fun load(point: GeoPoint, forceRefresh: Boolean = false, callback: (LightPollutionState) -> Unit) {
+        if (!SecureNetwork.available || !LightPollutionModel.isSourceCovered(point)) {
             callback(LightPollutionState.Unavailable)
             return
         }
-        val previousPoint = cachedPoint
-        val previous = cachedEstimate
-        if (previousPoint != null && previous != null &&
-            kotlin.math.abs(previousPoint.latitude - point.latitude) < 0.01 &&
-            kotlin.math.abs(previousPoint.longitude - point.longitude) < 0.01
-        ) {
+        val key = runCatching { LightPollutionModel.locationKey(point) }.getOrNull()
+        if (key == null) {
+            callback(LightPollutionState.Unavailable)
+            return
+        }
+        val ticket = cache.begin(key)
+        val previous = if (forceRefresh) null else cache.get(key)
+        if (previous != null) {
             callback(LightPollutionState.Ready(previous))
             return
         }
         thread(name = "astra-light-pollution") {
             val result = runCatching {
-                val tile = tileCoordinate(NetworkPolicy.roundedLocation(point), 8)
+                val tile = LightPollutionModel.tileCoordinate(key.toPoint())
                 val url = URL(
                     "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Night_Lights/" +
                         "default/2016-01-01/GoogleMapsCompatible_Level8/8/${tile.tileY}/${tile.tileX}.png"
@@ -156,33 +153,24 @@ internal object LightPollutionRepository {
                     val bytes = SecureNetwork.get(url.toString(), 1_048_576).bytes
                     val dimensions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, dimensions)
-                    check(dimensions.outWidth in 1..512 && dimensions.outHeight in 1..512)
+                    check(dimensions.outWidth == LightPollutionModel.TILE_SIZE && dimensions.outHeight == LightPollutionModel.TILE_SIZE)
                     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: error("Ungültige Kachel")
                     try {
-                        var sum = 0.0
-                        var count = 0
-                        for (dy in -4..4) for (dx in -4..4) {
-                            val color = bitmap[
-                                (tile.pixelX + dx).coerceIn(0, bitmap.width - 1),
-                                (tile.pixelY + dy).coerceIn(0, bitmap.height - 1)
-                            ]
-                            sum += 0.2126 * android.graphics.Color.red(color) +
-                                0.7152 * android.graphics.Color.green(color) +
-                                0.0722 * android.graphics.Color.blue(color)
-                            count++
-                        }
-                        estimateFromLuminance(sum / count)
+                        val sample = LightPollutionModel.sampleLuminance(
+                            bitmap.width, bitmap.height, tile.pixelX, tile.pixelY
+                        ) { x, y -> bitmap[x, y] } ?: error("Keine Nachtlichtdaten an diesem Standort")
+                        LightPollutionModel.estimateFromLuminance(sample.luminance, sample.coverageFraction)
                     } finally {
                         bitmap.recycle()
                     }
                 }
             }
             android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (!cache.isCurrent(ticket)) return@post
                 callback(result.fold(
                     onSuccess = {
                         if (SecureNetwork.available) {
-                            cachedPoint = point
-                            cachedEstimate = it
+                            cache.store(ticket, it)
                             LightPollutionState.Ready(it)
                         } else LightPollutionState.Unavailable
                     },
@@ -192,39 +180,8 @@ internal object LightPollutionRepository {
         }
     }
 
-    internal fun estimateFromLuminance(luminance: Double): LightPollutionEstimate {
-        val index = ((luminance / 255.0).coerceIn(0.0, 1.0).pow(0.62) * 100.0).toInt()
-        val bortle = when {
-            index < 3 -> 1
-            index < 7 -> 2
-            index < 13 -> 3
-            index < 22 -> 4
-            index < 35 -> 5
-            index < 50 -> 6
-            index < 68 -> 7
-            index < 85 -> 8
-            else -> 9
-        }
-        val skyBrightness = 22.0 - (index / 100.0) * 4.0
-        return LightPollutionEstimate(index, bortle, skyBrightness)
-    }
-
-    private data class TileCoordinate(val tileX: Int, val tileY: Int, val pixelX: Int, val pixelY: Int)
-
-    private fun tileCoordinate(point: GeoPoint, zoom: Int): TileCoordinate {
-        val tileCount = 1 shl zoom
-        val latitude = point.latitude.coerceIn(-85.0511, 85.0511)
-        val latitudeRadians = Math.toRadians(latitude)
-        val worldX = (point.longitude + 180.0) / 360.0 * tileCount * 256.0
-        val worldY = (1.0 - ln(tan(latitudeRadians) + 1.0 / cos(latitudeRadians)) / PI) / 2.0 *
-            tileCount * 256.0
-        return TileCoordinate(
-            floor(worldX / 256.0).toInt().coerceIn(0, tileCount - 1),
-            floor(worldY / 256.0).toInt().coerceIn(0, tileCount - 1),
-            floor(worldX % 256.0).toInt().coerceIn(0, 255),
-            floor(worldY % 256.0).toInt().coerceIn(0, 255)
-        )
-    }
+    internal fun estimateFromLuminance(luminance: Double): LightPollutionEstimate =
+        LightPollutionModel.estimateFromLuminance(luminance)
 }
 
 internal data class MeteorDefinition(
