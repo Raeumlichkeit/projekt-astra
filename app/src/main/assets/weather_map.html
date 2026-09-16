@@ -18,14 +18,15 @@
       padding: 10px 12px; border-radius: 14px; background: rgba(7,16,31,.91);
       box-shadow: 0 6px 24px rgba(0,0,0,.38); backdrop-filter: blur(9px);
     }
-    .row { display: flex; gap: 12px; align-items: center; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .row + .row { margin-top: 9px; }
     label { display: flex; align-items: center; gap: 5px; font-size: 13px; white-space: nowrap; }
     input[type=range] { flex: 1; accent-color: #6da8ff; min-width: 80px; }
     input[type=checkbox] { accent-color: #6da8ff; width: 17px; height: 17px; }
     button { border: 0; border-radius: 9px; color: #07101f; background: #ffd98a; padding: 7px 10px; font-weight: 700; }
     #time { margin-left: auto; color: #ffd98a; font-weight: 700; font-size: 13px; }
-    #status { font-size: 11px; color: #aab8ce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status { margin-top: 7px; font-size: 11px; color: #aab8ce; overflow-wrap: anywhere; }
+    .status.error { color: #ffd98a; }
     .location-dot { background:#6da8ff; border:3px solid white; border-radius:50%; box-shadow:0 0 0 7px rgba(109,168,255,.25); }
   </style>
 </head>
@@ -41,143 +42,199 @@
     <button id="play" aria-label="Animation starten">▶</button>
     <input id="timeline" type="range" min="0" max="0" value="0">
   </div>
-  <div id="status">Kartendaten werden geladen …</div>
+  <div id="radarStatus" class="status" aria-live="polite">Radar: noch keine Daten</div>
+  <div id="cloudStatus" class="status" aria-live="polite">Bewölkung: noch keine Daten</div>
 </div>
 <script nonce="__SCRIPT_NONCE__">__LEAFLET_JS__</script>
 <script nonce="__SCRIPT_NONCE__">
 (() => {
-  const lat = __ASTRA_LAT__;
-  const lon = __ASTRA_LON__;
-  const mapElement = document.getElementById('map');
-  function fitViewport() {
-    const width = Math.max(window.innerWidth, 320);
-    const height = Math.max(window.innerHeight, 360);
-    document.documentElement.style.width = width + 'px';
-    document.documentElement.style.height = height + 'px';
-    document.body.style.width = width + 'px';
-    document.body.style.height = height + 'px';
-    mapElement.style.width = width + 'px';
-    mapElement.style.height = height + 'px';
-  }
-  fitViewport();
+  let lat = __ASTRA_LAT__, lon = __ASTRA_LON__;
   const map = L.map('map', { zoomControl: true }).setView([lat, lon], 7);
   window.astraMap = map;
-  window.addEventListener('resize', () => { fitViewport(); map.invalidateSize(false); });
-  setTimeout(() => map.invalidateSize(false), 350);
+  window.addEventListener('resize', () => map.invalidateSize(false));
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    className: 'base-map',
+    maxZoom: 19, className: 'base-map',
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
-
-  L.marker([lat, lon], {
+  const marker = L.marker([lat, lon], {
     icon: L.divIcon({ className: 'location-dot', iconSize: [16,16], iconAnchor: [8,8] })
   }).addTo(map).bindPopup('Ungefährer Beobachtungsort (gerundet)');
-
-  const rainToggle = document.getElementById('rainToggle');
-  const cloudToggle = document.getElementById('cloudToggle');
-  const timeline = document.getElementById('timeline');
-  const timeLabel = document.getElementById('time');
-  const status = document.getElementById('status');
-  const play = document.getElementById('play');
-  let radarFrames = [];
-  let radarLayer = null;
-  let radarHost = '';
-  let cloudLayer = L.layerGroup().addTo(map);
-  let animation = null;
-
-  function showRadar(index) {
-    if (!radarFrames.length) return;
-    index = Math.max(0, Math.min(index, radarFrames.length - 1));
-    if (radarLayer) map.removeLayer(radarLayer);
-    const frame = radarFrames[index];
-    radarLayer = L.tileLayer(radarHost + frame.path + '/256/{z}/{x}/{y}/2/1_1.png', {
-      tileSize: 256, opacity: .72, maxNativeZoom: 7, maxZoom: 19,
-      attribution: 'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'
-    });
-    if (rainToggle.checked) radarLayer.addTo(map);
-    timeline.value = index;
-    timeLabel.textContent = new Date(frame.time * 1000).toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+  const $ = id => document.getElementById(id);
+  const rainToggle = $('rainToggle'), cloudToggle = $('cloudToggle'), timeline = $('timeline');
+  let active = false, radarFrames = [], radarLayer = null, cloudLayer = null;
+  let radarTime = null, cloudTime = null, cloudPoint = null;
+  let animation = null, radarTimer = null, cloudTimer = null, cancelCandidate = null;
+  const channels = { radar: { version: 0, controller: null }, cloud: { version: 0, controller: null } };
+  const formatTime = seconds => new Date(seconds * 1000).toLocaleString('de-DE',
+    { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+  function describe(channel, action, failed = false) {
+    const radar = channel === 'radar', stamp = radar ? radarTime : cloudTime;
+    const oldPlace = !radar && cloudPoint && (cloudPoint[0] !== lat || cloudPoint[1] !== lon);
+    const node = $(radar ? 'radarStatus' : 'cloudStatus');
+    node.textContent = (radar ? 'Radar (RainViewer): ' : 'Wolken (Open-Meteo): ') + action +
+      (stamp === null ? ' · noch keine Daten' : ' · Stand ' + formatTime(stamp)) +
+      (oldPlace ? ' · bisheriger Standort' : '');
+    node.classList.toggle('error', failed || !!oldPlace);
   }
-
-  async function loadRadar() {
+  function stopAnimation() {
+    clearInterval(animation); animation = null; $('play').textContent = '▶';
+    $('play').setAttribute('aria-label', 'Animation starten');
+  }
+  function cancel(channel) {
+    const item = channels[channel];
+    item.version++;
+    item.controller?.abort(); item.controller = null;
+    if (channel === 'radar' && cancelCandidate) cancelCandidate();
+  }
+  async function request(channel, url, consume) {
+    cancel(channel);
+    const item = channels[channel], version = item.version;
+    const controller = new AbortController();
+    item.controller = controller;
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    describe(channel, 'wird aktualisiert …');
     try {
-      const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const response = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+      if (!response.ok) throw new Error('Unavailable');
       const data = await response.json();
-      if (data.host !== 'https://tilecache.rainviewer.com') throw new Error('Unbekannte Radarquelle');
-      radarHost = 'https://tilecache.rainviewer.com';
-      const past = Array.isArray(data.radar?.past) ? data.radar.past : [];
-      const nowcast = Array.isArray(data.radar?.nowcast) ? data.radar.nowcast : [];
-      radarFrames = [...past, ...nowcast].slice(0, 32).filter(frame =>
-        typeof frame.path === 'string' && /^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/.test(frame.path) &&
-        Number.isFinite(frame.time));
-      if (!radarFrames.length) throw new Error('Keine Radarframes');
-      timeline.max = radarFrames.length - 1;
-      showRadar(radarFrames.length - 1);
-      status.textContent = 'Aktuell · Radar: RainViewer · Wolken: Open-Meteo';
-    } catch (error) {
-      status.textContent = 'Regenradar momentan nicht verfügbar';
+      if (!active || version !== item.version) return;
+      await consume(data, version);
+    } catch (_) {
+      if (active && version === item.version) describe(channel, 'Abruf fehlgeschlagen; erneut nach unten ziehen', true);
+    } finally {
+      clearTimeout(timeout);
+      if (item.controller === controller) item.controller = null;
     }
   }
 
-  async function loadClouds() {
-    const points = [];
-    const step = 0.7;
-    for (let y = -3; y <= 3; y++) {
-      for (let x = -3; x <= 3; x++) points.push([
-        Math.max(-90, Math.min(90, lat + y * step)), ((lon + x * step + 540) % 360) - 180
-      ]);
+  // Render replacement tiles invisibly first. Never remove a working frame for an empty/error frame.
+  function replaceRadar(frames, index, version) {
+    if (cancelCandidate) cancelCandidate();
+    const frame = frames[index];
+    return new Promise(resolve => {
+      const candidate = L.tileLayer('https://tilecache.rainviewer.com' + frame.path + '/256/{z}/{x}/{y}/2/1_1.png', {
+        tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 19,
+        attribution: 'Radar: <a href="https://www.rainviewer.com/">RainViewer</a>'
+      });
+      let done = false, loaded = 0;
+      const finish = success => {
+        if (done) return;
+        done = true; clearTimeout(timeout);
+        candidate.off('tileload', onTileLoad).off('tileerror', onTileError).off('load', onLoad);
+        cancelCandidate = null;
+        if (!success || !active || version !== channels.radar.version) {
+          map.removeLayer(candidate); resolve(false); return;
+        }
+        if (radarLayer) map.removeLayer(radarLayer);
+        radarLayer = candidate; radarFrames = frames; radarTime = frame.time;
+        if (rainToggle.checked) candidate.setOpacity(.72); else map.removeLayer(candidate);
+        timeline.max = frames.length - 1; timeline.value = index; timeline.disabled = false;
+        $('play').disabled = false;
+        $('time').textContent = new Date(frame.time * 1000).toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+        describe('radar', 'Bild geladen');
+        resolve(true);
+      };
+      const timeout = setTimeout(() => finish(false), 15000);
+      const onTileLoad = () => loaded++;
+      const onTileError = () => finish(false);
+      const onLoad = () => finish(loaded > 0);
+      cancelCandidate = () => finish(false);
+      candidate.on('tileload', onTileLoad);
+      candidate.on('tileerror', onTileError);
+      candidate.on('load', onLoad);
+      candidate.addTo(map);
+    });
+  }
+  async function loadRadar() {
+    if (!active) return;
+    stopAnimation();
+    await request('radar', 'https://api.rainviewer.com/public/weather-maps.json', async (data, version) => {
+      if (data.host !== 'https://tilecache.rainviewer.com') throw new Error('Invalid source');
+      const frames = [...(data.radar?.past || []), ...(data.radar?.nowcast || [])].slice(0,32);
+      if (!frames.length || !frames.every(frame =>
+        typeof frame.path === 'string' && /^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/.test(frame.path) &&
+        Number.isSafeInteger(frame.time) && frame.time > 0)) throw new Error('Invalid frames');
+      const success = await replaceRadar(frames, frames.length - 1, version);
+      if (!success && active && version === channels.radar.version)
+        describe('radar', 'Kacheln nicht aktualisiert; erneut nach unten ziehen', true);
+    });
+  }
+  async function showRadar(index) {
+    // While loading, the slider and timestamp still describe the visible (old) image.
+    timeline.value = radarFrames.findIndex(frame => frame.time === radarTime);
+    if (!active || !radarFrames.length || cancelCandidate || channels.radar.controller) return;
+    index = Math.max(0, Math.min(index, radarFrames.length - 1));
+    const version = channels.radar.version;
+    const success = await replaceRadar(radarFrames, index, version);
+    if (!success && active && version === channels.radar.version) {
+      stopAnimation(); describe('radar', 'Bild nicht aktualisiert; bisheriges Bild bleibt', true);
     }
+  }
+  async function loadClouds() {
+    if (!active) return;
+    const center = [lat, lon], points = [], step = .7;
+    for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) points.push([
+      Math.max(-90, Math.min(90, lat + y * step)), ((lon + x * step + 540) % 360) - 180
+    ]);
     const lats = points.map(p => p[0].toFixed(2)).join(',');
     const lons = points.map(p => p[1].toFixed(2)).join(',');
-    try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=cloud_cover&forecast_days=1`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      const values = await response.json();
-      const rows = Array.isArray(values) ? values : [values];
-      cloudLayer.clearLayers();
-      rows.slice(0, points.length).forEach((row, i) => {
-        const value = row.current?.cloud_cover;
-        if (!Number.isFinite(value)) return;
-        const cover = Math.max(0, Math.min(100, value));
-        const p = points[i];
-        L.rectangle([[p[0]-step/2,p[1]-step/2],[p[0]+step/2,p[1]+step/2]], {
-          stroke: false,
-          fillColor: cover > 75 ? '#d8e1ef' : cover > 40 ? '#aebbd0' : '#8da0bc',
-          fillOpacity: .04 + cover / 100 * .48,
-          interactive: false
-        }).addTo(cloudLayer);
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lats + '&longitude=' + lons +
+      '&current=cloud_cover&forecast_days=1&timeformat=unixtime';
+    await request('cloud', url, rows => {
+      if (!Array.isArray(rows) || rows.length !== points.length || !rows.every(row =>
+        Number.isFinite(row.current?.cloud_cover) && row.current.cloud_cover >= 0 && row.current.cloud_cover <= 100 &&
+        Number.isSafeInteger(row.current?.time) && row.current.time > 0)) throw new Error('Incomplete cloud data');
+      const candidate = L.layerGroup();
+      rows.forEach((row, i) => {
+        const cover = row.current.cloud_cover, p = points[i];
+        L.rectangle([[Math.max(-90,p[0]-step/2),p[1]-step/2],[Math.min(90,p[0]+step/2),p[1]+step/2]], {
+          stroke: false, fillColor: cover > 75 ? '#d8e1ef' : cover > 40 ? '#aebbd0' : '#8da0bc',
+          fillOpacity: .04 + cover / 100 * .48, interactive: false
+        }).addTo(candidate);
       });
-    } catch (error) {
-      status.textContent = 'Bewölkungsdaten momentan nicht verfügbar';
-    }
+      if (cloudToggle.checked) candidate.addTo(map);
+      if (cloudLayer) map.removeLayer(cloudLayer);
+      cloudLayer = candidate; cloudPoint = center;
+      cloudTime = Math.min(...rows.map(row => row.current.time));
+      describe('cloud', 'Raster geladen');
+    });
   }
 
-  timeline.addEventListener('input', () => showRadar(Number(timeline.value)));
+  timeline.disabled = true; $('play').disabled = true;
+  timeline.addEventListener('input', () => { stopAnimation(); showRadar(Number(timeline.value)); });
   rainToggle.addEventListener('change', () => {
-    if (!radarLayer) return;
-    if (rainToggle.checked) radarLayer.addTo(map); else map.removeLayer(radarLayer);
+    if (radarLayer) { if (rainToggle.checked) radarLayer.setOpacity(.72).addTo(map); else map.removeLayer(radarLayer); }
   });
   cloudToggle.addEventListener('change', () => {
-    if (cloudToggle.checked) cloudLayer.addTo(map); else map.removeLayer(cloudLayer);
+    if (cloudLayer) { if (cloudToggle.checked) cloudLayer.addTo(map); else map.removeLayer(cloudLayer); }
   });
-  play.addEventListener('click', () => {
-    if (animation) {
-      clearInterval(animation); animation = null; play.textContent = '▶'; return;
-    }
-    play.textContent = '■';
-    animation = setInterval(() => {
-      const next = (Number(timeline.value) + 1) % radarFrames.length;
-      showRadar(next);
-    }, 650);
+  $('play').addEventListener('click', () => {
+    if (animation) { stopAnimation(); return; }
+    if (!active || !radarFrames.length) return;
+    $('play').textContent = '■'; $('play').setAttribute('aria-label', 'Animation stoppen');
+    animation = setInterval(() => showRadar((Number(timeline.value) + 1) % radarFrames.length), 1000);
   });
-
-  loadRadar();
-  loadClouds();
-  setInterval(loadRadar, 5 * 60 * 1000);
-  setInterval(loadClouds, 15 * 60 * 1000);
+  window.astraWeather = {
+    refresh(nextLat = lat, nextLon = lon) {
+      if (!Number.isFinite(nextLat) || !Number.isFinite(nextLon) || Math.abs(nextLat) > 90 || Math.abs(nextLon) > 180) return;
+      active = true;
+      if (lat !== nextLat || lon !== nextLon) {
+        lat = nextLat; lon = nextLon; marker.setLatLng([lat,lon]); map.setView([lat,lon],map.getZoom());
+      }
+      clearInterval(radarTimer); clearInterval(cloudTimer);
+      loadRadar(); loadClouds();
+      radarTimer = setInterval(loadRadar, 5 * 60 * 1000);
+      cloudTimer = setInterval(loadClouds, 15 * 60 * 1000);
+    },
+    suspend() {
+      active = false; cancel('radar'); cancel('cloud'); stopAnimation();
+      clearInterval(radarTimer); clearInterval(cloudTimer);
+      describe('radar','pausiert'); describe('cloud','pausiert');
+    },
+    state: () => ({ active, radarTime, cloudTime, cloudPoint, cloudCount: cloudLayer?.getLayers().length || 0,
+      radarVisible: !!radarLayer && map.hasLayer(radarLayer), cloudVisible: !!cloudLayer && map.hasLayer(cloudLayer),
+      radarLoading: !!channels.radar.controller || !!cancelCandidate, cloudLoading: !!channels.cloud.controller })
+  };
 })();
 </script>
 </body>

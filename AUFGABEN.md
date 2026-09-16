@@ -77,11 +77,15 @@ Die zusätzliche Anbieterkarte verwendet eine getrennte, flüchtige WebView mit 
 
 ### 6. Wetteraktualisierung ohne Datenlücke
 
-- [ ] Beim Pull-to-Refresh die letzte erfolgreiche Wetterantwort, Zeitleiste, Astra-Score-Daten und Kartenebenen sichtbar lassen, bis neue Daten vollständig vorliegen.
-- [ ] Ladezustand als dezente Aktualisierungsanzeige über den alten Daten zeigen; keine leere Ansicht und kein Zurücksetzen auf „Idle“ während des Abrufs.
-- [ ] Bei einem Fehler alte Daten mit Datenalter und Wiederholen-Aktion anzeigen; nur beim ersten Abruf einen leeren Ladezustand verwenden.
-- [ ] Wetter, Regenradar, Bewölkung und Standortaktualisierung getrennt behandeln, damit ein Fehler nicht alle vorhandenen Ebenen entfernt.
-- [ ] Tests für Pull-to-Refresh, langsame Antwort, Fehler, Standortwechsel, Offlinebetrieb und App-Hintergrund während des Abrufs ergänzen.
+- [x] Beim Pull-to-Refresh die letzte erfolgreiche Wetterantwort, Zeitleiste, Astra-Score-Daten und Kartenebenen sichtbar lassen, bis neue Daten vollständig vorliegen.
+- [x] Ladezustand als dezente Aktualisierungsanzeige über den alten Daten zeigen; keine leere Ansicht und kein Zurücksetzen auf „Idle“ während des Abrufs.
+- [x] Bei einem Fehler alte Daten mit Datenalter und Wiederholen-Aktion anzeigen; nur beim ersten Abruf einen leeren Ladezustand verwenden.
+- [x] Wetter, Regenradar, Bewölkung und Standortaktualisierung getrennt behandeln, damit ein Fehler nicht alle vorhandenen Ebenen entfernt.
+- [x] Tests für Pull-to-Refresh, langsame Antwort, Fehler, Standortwechsel, Offlinebetrieb und App-Hintergrund während des Abrufs ergänzen.
+
+Umgesetzt in `1.1.8-pre.1`. Wetter und zugehöriger Ort werden atomar ersetzt; alte Antworten können neuere Anfragen nicht überschreiben. Stunden und Score verwenden feste Zeitstempel des Datensatzes. Radar tauscht das Bild erst nach erfolgreichem Laden der sichtbaren Ersatzkacheln aus, Bewölkung erst nach einem vollständigen 49-Punkte-Raster. Fehler und Zeitstände beider Ebenen werden getrennt angezeigt. Standortabruf bleibt unabhängig; ohne neuen GPS-Fix gilt der letzte verfügbare Ort. Alle Wetter-/Standortdaten bleiben nur im Arbeitsspeicher dieser Ansicht, nicht über Tabwechsel oder einen Prozessneustart hinweg. Hintergrundabrufe werden abgebrochen und bei Rückkehr neu begonnen.
+
+- [ ] Auf einem weiteren realen Gerät mit schwachem Mobilfunk, echtem GPS-Standortwechsel und großer Schrift gegenprüfen; Akkutests bleiben P3.
 
 ### 7. Schneller App- und Sternkartenstart
 

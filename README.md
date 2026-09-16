@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Status:** `1.1.7-pre.2` · Version Code `17` · Android 9 / API 28 bis Android 17 / API 37<br>
-Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.7-pre.2 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.7-pre.2).
+**Status:** `1.1.8-pre.1` · Version Code `18` · Android 9 / API 28 bis Android 17 / API 37<br>
+Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.8-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.8-pre.1).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -18,12 +18,20 @@ Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: 
 | Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme |
 | Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
 | AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
-| Wetter | Open-Meteo-Vorhersage, Wolken, Regenwahrscheinlichkeit, Wind, Sicht, Radar- und Wetterkarte |
+| Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.7-pre.2
+## Neu in 1.1.8-pre.1
+
+Beim Herunterziehen bleiben Wetterwerte, Astra-Score, Stundenübersicht und Karten sichtbar, bis Ersatzdaten vorliegen. Eine kleine Statusanzeige kennzeichnet den Abruf. Bei einem Fehler bleiben die bisherigen Werte mit Datenstand und Wiederholen-Aktion erhalten.
+
+Radar und Bewölkung aktualisieren sich unabhängig, ohne die Kartenansicht neu aufzubauen. Zoom und Ebenenschalter bleiben erhalten; Ersatz-Radarkacheln werden vor dem Austausch geladen. Beide Ebenen zeigen ihren eigenen Datenstand und Fehlerstatus. Ein Standortwechsel mischt alte Wetterdaten nicht mit dem neuen Ort; noch angezeigte Daten des bisherigen Orts sind gekennzeichnet.
+
+Die Stundenübersicht verwendet feste Zeitpunkte, auch über Mitternacht und Zeitumstellungen hinweg. Im Hintergrund werden Abrufe abgebrochen und veraltete Rückmeldungen verworfen. Wetter- und Standortdaten bleiben nur während der geöffneten Ansicht im Arbeitsspeicher; es gibt keinen neuen dauerhaften Wettercache. Testhinweise: [1.1.8-pre.1](play-store/pre-release-1.1.8-pre.1.md).
+
+## Hinweise auf alte Lichtdaten seit 1.1.7-pre.2
 
 Ein sichtbarer Hinweis direkt am Astra-Score und oberhalb der internen Lichtkarte kennzeichnet die NASA-Lichtdaten von **2016 als veraltet**. Der Hinweis bleibt bei eingeklappter Score-Erklärung und im Karten-Vollbild sichtbar. Neuladen liefert keine neueren Beobachtungen; heutige Beleuchtung kann abweichen. Die Score-Berechnung bleibt unverändert, die Werte der externen Karte werden weiterhin nicht übernommen. Testhinweise: [1.1.7-pre.2](play-store/pre-release-1.1.7-pre.2.md).
 
@@ -83,9 +91,9 @@ adb install -r app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk
 adb shell am instrument -w de.projektastra.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.7-pre.2.md](play-store/pre-release-1.1.7-pre.2.md).
+Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.8-pre.1.md](play-store/pre-release-1.1.8-pre.1.md).
 
-Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.7-pre.2.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
+Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.8-pre.1.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
 
 ## Release und Pre-Releases
 

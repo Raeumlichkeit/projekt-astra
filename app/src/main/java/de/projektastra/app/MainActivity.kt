@@ -1,6 +1,5 @@
 package de.projektastra.app
 
-import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -17,9 +16,6 @@ import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
@@ -211,8 +207,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStart() {
-        super.onStart()
         SecureNetwork.setForeground(true)
+        super.onStart()
     }
 
     override fun onStop() {
@@ -1857,36 +1853,52 @@ private fun AstraSectionTitle(title: String, subtitle: String? = null) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WeatherScreen(location: GeoPoint?, simulatedSkyTime: Instant?, refreshLocation: () -> Unit) {
-    var state by remember { mutableStateOf<WeatherState>(WeatherState.Idle) }
-    var lightPollution by remember { mutableStateOf<LightPollutionState>(LightPollutionState.Loading) }
+internal fun WeatherScreen(
+    location: GeoPoint?,
+    simulatedSkyTime: Instant?,
+    refreshLocation: () -> Unit,
+    loadWeather: (GeoPoint, (Result<WeatherSnapshot>) -> Unit) -> Unit = WeatherRepository::load,
+    loadLight: (GeoPoint, Boolean, (LightPollutionState) -> Unit) -> Unit = LightPollutionRepository::load,
+    mapContent: @Composable (GeoPoint, Int) -> Unit = { point, refresh -> WeatherMap(point, refresh) }
+) {
+    val session = remember { WeatherRefreshSession() }
+    val state = session.state
     var refreshKey by remember { mutableIntStateOf(0) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
+    var foreground by remember { mutableStateOf(false) }
+    var now by remember { mutableStateOf(Instant.now()) }
+    val observer = NetworkPolicy.roundedLocation(location ?: GeoPoint(52.52, 13.405, 34.0))
+    val target = WeatherTarget(observer, demo = location == null)
 
     fun refresh() {
-        isRefreshing = true
         refreshKey++
         refreshLocation()
     }
 
-    LaunchedEffect(observer, refreshKey) {
-        if (!SecureNetwork.options.online) {
-            state = WeatherState.Idle
-            isRefreshing = false
-            return@LaunchedEffect
+    LifecycleStartEffect(target, refreshKey) {
+        foreground = true
+        if (SecureNetwork.available) {
+            val ticket = session.begin(target)
+            loadWeather(observer) {
+                if (SecureNetwork.available) session.weather(ticket, it)
+            }
+            loadLight(observer, refreshKey > 0) {
+                if (SecureNetwork.available) session.light(ticket, (it as? LightPollutionState.Ready)?.estimate)
+            }
         }
-        state = WeatherState.Loading
-        lightPollution = LightPollutionState.Loading
-        WeatherRepository.load(observer) {
-            state = it
-            isRefreshing = false
+        onStopOrDispose {
+            foreground = false
+            session.stop()
         }
-        LightPollutionRepository.load(observer) { lightPollution = it }
+    }
+    LaunchedEffect(foreground) {
+        while (foreground) {
+            now = Instant.now()
+            kotlinx.coroutines.delay(30_000)
+        }
     }
 
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
+        isRefreshing = state.refreshing,
         onRefresh = ::refresh,
         modifier = Modifier.fillMaxSize().background(
             Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
@@ -1910,49 +1922,59 @@ private fun WeatherScreen(location: GeoPoint?, simulatedSkyTime: Instant?, refre
                     color = StarGold, fontSize = 13.sp)
             }
             if (!SecureNetwork.options.online) OfflineNotice()
-            when (val value = state) {
-                WeatherState.Idle -> Unit
-                WeatherState.Loading -> Text("Aktuelle Daten werden geladen …")
-                is WeatherState.Error -> {
-                    Text(value.message, color = StarGold)
-                    Button(onClick = ::refresh) { Text("Erneut versuchen") }
+            if (state.refreshing) {
+                Text(if (state.displayed == null) "Wetter wird geladen …" else "Wetter wird aktualisiert · bisherige Daten bleiben sichtbar",
+                    color = AstraBlue, fontSize = 12.sp)
+            }
+            Text(if (target.demo) "Ohne verfügbaren Standort wird Berlin verwendet."
+                else "Bis zu einem neuen GPS-Fix wird der letzte verfügbare Standort verwendet.",
+                color = AstraTextMuted, fontSize = 12.sp)
+            if (state.error) {
+                Text(if (state.displayed == null) "Wetterdaten konnten nicht geladen werden."
+                    else "Aktualisierung fehlgeschlagen · bisherige Wetterdaten werden weiter angezeigt.", color = StarGold)
+                TextButton(onClick = ::refresh) { Text("Erneut versuchen") }
+            }
+            state.displayed?.let { value ->
+                if (value.target != target) {
+                    Text("Noch Wetter für den bisherigen Standort${if (value.target.demo) " (Demo Berlin)" else ""}. Neue Standortdaten sind noch nicht verfügbar.",
+                        color = StarGold, fontSize = 13.sp)
                 }
-                is WeatherState.Ready -> {
-                    ObservationScore(
-                        value.weather,
-                        observer,
-                        (lightPollution as? LightPollutionState.Ready)?.estimate
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        WeatherTile("Temperatur", "${value.weather.temperature.format(1)} °C", Modifier.weight(1f))
-                        WeatherTile("Bewölkung", "${value.weather.cloudCover}%", Modifier.weight(1f))
-                    }
-                    (lightPollution as? LightPollutionState.Ready)?.estimate?.let {
-                        WeatherTile(
-                            "Lichtverschmutzung · NASA ${it.sourceYear}",
-                            "Index ${it.index}/100 · Bortle ≈ ${it.bortleClass}",
-                            Modifier.fillMaxWidth()
-                        )
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        WeatherTile("Wind", "${value.weather.windSpeed.format(1)} km/h", Modifier.weight(1f))
-                        WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
-                    }
-                    Text("Quelle: Open-Meteo · zuletzt ${value.weather.updatedAt}", fontSize = 12.sp, color = Color(0xFFAAB8CE))
-                    AstraSectionTitle("24-Stunden-Ausblick", "Stündliche Bedingungen am aktuellen Standort")
-                    ForecastTimeline(
-                        value.weather.forecast,
-                        observer,
-                        (lightPollution as? LightPollutionState.Ready)?.estimate
-                    )
-                    AstraSectionTitle("Wolken- und Regenkarte", "Radar, Niederschlag und Bewölkung")
-                    Text(
-                        "Regenradar mit 2-Stunden-Zeitleiste und aktuelle Bewölkung. Ebenen lassen sich direkt in der Karte umschalten.",
-                        color = Color(0xFFAAB8CE),
-                        fontSize = 13.sp
-                    )
-                    WeatherMap(observer, refreshKey)
+                ObservationScore(
+                    value.weather,
+                    value.target.point,
+                    value.light
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    WeatherTile("Temperatur", "${value.weather.temperature.format(1)} °C", Modifier.weight(1f))
+                    WeatherTile("Bewölkung", "${value.weather.cloudCover}%", Modifier.weight(1f))
                 }
+                value.light?.let {
+                    WeatherTile(
+                        "Lichtverschmutzung · NASA ${it.sourceYear}",
+                        "Index ${it.index}/100 · Bortle ≈ ${it.bortleClass}",
+                        Modifier.fillMaxWidth()
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    WeatherTile("Wind", "${value.weather.windSpeed.format(1)} km/h", Modifier.weight(1f))
+                    WeatherTile("Sichtweite", "${(value.weather.visibility / 1000.0).format(1)} km", Modifier.weight(1f))
+                }
+                val age = java.time.Duration.between(value.weather.fetchedAt, now).toMinutes().coerceAtLeast(0)
+                Text("Open-Meteo · Datenstand ${value.weather.updatedAt}\nAbgerufen ${if (age == 0L) "vor weniger als einer Minute" else "vor $age Min."}", fontSize = 12.sp, color = AstraTextMuted)
+                if (state.lightRefreshing) Text("Lichtschätzung wird separat aktualisiert …", fontSize = 12.sp, color = AstraTextMuted)
+                else if (state.lightError) Text("Lichtschätzung nicht aktualisiert${if (value.light != null) " · bisheriger Wert bleibt erhalten" else " · im Score nicht verfügbar"}.", fontSize = 12.sp, color = StarGold)
+                AstraSectionTitle("24-Stunden-Ausblick", "Vorhersage des oben angegebenen Datenstands")
+                ForecastTimeline(
+                    value.weather.forecast,
+                    value.target.point,
+                    value.light
+                )
+            }
+            if (SecureNetwork.options.online) {
+                AstraSectionTitle("Wolken- und Regenkarte", "Radar und Bewölkung · unabhängig vom Wetterabruf")
+                Text("Vorhandene Ebenen bleiben beim Aktualisieren sichtbar. Den jeweiligen Datenstand siehst du direkt in der Karte.",
+                    color = AstraTextMuted, fontSize = 13.sp)
+                mapContent(observer, refreshKey)
             }
         }
     }
@@ -1969,14 +1991,14 @@ private fun ForecastTimeline(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         forecast.forEach { hour ->
-            val score = remember(hour, observer) {
+            val score = remember(hour, observer, lightPollution) {
                 AstraScoreCalculator.calculate(
                     cloudCover = hour.cloudCover,
                     rainProbability = hour.rainProbability,
                     windSpeed = hour.windSpeed,
                     visibilityMeters = hour.visibility,
                     observer = observer,
-                    instant = Instant.now().plusSeconds(hour.hoursFromNow * 3_600L),
+                    instant = hour.instant,
                     lightPollution = lightPollution
                 ).score
             }
@@ -2007,39 +2029,6 @@ private fun ForecastTimeline(
     }
 }
 
-@Composable
-@SuppressLint("SetJavaScriptEnabled")
-private fun WeatherMap(observer: GeoPoint, refreshKey: Int) {
-    val context = LocalContext.current
-    val webView = remember(context) { PrivateWebViews.create(context, javascript = true) }
-
-    LaunchedEffect(observer, refreshKey) {
-        val approximate = NetworkPolicy.roundedLocation(observer)
-        val leafletCss = context.assets.open("leaflet-1.9.4.css").bufferedReader().use { it.readText() }
-        val leafletJs = context.assets.open("leaflet-1.9.4.js").bufferedReader().use { it.readText() }
-        val html = context.assets.open("weather_map.html").bufferedReader().use { it.readText() }
-            .replace("__LEAFLET_CSS__", leafletCss)
-            .replace("__LEAFLET_JS__", leafletJs)
-            .replace("__ASTRA_LAT__", approximate.latitude.toString())
-            .replace("__ASTRA_LON__", approximate.longitude.toString())
-            .replace("__SCRIPT_NONCE__", java.util.UUID.randomUUID().toString())
-        PrivateWebViews.loadHtml(webView, html)
-    }
-
-    DisposableEffect(webView) {
-        onDispose {
-            PrivateWebViews.dispose(webView)
-        }
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth().height(400.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = NightBlue)
-    ) {
-        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
-    }
-}
 
 private enum class SkyEventKind(val label: String) {
     METEOR("Sternschnuppen"),
@@ -2397,7 +2386,7 @@ private fun ObservationScore(
 ) {
     var detailsVisible by remember { mutableStateOf(false) }
     val breakdown = remember(weather, observer, lightPollution) {
-        AstraScoreCalculator.calculate(weather, observer, Instant.now(), lightPollution)
+        AstraScoreCalculator.calculate(weather, observer, weather.observedAt, lightPollution)
     }
     val score = breakdown.score
     val label = when {
@@ -3191,88 +3180,6 @@ internal object AstronomyEngine {
     }
 }
 
-internal data class HourlyForecast(
-    val time: String,
-    val hoursFromNow: Int,
-    val cloudCover: Int,
-    val rainProbability: Int,
-    val windSpeed: Double,
-    val visibility: Double
-)
-
-internal data class WeatherSnapshot(
-    val temperature: Double,
-    val cloudCover: Int,
-    val windSpeed: Double,
-    val visibility: Double,
-    val updatedAt: String,
-    val forecast: List<HourlyForecast>
-)
-
-private sealed interface WeatherState {
-    data object Idle : WeatherState
-    data object Loading : WeatherState
-    data class Ready(val weather: WeatherSnapshot) : WeatherState
-    data class Error(val message: String) : WeatherState
-}
-
-private object WeatherRepository {
-    fun load(point: GeoPoint, callback: (WeatherState) -> Unit) {
-        thread(name = "astra-weather") {
-            val result = runCatching {
-                val approximate = NetworkPolicy.roundedLocation(point)
-                val url = java.net.URL(
-                    "https://api.open-meteo.com/v1/forecast?latitude=${approximate.latitude}" +
-                        "&longitude=${approximate.longitude}" +
-                        "&current=temperature_2m,cloud_cover,wind_speed_10m" +
-                        "&hourly=visibility,cloud_cover,precipitation_probability,wind_speed_10m" +
-                        "&forecast_days=2&timezone=auto"
-                )
-                run {
-                    val json = org.json.JSONObject(String(SecureNetwork.get(url.toString()).bytes, Charsets.UTF_8))
-                    val current = json.getJSONObject("current")
-                    val hourly = json.getJSONObject("hourly")
-                    val times = hourly.getJSONArray("time")
-                    val visibilities = hourly.getJSONArray("visibility")
-                    val cloudCover = hourly.getJSONArray("cloud_cover")
-                    val rainProbability = hourly.getJSONArray("precipitation_probability")
-                    val hourlyWind = hourly.getJSONArray("wind_speed_10m")
-                    val currentHour = current.getString("time").take(13)
-                    var index = 0
-                    for (i in 0 until times.length()) {
-                        if (times.getString(i).startsWith(currentHour)) { index = i; break }
-                    }
-                    val forecast = (index until min(index + 24, times.length())).map { i ->
-                        HourlyForecast(
-                            time = times.getString(i).takeLast(5),
-                            hoursFromNow = i - index,
-                            cloudCover = cloudCover.optInt(i, 0),
-                            rainProbability = rainProbability.optInt(i, 0),
-                            windSpeed = hourlyWind.optDouble(i, 0.0),
-                            visibility = visibilities.optDouble(i, 10_000.0)
-                        )
-                    }
-                    WeatherSnapshot(
-                        temperature = current.getDouble("temperature_2m"),
-                        cloudCover = current.getInt("cloud_cover"),
-                        windSpeed = current.getDouble("wind_speed_10m"),
-                        visibility = visibilities.optDouble(index, 10_000.0),
-                        updatedAt = current.getString("time").takeLast(5),
-                        forecast = forecast
-                    )
-                }
-            }
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                callback(
-                    result.fold(
-                        onSuccess = { if (SecureNetwork.available) WeatherState.Ready(it) else WeatherState.Idle },
-                        onFailure = { WeatherState.Error("Wetterdaten konnten nicht geladen werden.") }
-                    )
-                )
-            }
-        }
-    }
-}
 
 private fun normalizeDegrees(value: Double): Double = ((value % 360.0) + 360.0) % 360.0
 private fun normalizeSignedDegrees(value: Double): Double = ((value + 540.0) % 360.0) - 180.0

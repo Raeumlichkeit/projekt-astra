@@ -205,7 +205,7 @@ internal object PrivateWebViews {
         view.loadUrl(NetworkPolicy.LOCAL_ORIGIN + "/")
     }
     @SuppressLint("SetJavaScriptEnabled")
-    fun create(context: Context, javascript: Boolean): WebView = WebView(context).apply {
+    fun create(context: Context, javascript: Boolean, onDocumentReady: (() -> Unit)? = null): WebView = WebView(context).apply {
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         CookieManager.getInstance().setAcceptCookie(false)
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
@@ -253,6 +253,7 @@ internal object PrivateWebViews {
             }
             override fun onPageFinished(view: WebView, url: String?) {
                 if (javascript) view.evaluateJavascript("window.astraMap && window.astraMap.invalidateSize(true)", null)
+                if (url == NetworkPolicy.LOCAL_ORIGIN + "/" && documents.containsKey(view)) onDocumentReady?.invoke()
             }
         }
     }
