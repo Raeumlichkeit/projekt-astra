@@ -663,9 +663,12 @@ internal fun SkyScreen(
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
     val orientation = rememberOrientation(observer)
     val context = LocalContext.current
-    val stars = remember { StarCatalog.load(context) }
-    val deepSkyObjects = remember { DeepSkyCatalog.load(context) }
-    val iauBoundaries = remember { IauBoundaryCatalog.load(context) }
+    val catalogStore = remember(context) { ProcessSkyCatalogs.get(context) }
+    var catalogRetry by remember { mutableIntStateOf(0) }
+    val catalogs = rememberSkyCatalogs(catalogStore, catalogRetry)
+    val stars = catalogs.stars ?: StarCatalog.fallbackObjects
+    val deepSkyObjects = catalogs.deepSky.orEmpty()
+    val iauBoundaries = catalogs.boundaries.orEmpty()
     val initialCameraFov = rememberCameraHorizontalFov()
     var cameraFov by remember { mutableStateOf(initialCameraFov) }
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
@@ -712,9 +715,8 @@ internal fun SkyScreen(
     }
     val coordinateFrame = remember(observer, skyInstant) { SkyCoordinateFrame(observer, skyInstant) }
     val solarSystem = remember(observer, skyInstant) { SolarSystemCatalog.at(observer, skyInstant) }
-    val searchIndex = remember(stars, deepSkyObjects) {
-        SkySearchIndex((stars + deepSkyObjects + solarSystem).map { SkySearchTarget(it) } + constellationSearchTargets(stars))
-    }
+    val searchIndex = catalogs.searchIndex ?: remember { SkySearchIndex(emptyList()) }
+    val movingSearchTargets = remember(solarSystem) { solarSystem.map { SkySearchTarget(it) } }
     val resolveTarget: (SkySearchTarget) -> CelestialObject = { target ->
         solarSystem.firstOrNull { it.catalogId == target.objectData.catalogId } ?: target.objectData
     }
@@ -744,8 +746,8 @@ internal fun SkyScreen(
         showSearch = false
         selected = null
     }
-    LaunchedEffect(requestedObjectId, solarSystem) {
-        if (requestedObjectId != null) {
+    LaunchedEffect(requestedObjectId, solarSystem, catalogs.objectsReady) {
+        if (requestedObjectId != null && catalogs.objectsReady) {
             val data = (stars + deepSkyObjects + solarSystem).firstOrNull { it.catalogId == requestedObjectId }
             if (data != null) openTarget(SkySearchTarget(data))
             else targetMessage = "Das vorgemerkte Objekt ist im Offline-Katalog nicht verfügbar."
@@ -770,7 +772,7 @@ internal fun SkyScreen(
             )
         }
     }
-    val visible = remember(observer, skyInstant, showDeepSky) {
+    val visible = remember(observer, skyInstant, showDeepSky, stars, deepSkyObjects) {
         val catalog = if (showDeepSky) stars + solarSystem + deepSkyObjects else stars + solarSystem
         catalog.map {
             VisibleObject(it, it.solarBody?.let { body -> SolarSystemCatalog.horizontal(body, observer, skyInstant) }
@@ -799,6 +801,10 @@ internal fun SkyScreen(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(if (skyTime.live) "Sternkarte" else "Simulation", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                if (!catalogs.complete) {
+                    Text(if (catalogs.failed) "Offline-Katalog unvollständig · Suche zum Wiederholen öffnen"
+                        else "Offline-Katalog wird geladen …", fontSize = 12.sp, color = AstraTextMuted)
+                }
                 Text(if (location != null) "GPS-Standort" else "Standort: Berlin Demo", fontSize = 12.sp, color = AstraTextMuted)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1050,7 +1056,9 @@ internal fun SkyScreen(
         (terrainState as? TerrainState.Ready)?.profile, positionOf,
         timeLabel = (if (skyTime.live) "Jetzt · " else "Simulation · ") +
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm XXX").withZone(displayZone).format(skyInstant),
-        dismiss = { showSearch = false }, open = openTarget)
+        dismiss = { showSearch = false }, open = openTarget,
+        loading = !catalogs.complete && !catalogs.failed, failed = catalogs.failed,
+        retry = { catalogRetry++ }, movingTargets = movingSearchTargets)
 
     selected?.let { original ->
         val target = SkySearchTarget(original.celestial)
@@ -2478,7 +2486,7 @@ private fun WeatherTile(label: String, value: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun ObservationPlanScreen(
+internal fun ObservationPlanScreen(
     location: GeoPoint?,
     favoriteIds: Set<String>,
     openObject: (String) -> Unit,
@@ -2489,12 +2497,18 @@ private fun ObservationPlanScreen(
     setReminderHours: (Int) -> Unit,
     removeFavorite: (String) -> Unit,
     removeEvent: (SavedSkyEvent) -> Unit,
-    requestNotifications: () -> Unit
+    requestNotifications: () -> Unit,
+    catalogStore: SkyCatalogStore? = null
 ) {
     val context = LocalContext.current
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
-    val catalog = remember(context, observer) {
-        StarCatalog.load(context) + DeepSkyCatalog.load(context) + SolarSystemCatalog.at(observer, Instant.now())
+    val store = catalogStore ?: remember(context) { ProcessSkyCatalogs.get(context) }
+    var catalogRetry by remember { mutableIntStateOf(0) }
+    val catalogs = rememberSkyCatalogs(store, catalogRetry)
+    val instant = remember(observer) { Instant.now() }
+    val solarSystem = remember(observer, instant) { SolarSystemCatalog.at(observer, instant) }
+    val catalog = remember(catalogs.stars, catalogs.deepSky, solarSystem) {
+        (catalogs.stars ?: StarCatalog.fallbackObjects) + catalogs.deepSky.orEmpty() + solarSystem
     }
     val favorites = remember(catalog, favoriteIds) { catalog.filter { it.catalogId in favoriteIds } }
     val zone = ZoneId.systemDefault()
@@ -2510,9 +2524,15 @@ private fun ObservationPlanScreen(
         AstraScreenHeader(
             eyebrow = "ASTRA PLAN",
             title = "Beobachtungsliste",
-            subtitle = "${favorites.size} Objekte · ${savedEvents.size} Ereignisse",
+            subtitle = "${favoriteIds.size} vorgemerkte Objekte · ${savedEvents.size} Ereignisse",
             icon = Icons.Rounded.Bookmarks
         )
+        if (catalogs.failed) {
+            Text("Offline-Katalog unvollständig. Deine Vormerkungen bleiben erhalten.", color = StarGold)
+            TextButton(onClick = { catalogRetry++ }) { Text("Katalog erneut laden") }
+        } else if (!catalogs.complete) {
+            Text("Offline-Katalog wird geladen · Vormerkungen bleiben erhalten", color = AstraTextMuted)
+        }
 
         Card(
             colors = CardDefaults.cardColors(containerColor = AstraSurface),
@@ -2585,10 +2605,14 @@ private fun ObservationPlanScreen(
         }
 
         AstraSectionTitle("Favorisierte Himmelsobjekte", "Sterne und Deep-Sky-Ziele für deine Nacht")
-        if (favorites.isEmpty()) {
+        if (favoriteIds.isEmpty()) {
             EmptyPlanCard("Tippe ein Objekt in der Sternkarte an und füge es zur Liste hinzu.")
-        } else favorites.forEach { objectData ->
-            val position = remember(objectData, observer) { coordinatesAt(objectData, observer, Instant.now()) }
+        } else if (favorites.size < favoriteIds.size) {
+            EmptyPlanCard(if (!catalogs.objectsReady) "Einige Vormerkungen warten noch auf den vollständigen Katalog."
+                else "Einige vorgemerkte Objekte sind im aktuellen Katalog nicht verfügbar. Deine Vormerkungen bleiben erhalten.")
+        }
+        favorites.forEach { objectData ->
+            val position = remember(objectData, observer, instant) { coordinatesAt(objectData, observer, instant) }
             Card(colors = CardDefaults.cardColors(containerColor = AstraSurface)) {
                 Row(
                     Modifier.fillMaxWidth().padding(16.dp),
@@ -2802,7 +2826,8 @@ internal data class HorizontalCoordinates(val azimuth: Double, val altitude: Dou
 internal data class VisibleObject(val celestial: CelestialObject, val position: HorizontalCoordinates)
 
 internal object StarCatalog {
-    private val fallbackObjects = listOf(
+    // Display-only fallback: never mark these few objects as a successfully loaded catalog.
+    val fallbackObjects = listOf(
         CelestialObject("Sirius", "HIP 32349", 6.7525, -16.7161, -1.46, 8.6, "A1V"),
         CelestialObject("Canopus", "HIP 30438", 6.3992, -52.6957, -0.74, 310.0, "A9II"),
         CelestialObject("Arktur", "HIP 69673", 14.2610, 19.1824, -0.05, 36.7, "K1.5III"),
@@ -2817,12 +2842,12 @@ internal object StarCatalog {
         CelestialObject("Spica", "HIP 65474", 13.4199, -11.1613, 0.98, 250.0, "B1V")
     )
 
-    fun load(context: Context): List<CelestialObject> = runCatching {
+    fun load(context: Context): List<CelestialObject> =
         context.assets.open("hyg_bright_stars.tsv").bufferedReader().useLines { lines ->
             lines.filterNot { it.startsWith("#") || it.isBlank() }
-                .mapNotNull { line ->
+                .map { line ->
                     val fields = line.split('\t')
-                    if (fields.size < 9) return@mapNotNull null
+                    require(fields.size >= 9) { "Unvollständiger HYG-Datensatz" }
                     val hip = fields[0].toIntOrNull()
                     val distanceParsec = fields[5].toDoubleOrNull() ?: 0.0
                     CelestialObject(
@@ -2847,22 +2872,21 @@ internal object StarCatalog {
                             ?.let { listOf("$it ${fields[8]}") }.orEmpty()
                     )
                 }.toList()
-        }.ifEmpty { fallbackObjects }
-    }.getOrDefault(fallbackObjects)
+        }.also { check(it.isNotEmpty()) { "Leerer HYG-Katalog" } }
 }
 
 internal object DeepSkyCatalog {
-    fun load(context: Context): List<CelestialObject> = runCatching {
+    fun load(context: Context): List<CelestialObject> =
         context.assets.open("openngc_deep_sky.tsv").bufferedReader().useLines { lines ->
             lines.filterNot { it.startsWith("#") || it.isBlank() }
-                .mapNotNull { line ->
+                .map { line ->
                     val fields = line.split('\t')
-                    if (fields.size < 7) return@mapNotNull null
+                    require(fields.size >= 7) { "Unvollständiger OpenNGC-Datensatz" }
                     CelestialObject(
                         name = fields[0],
                         catalogId = fields[1],
-                        raHours = fields[2].toDoubleOrNull() ?: return@mapNotNull null,
-                        decDegrees = fields[3].toDoubleOrNull() ?: return@mapNotNull null,
+                        raHours = fields[2].toDouble(),
+                        decDegrees = fields[3].toDouble(),
                         magnitude = fields[4].toDoubleOrNull() ?: 12.0,
                         distanceLightYears = 0.0,
                         spectralClass = "",
@@ -2875,8 +2899,7 @@ internal object DeepSkyCatalog {
                         messierId = fields.getOrNull(11).orEmpty()
                     )
                 }.toList()
-        }
-    }.getOrDefault(emptyList())
+        }.also { check(it.isNotEmpty()) { "Leerer OpenNGC-Katalog" } }
 }
 
 private object ConstellationLines {

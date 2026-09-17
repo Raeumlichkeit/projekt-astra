@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Status:** `1.1.8-pre.1` · Version Code `18` · Android 9 / API 28 bis Android 17 / API 37<br>
-Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.8-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.8-pre.1).
+**Beta-Stand:** `1.1.9-pre.1` · Version Code `19` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.1).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -23,7 +23,15 @@ Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: 
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.8-pre.1
+## Neu in 1.1.9-pre.1 · Beta
+
+Sternkarte und Beobachtungsliste teilen sich jetzt einen Katalogcache im Arbeitsspeicher. Sterne, Deep-Sky-Objekte, IAU-Grenzen und der statische Suchindex werden außerhalb des UI-Threads geladen und beim Tabwechsel wiederverwendet. Die kleine Ersatz-Sternkarte bleibt während des Ladens und bei Fehlern nutzbar.
+
+Ladefehler werden nicht mehr als vollständige Kataloge gespeichert: **Katalog erneut laden** wiederholt nur die noch fehlenden Stufen. Die Beobachtungsliste zeigt ihren Ladezustand und behält alle vorgemerkten Objekt-IDs, auch wenn Namen noch nicht aufgelöst werden konnten. Suchtext, Standort und aktuelle Planetenpositionen bleiben außerhalb des gemeinsamen Caches.
+
+Das ist ein erster Teil von P1.7, keine Zusage einer bestimmten Startzeit. Textur-/GPU-Start, erste Kartenzeichnung, Low-Memory-Verhalten und Messungen auf schwachen echten Geräten stehen noch aus. Testhinweise: [1.1.9-pre.1](play-store/pre-release-1.1.9-pre.1.md).
+
+## Wetteraktualisierung seit 1.1.8-pre.1
 
 Beim Herunterziehen bleiben Wetterwerte, Astra-Score, Stundenübersicht und Karten sichtbar, bis Ersatzdaten vorliegen. Eine kleine Statusanzeige kennzeichnet den Abruf. Bei einem Fehler bleiben die bisherigen Werte mit Datenstand und Wiederholen-Aktion erhalten.
 
@@ -91,9 +99,9 @@ adb install -r app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk
 adb shell am instrument -w de.projektastra.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.8-pre.1.md](play-store/pre-release-1.1.8-pre.1.md).
+Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.9-pre.1.md](play-store/pre-release-1.1.9-pre.1.md).
 
-Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.8-pre.1.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
+Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.9-pre.1.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
 
 ## Release und Pre-Releases
 
