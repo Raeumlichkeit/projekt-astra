@@ -56,7 +56,7 @@ internal object TonightWindowCalculator {
         val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMAN).withZone(zone)
 
         val localNow = now.atZone(zone)
-        val nightDate = if (localNow.hour < 12) localNow.toLocalDate().minusDays(1) else localNow.toLocalDate()
+        val nightDate = if (localNow.hour < 6) localNow.toLocalDate().minusDays(1) else localNow.toLocalDate()
         val nightDateText = dateFormatter.format(nightDate.atTime(20, 0).atZone(zone))
 
         // Sample Sun altitude from 15:00 on nightDate to 09:00 on the following day (108 steps of 10 min)
@@ -252,9 +252,9 @@ internal object TonightTargetEngine {
             raHours = 0.0, decDegrees = 0.0, magnitude = 0.4,
             objectType = CelestialType.PLANET,
             constellation = "Zwillinge",
-            defaultEquipment = ObservationEquipment.NAKED_EYE,
+            defaultEquipment = ObservationEquipment.TELESCOPE,
             highlightTitle = "Mars – Der Rote Planet",
-            observationNotes = "Mit bloßem Auge auffällig rötlich-orange leuchtend am Himmel.",
+            observationNotes = "Mit bloßem Auge auffällig rötlich-orange leuchtend; im Teleskop zeigen sich Polkappen und dunkle Oberflächenstrukturen.",
             solarBody = Body.Mars
         ),
         HighlightCandidate(
@@ -270,7 +270,7 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Andromedagalaxie",
-            catalogId = "NGC 224",
+            catalogId = "M 31 · NGC 224",
             raHours = 0.712, decDegrees = 41.27, magnitude = 3.4,
             objectType = CelestialType.GALAXY,
             constellation = "Andromeda",
@@ -280,17 +280,17 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Plejaden",
-            catalogId = "Mel 22",
+            catalogId = "M 45 · Mel022",
             raHours = 3.79, decDegrees = 24.11, magnitude = 1.6,
             objectType = CelestialType.OPEN_CLUSTER,
             constellation = "Stier",
-            defaultEquipment = ObservationEquipment.NAKED_EYE,
+            defaultEquipment = ObservationEquipment.BINOCULARS,
             highlightTitle = "Plejaden / Siebengestirn (M45)",
             observationNotes = "Der bekannteste offene Sternhaufen. Für das bloße Auge als feine Gruppe und im Fernglas als funkelndes Diamantenfeld spektakulär."
         ),
         HighlightCandidate(
             name = "Orionnebel",
-            catalogId = "NGC 1976",
+            catalogId = "M 42 · NGC 1976",
             raHours = 5.59, decDegrees = -5.39, magnitude = 4.0,
             objectType = CelestialType.NEBULA,
             constellation = "Orion",
@@ -300,7 +300,7 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Herkuleshaufen",
-            catalogId = "NGC 6205",
+            catalogId = "M 13 · NGC 6205",
             raHours = 16.695, decDegrees = 36.46, magnitude = 5.8,
             objectType = CelestialType.GLOBULAR_CLUSTER,
             constellation = "Herkules",
@@ -310,7 +310,7 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Praesepe",
-            catalogId = "NGC 2632",
+            catalogId = "M 44 · NGC 2632",
             raHours = 8.67, decDegrees = 19.67, magnitude = 3.7,
             objectType = CelestialType.OPEN_CLUSTER,
             constellation = "Krebs",
@@ -330,7 +330,7 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Ringnebel",
-            catalogId = "NGC 6720",
+            catalogId = "M 57 · NGC 6720",
             raHours = 18.89, decDegrees = 33.03, magnitude = 8.8,
             objectType = CelestialType.PLANETARY_NEBULA,
             constellation = "Leier",
@@ -340,7 +340,7 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Hantelnebel",
-            catalogId = "NGC 6853",
+            catalogId = "M 27 · NGC 6853",
             raHours = 19.99, decDegrees = 22.72, magnitude = 7.4,
             objectType = CelestialType.PLANETARY_NEBULA,
             constellation = "Füchschen",
@@ -350,7 +350,7 @@ internal object TonightTargetEngine {
         ),
         HighlightCandidate(
             name = "Bodes Galaxie",
-            catalogId = "NGC 3031",
+            catalogId = "M 81 · NGC 3031",
             raHours = 9.93, decDegrees = 69.07, magnitude = 6.9,
             objectType = CelestialType.GALAXY,
             constellation = "Großer Bär",
@@ -471,7 +471,10 @@ internal object TonightTargetEngine {
                 )
             }.getOrNull()
 
-            val moonSep = if (moonEq != null) {
+            val isMoon = baseObj.solarBody == Body.Moon
+            val moonSep = if (isMoon) {
+                -1.0
+            } else if (moonEq != null) {
                 angularDistanceDegrees(baseObj.raHours, baseObj.decDegrees, moonEq.ra, moonEq.dec)
             } else {
                 75.0
@@ -483,11 +486,13 @@ internal object TonightTargetEngine {
             score += ((maxAlt / 90.0) * 45.0).roundToInt().coerceIn(0, 45)
 
             // 2. Moon influence
-            if (window.moonPhasePercent <= 15 || moonPos.altitude <= 0.0) {
+            if (isMoon) {
+                score += 30 // Target is the Moon itself
+            } else if (window.moonPhasePercent <= 15 || moonPos.altitude <= 0.0) {
                 score += 30 // Dark moonless sky
             } else {
                 if (baseObj.solarBody != null) {
-                    score += 25 // Planets/Moon tolerate moonlight very well
+                    score += 25 // Planets tolerate moonlight very well
                 } else {
                     if (moonSep >= 60.0) score += 20
                     else if (moonSep >= 35.0) score += 10
@@ -505,15 +510,18 @@ internal object TonightTargetEngine {
 
             val finalScore = score.coerceIn(5, 99)
 
-            val moonText = when {
-                moonPos.altitude <= 0.0 -> "Mond unter dem Horizont"
-                moonSep >= 60.0 -> "Mondabstand ${moonSep.roundToInt()}° (ungestört)"
-                moonSep >= 35.0 -> "Mondabstand ${moonSep.roundToInt()}°"
-                else -> "Mondnah (${moonSep.roundToInt()}°)"
-            }
-
             val peakTimeText = timeFormatter.format(peakTime)
-            val reason = "Höchster Stand um $peakTimeText Uhr auf ${maxAlt.roundToInt()}° Höhe · $moonText. ${candidate.observationNotes}"
+            val reason = if (isMoon) {
+                "Höchster Stand um $peakTimeText Uhr auf ${maxAlt.roundToInt()}° Höhe. ${candidate.observationNotes}"
+            } else {
+                val moonText = when {
+                    moonPos.altitude <= 0.0 -> "Mond unter dem Horizont"
+                    moonSep >= 60.0 -> "Mondabstand ${moonSep.roundToInt()}° (ungestört)"
+                    moonSep >= 35.0 -> "Mondabstand ${moonSep.roundToInt()}°"
+                    else -> "Mondnah (${moonSep.roundToInt()}°)"
+                }
+                "Höchster Stand um $peakTimeText Uhr auf ${maxAlt.roundToInt()}° Höhe · $moonText. ${candidate.observationNotes}"
+            }
 
             results.add(
                 TonightTarget(
@@ -541,7 +549,10 @@ internal object TonightTargetEngine {
                 it.equipment == ObservationEquipment.BINOCULARS || it.equipment == ObservationEquipment.NAKED_EYE
             }
             ObservationEquipment.TELESCOPE -> sorted.filter {
-                it.equipment == ObservationEquipment.TELESCOPE || it.equipment == ObservationEquipment.BINOCULARS
+                it.equipment == ObservationEquipment.TELESCOPE ||
+                    it.equipment == ObservationEquipment.BINOCULARS ||
+                    it.objectData.objectType == CelestialType.PLANET ||
+                    it.objectData.objectType == CelestialType.MOON
             }
         }
     }

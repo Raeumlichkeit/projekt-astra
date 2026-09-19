@@ -800,7 +800,11 @@ internal fun SkyScreen(
     }
     LaunchedEffect(requestedObjectId, solarSystem, catalogs.objectsReady) {
         if (requestedObjectId != null && catalogs.objectsReady) {
-            val data = (stars + deepSkyObjects + solarSystem).firstOrNull { it.catalogId == requestedObjectId }
+            val data = (stars + deepSkyObjects + solarSystem).firstOrNull {
+                it.catalogId == requestedObjectId ||
+                    it.catalogId.split("·").any { part -> part.trim().equals(requestedObjectId, ignoreCase = true) } ||
+                    (it.messierId.isNotEmpty() && it.messierId.equals(requestedObjectId, ignoreCase = true))
+            }
             if (data != null) openTarget(SkySearchTarget(data))
             else targetMessage = "Das vorgemerkte Objekt ist im Offline-Katalog nicht verfügbar."
             consumeObjectRequest()

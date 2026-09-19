@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.4` · Version Code `22` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.4 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.4).
+**Beta-Stand:** `1.1.9-pre.5` · Version Code `23` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.5 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.5).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 

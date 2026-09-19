@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 11. September 2026 · Aktueller Ausbau: Version 1.1.7-pre.2.
+Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.5.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 

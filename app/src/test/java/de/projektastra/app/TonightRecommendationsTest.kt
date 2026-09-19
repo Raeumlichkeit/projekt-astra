@@ -181,9 +181,66 @@ class TonightRecommendationsTest {
         )
         for (target in telescopes) {
             assertTrue(
+                "Telescope filter should allow telescope, binocular, planets, or moon targets",
                 target.equipment == ObservationEquipment.TELESCOPE ||
-                    target.equipment == ObservationEquipment.BINOCULARS
+                    target.equipment == ObservationEquipment.BINOCULARS ||
+                    target.objectData.objectType == CelestialType.PLANET ||
+                    target.objectData.objectType == CelestialType.MOON
             )
+        }
+
+        // Verify Moon target has suppressed moonSeparationDegrees
+        val moonTarget = allTargets.firstOrNull { it.objectData.solarBody == Body.Moon }
+        if (moonTarget != null) {
+            assertEquals(-1.0, moonTarget.moonSeparationDegrees, 0.001)
+            assertFalse("Moon reason should not mention 0° moon separation", moonTarget.reason.contains("0°"))
+        }
+    }
+
+    @Test
+    fun tonightWindowCalculator_morningPlanningSelectsUpcomingNight() {
+        // At 08:30 AM local time, user is planning the coming evening (today), not yesterday
+        val morningInstant = Instant.parse("2026-10-15T06:30:00Z") // 08:30 CEST in Berlin
+        val window = TonightWindowCalculator.calculate(
+            observer = berlin,
+            now = morningInstant,
+            weather = null,
+            zone = zone
+        )
+        assertTrue(
+            "Window for morning planning should select 15. Oktober",
+            window.nightDateText.contains("15. Oktober")
+        )
+    }
+
+    @Test
+    fun tonightRecommendations_curatedCatalogIdsMatchStandardCatalogs() {
+        val testInstant = Instant.parse("2026-10-15T20:00:00Z")
+        val window = TonightWindowCalculator.calculate(
+            observer = berlin,
+            now = testInstant,
+            weather = null,
+            zone = zone
+        )
+        val targets = TonightTargetEngine.evaluate(
+            observer = berlin,
+            window = window,
+            now = testInstant,
+            equipmentFilter = ObservationEquipment.ALL,
+            zone = zone
+        )
+        for (t in targets) {
+            val id = t.objectData.catalogId
+            assertTrue("catalogId should be valid: $id", id.isNotEmpty())
+            if (t.objectData.solarBody != null) {
+                assertTrue("Solar body catalogId: $id", id.startsWith("Astronomy Engine · "))
+            } else if (id.startsWith("HIP ")) {
+                assertTrue("HIP ID format: $id", id.removePrefix("HIP ").toIntOrNull() != null)
+            } else {
+                // Deep sky objects should use exact catalog naming (e.g. M 31 · NGC 224, NGC 869)
+                assertTrue("Deep sky catalogId format: $id", id.startsWith("M ") || id.startsWith("NGC "))
+            }
         }
     }
 }
+
