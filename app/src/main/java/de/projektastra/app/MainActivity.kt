@@ -695,7 +695,7 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
         ).declination
     }
 
-    DisposableEffect(observer, magneticDeclination) {
+    LifecycleStartEffect(observer, magneticDeclination) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val sensor = manager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
             ?: manager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
@@ -726,7 +726,7 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
             }
         }
         sensor?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI) }
-        onDispose { manager.unregisterListener(listener) }
+        onStopOrDispose { manager.unregisterListener(listener) }
     }
     return OrientationState(azimuth, pitch, available, accuracy)
 }

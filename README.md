@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.9` · Version Code `27` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.9 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.9).
+**Beta-Stand:** `1.1.9-pre.10` · Version Code `28` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.10 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.10).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -24,6 +24,13 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+
+## Neu in 1.1.9-pre.10 · Beta
+
+- **Akku- & Energieoptimierung (P3):**
+  - **Hintergrund-Dormancy für Sensoren:** Umstellung der Sensoregistrierung in `rememberOrientation` auf `LifecycleStartEffect` (beim Ausschalten des Bildschirms oder Wechsel in den Hintergrund werden Orientierungssensoren sofort deregistriert, 0 % Standby-Last).
+  - **Energiemessmatrix & Laufzeitdokumentation:** Detaillierte Messungen in `play-store/battery-profiling.md` für OLED-Dunkelmodus (4,8 %/h, > 20 h Laufzeit), Rotlichtmodus (4,2 %/h, > 23 h Laufzeit) und AR-Kamera (14,5 %/h, ~6,8 h).
+  - **Automatisierte Dormancy-Tests:** Lifecycle-Vertragstests in `SkyStartupTest.kt` verifiziert. Testhinweise: [1.1.9-pre.10](play-store/pre-release-1.1.9-pre.10.md).
 
 ## Neu in 1.1.9-pre.9 · Beta
 

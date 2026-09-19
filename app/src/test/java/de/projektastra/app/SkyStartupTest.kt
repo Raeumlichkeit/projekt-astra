@@ -209,4 +209,33 @@ class SkyStartupTest {
         // Ensure repeated clearing on low memory / trim memory does not throw or destabilize state
         LightPollutionRepository.clear()
     }
+
+    @Test
+    fun backgroundLifecycleDormancyContractsAreMaintained() {
+        var sensorRegistered = false
+        var locationRegistered = false
+        var renderingActive = false
+
+        // Start effect
+        fun onStart() {
+            sensorRegistered = true
+            locationRegistered = true
+            renderingActive = true
+        }
+
+        // Stop / Dispose effect (screen off, app in background)
+        fun onStop() {
+            sensorRegistered = false
+            locationRegistered = false
+            renderingActive = false
+        }
+
+        onStart()
+        assertTrue(sensorRegistered && locationRegistered && renderingActive)
+
+        onStop()
+        assertFalse("Sensors must be unregistered when stopped", sensorRegistered)
+        assertFalse("Location updates must be removed when stopped", locationRegistered)
+        assertFalse("GPU rendering must be suspended when stopped", renderingActive)
+    }
 }

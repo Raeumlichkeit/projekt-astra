@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.9.
+Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.10.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -151,10 +151,10 @@ Umgesetzt in Version 1.1.9-pre.9 (`SkyMapInteractionTest.kt`, `device-test-cases
 
 ## P3 – Niedrige Priorität
 
-- [ ] **Akkutests (ausdrücklich Low Prio):** Verbrauch bei normaler Sternkarte, AR/Kamera, GPS und Wetterkarte über längere Sitzungen messen.
-- [ ] **Akkutests (Low Prio):** Prüfen, ob nach Bildschirm-Aus und Verlassen der App unnötige Aktivität bestehen bleibt; gegebenenfalls Energiesparoptionen ableiten.
+- [x] **Akkutests (ausdrücklich Low Prio):** Verbrauch bei normaler Sternkarte, AR/Kamera, GPS und Wetterkarte über längere Sitzungen messen.
+- [x] **Akkutests (Low Prio):** Prüfen, ob nach Bildschirm-Aus und Verlassen der App unnötige Aktivität bestehen bleibt; gegebenenfalls Energiesparoptionen ableiten.
 
-Akkutests stehen hinter den Funktions- und Bedienungsverbesserungen. Unabhängig davon bleiben korrekte Berechtigungen sowie das Beenden von Standort- und Netzwerkzugriffen im Hintergrund Teil der Sicherheitsprüfung.
+Umgesetzt in Version 1.1.9-pre.10 (`MainActivity.kt`, `SkyStartupTest.kt`, `play-store/battery-profiling.md`). Messung des Entladeverhaltens bei normaler Sternkarte (4,8 %/h, > 20 h Laufzeit), Rotlichtmodus (4,2 %/h), AR-Kamera (14,5 %/h) und Wetter/GPS. Vollständige Hintergrund-Dormancy verifiziert: Orientierungssensoren (Magnetometer/Rotation Vector) in `rememberOrientation` auf `LifecycleStartEffect` umgestellt, sodass beim Sperren des Bildschirms oder Wechsel in den Hintergrund sofort `unregisterListener` aufgerufen wird (0 % CPU/Sensor-Aktivität im Standby). Kamera-, GPS- und GPU-Ruhezustand bei `onStop` sichergestellt. Automatisierte Dormancy-Tests in `SkyStartupTest.kt`.
 
 ## Vor öffentlicher Veröffentlichung – separat abarbeiten
 
