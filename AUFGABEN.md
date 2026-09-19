@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.5.
+Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.6.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -113,12 +113,14 @@ Umgesetzt in Version 1.1.9-pre.4 (`TonightWindowCalculator`, `TonightTargetEngin
 
 ### 9. Beobachtungstagebuch
 
-- [ ] Objekte als beobachtet markieren; Datum, Notizen und optional eigene Fotos hinzufügen.
-- [ ] Beobachtungen ausschließlich lokal speichern; genaue Standortangaben nur optional und bewusst hinzufügen.
-- [ ] Einzelne Beobachtungen sowie alle Tagebuchdaten löschbar machen; zugehörige app-eigene Foto-Kopien berücksichtigen.
-- [ ] Bewussten Export und Import anbieten, einschließlich Vorschau der enthaltenen Daten und Hinweis auf mögliche Foto-Standortmetadaten.
-- [ ] Keine automatische Cloud-Synchronisierung oder Änderung der bestehenden Backup-Ausschlüsse einführen.
-- [ ] Importfehler, Größenlimits, Export/Import-Rundlauf und vollständiges Löschen testen.
+- [x] Objekte als beobachtet markieren; Datum, Notizen und optional eigene Fotos hinzufügen.
+- [x] Beobachtungen ausschließlich lokal speichern; genaue Standortangaben nur optional und bewusst hinzufügen.
+- [x] Einzelne Beobachtungen sowie alle Tagebuchdaten löschbar machen; zugehörige app-eigene Foto-Kopien berücksichtigen.
+- [x] Bewussten Export und Import anbieten, einschließlich Vorschau der enthaltenen Daten und Hinweis auf mögliche Foto-Standortmetadaten.
+- [x] Keine automatische Cloud-Synchronisierung oder Änderung der bestehenden Backup-Ausschlüsse einführen.
+- [x] Importfehler, Größenlimits, Export/Import-Rundlauf und vollständiges Löschen testen.
+
+Umgesetzt in Version 1.1.9-pre.6 (`ObservationLogbook.kt`, `ObservationLogbookStore`, `ObservationLogEntryDialog`, `LogbookExportImportDialog`, `FullPhotoDialog`). Beobachtungen werden 100 % lokal in einer privaten JSON-Datei in `context.filesDir` abgelegt. Eigene Fotos werden in den isolierten Ordner `logbook_photos` kopiert und beim Löschen eines Eintrags automatisch bereinigt. Standortdaten sind standardmäßig deaktiviert und werden nur bei bewusstem Opt-in hinzugefügt. Vollständiges Löschen aller Einträge und lokaler Fotos mit Bestätigungsdialog. Export und Import via JSON mit Größenbegrenzung (10 MB, 5.000 Einträge), Vorschau und EXIF-Datenschutzhinweis. Cloud-Backup und Datenübertragung bleiben strikt ausgeschlossen (`allowBackup="false"`).
 
 ### 10. Fernglas- und Teleskop-Sichtfeld
 

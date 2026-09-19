@@ -1,8 +1,12 @@
 package de.projektastra.app
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -16,6 +20,9 @@ import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.widget.Toast
+import java.io.File
+import java.util.UUID
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
@@ -28,6 +35,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -75,12 +83,22 @@ import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.ImportExport
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -93,6 +111,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Switch
@@ -127,10 +148,13 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -356,6 +380,7 @@ private fun AstraApp(
         LightPollutionRepository.clear()
     }
     var savedEvents by remember { mutableStateOf(ObservationStore.savedEvents(context)) }
+    var logbookEntries by remember { mutableStateOf(ObservationLogbookStore.loadEntries(context)) }
     var reminderHours by remember { mutableIntStateOf(ObservationStore.reminderHours(context)) }
     var notificationsGranted by remember {
         mutableStateOf(
@@ -496,6 +521,9 @@ private fun AstraApp(
                             arEnabled = true
                         }
                         else cameraLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                    onSaveLogEntry = { entry ->
+                        logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
                     }
                 )
                     AstraTab.WEATHER -> WeatherScreen(
@@ -576,7 +604,25 @@ private fun AstraApp(
                                 objectData.catalogId !in favoriteObjectIds
                             )
                         },
-                        privacy = privacy
+                        privacy = privacy,
+                        logbookEntries = logbookEntries,
+                        onSaveLogEntry = { entry ->
+                            logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
+                        },
+                        onDeleteLogEntry = { entryId ->
+                            logbookEntries = ObservationLogbookStore.deleteEntry(context, entryId)
+                        },
+                        onDeleteAllLogEntries = {
+                            ObservationLogbookStore.deleteAllEntries(context)
+                            logbookEntries = emptyList()
+                        },
+                        onImportLogbook = { jsonText, merge ->
+                            val result = ObservationLogbookStore.importJson(context, jsonText, merge)
+                            if (result.success) {
+                                logbookEntries = ObservationLogbookStore.loadEntries(context)
+                            }
+                            result
+                        }
                     )
                     AstraTab.ABOUT -> AboutScreen(
                         redLightMode = redLightMode,
@@ -708,7 +754,8 @@ internal fun SkyScreen(
     toggleFavorite: (CelestialObject) -> Unit,
     onLocationPermissionResult: (Boolean) -> Unit,
     onResetLocation: () -> Unit,
-    toggleAr: () -> Unit
+    toggleAr: () -> Unit,
+    onSaveLogEntry: (ObservationLogEntry) -> Unit = {}
 ) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
     val orientation = rememberOrientation(observer)
@@ -722,6 +769,7 @@ internal fun SkyScreen(
     val initialCameraFov = rememberCameraHorizontalFov()
     var cameraFov by remember { mutableStateOf(initialCameraFov) }
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
+    var logEntryTarget by remember { mutableStateOf<CelestialObject?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     var showTimeControls by remember { mutableStateOf(false) }
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
@@ -1172,7 +1220,8 @@ internal fun SkyScreen(
                 simulated = !skyTime.live,
                 terrain = (terrainState as? TerrainState.Ready)?.profile,
                 isFavorite = item.celestial.catalogId in favoriteObjectIds,
-                toggleFavorite = { toggleFavorite(item.celestial) }
+                toggleFavorite = { toggleFavorite(item.celestial) },
+                onAddLogEntry = { logEntryTarget = it }
             )
         }
     }
@@ -1180,6 +1229,17 @@ internal fun SkyScreen(
         ModalBottomSheet(onDismissRequest = { showCalibration = false }, containerColor = NightBlue) {
             CalibrationGuide(orientation) { showCalibration = false }
         }
+    }
+    logEntryTarget?.let { target ->
+        ObservationLogEntryDialog(
+            initialObject = target,
+            currentLocation = location,
+            onDismiss = { logEntryTarget = null },
+            onSave = { entry ->
+                onSaveLogEntry(entry)
+                logEntryTarget = null
+            }
+        )
     }
 }
 
@@ -1772,7 +1832,8 @@ private fun ObjectDetails(
     simulated: Boolean,
     terrain: TerrainProfile?,
     isFavorite: Boolean,
-    toggleFavorite: () -> Unit
+    toggleFavorite: () -> Unit,
+    onAddLogEntry: ((CelestialObject) -> Unit)? = null
 ) {
     val objectData = item.celestial
     val path = remember(item.celestial, observer, skyInstant) {
@@ -1791,16 +1852,34 @@ private fun ObjectDetails(
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss XXX").withZone(ZoneId.systemDefault()).format(skyInstant),
             fontSize = 12.sp, color = StarGold)
         Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = toggleFavorite,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isFavorite) StarGold else AstraSurfaceHigh,
-                contentColor = if (isFavorite) Night else Color.White
-            )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, null)
-            Spacer(Modifier.width(8.dp))
-            Text(if (isFavorite) "In Beobachtungsliste ✓" else "Zur Beobachtungsliste")
+            Button(
+                onClick = toggleFavorite,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isFavorite) StarGold else AstraSurfaceHigh,
+                    contentColor = if (isFavorite) Night else Color.White
+                )
+            ) {
+                Icon(if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (isFavorite) "In Beobachtungsliste ✓" else "Zur Beobachtungsliste")
+            }
+            if (onAddLogEntry != null) {
+                Button(
+                    onClick = { onAddLogEntry(objectData) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AstraSurfaceHigh,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Rounded.EditNote, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Beobachten")
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
         DetailRow("Objekttyp", objectData.objectType.label)
@@ -2608,7 +2687,12 @@ internal fun ObservationPlanScreen(
     requestNotifications: () -> Unit,
     toggleFavorite: ((CelestialObject) -> Unit)? = null,
     privacy: PrivacyOptions = PrivacyOptions(),
-    catalogStore: SkyCatalogStore? = null
+    catalogStore: SkyCatalogStore? = null,
+    logbookEntries: List<ObservationLogEntry> = emptyList(),
+    onSaveLogEntry: (ObservationLogEntry) -> Unit = {},
+    onDeleteLogEntry: (String) -> Unit = {},
+    onDeleteAllLogEntries: () -> Unit = {},
+    onImportLogbook: (String, Boolean) -> LogbookImportResult = { _, _ -> LogbookImportResult(false, 0, 0, "") }
 ) {
     val context = LocalContext.current
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
@@ -2624,6 +2708,12 @@ internal fun ObservationPlanScreen(
     val zone = ZoneId.systemDefault()
     val dateFormat = DateTimeFormatter.ofPattern("EEE, d. MMM yyyy · HH:mm", Locale.GERMAN).withZone(zone)
     val timeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.GERMAN).withZone(zone)
+
+    var showNewLogDialog by remember { mutableStateOf(false) }
+    var editingEntry by remember { mutableStateOf<ObservationLogEntry?>(null) }
+    var showExportImportDialog by remember { mutableStateOf(false) }
+    var viewingPhotoFile by remember { mutableStateOf<File?>(null) }
+    var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
 
     var weatherSnapshot by remember { mutableStateOf<WeatherSnapshot?>(null) }
     LaunchedEffect(observer, privacy.online) {
@@ -2931,7 +3021,136 @@ internal fun ObservationPlanScreen(
                 }
             }
         }
+
+        AstraSectionTitle("Beobachtungstagebuch", "Eigene Beobachtungen, Notizen & Fotos (100% lokal)")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { showNewLogDialog = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AstraBlue,
+                    contentColor = Night
+                )
+            ) {
+                Icon(Icons.Rounded.EditNote, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Eintrag verfassen")
+            }
+            OutlinedButton(
+                onClick = { showExportImportDialog = true },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                border = BorderStroke(1.dp, AstraOutline)
+            ) {
+                Icon(Icons.Rounded.ImportExport, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Export / Import")
+            }
+        }
+
+        if (logbookEntries.isEmpty()) {
+            EmptyPlanCard("Noch keine Beobachtungen erfasst. Halte deine Nächte, Teleskopnotizen und Seeing-Bewertungen hier fest – 100% lokal auf diesem Gerät.")
+        } else {
+            logbookEntries.forEach { entry ->
+                LogbookEntryCard(
+                    entry = entry,
+                    context = context,
+                    dateFormat = dateFormat,
+                    onOpenInSky = {
+                        if (entry.objectCatalogId.isNotBlank()) openObject(entry.objectCatalogId)
+                    },
+                    onEdit = { editingEntry = entry },
+                    onDelete = { onDeleteLogEntry(entry.id) },
+                    onShowPhoto = { viewingPhotoFile = it }
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = { showDeleteAllConfirmDialog = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF8B8B))
+                ) {
+                    Icon(Icons.Rounded.Delete, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Alle Einträge löschen", fontSize = 12.sp)
+                }
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
+    }
+
+    if (showNewLogDialog) {
+        ObservationLogEntryDialog(
+            initialEntry = null,
+            currentLocation = location,
+            onDismiss = { showNewLogDialog = false },
+            onSave = { newEntry ->
+                onSaveLogEntry(newEntry)
+                showNewLogDialog = false
+            }
+        )
+    }
+
+    editingEntry?.let { entryToEdit ->
+        ObservationLogEntryDialog(
+            initialEntry = entryToEdit,
+            currentLocation = location,
+            onDismiss = { editingEntry = null },
+            onSave = { updatedEntry ->
+                onSaveLogEntry(updatedEntry)
+                editingEntry = null
+            }
+        )
+    }
+
+    if (showExportImportDialog) {
+        LogbookExportImportDialog(
+            entries = logbookEntries,
+            onImport = onImportLogbook,
+            onDismiss = { showExportImportDialog = false }
+        )
+    }
+
+    viewingPhotoFile?.let { photoFile ->
+        FullPhotoDialog(
+            photoFile = photoFile,
+            onDismiss = { viewingPhotoFile = null }
+        )
+    }
+
+    if (showDeleteAllConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllConfirmDialog = false },
+            containerColor = NightBlue,
+            title = { Text("Alle Tagebucheinträge löschen?", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Möchtest du wirklich alle ${logbookEntries.size} Einträge und die zugehörigen lokalen Fotos unwiderruflich von diesem Gerät löschen?",
+                    color = AstraTextMuted
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteAllLogEntries()
+                        showDeleteAllConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC43828), contentColor = Color.White)
+                ) {
+                    Text("Unwiderruflich löschen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllConfirmDialog = false }) {
+                    Text("Abbrechen")
+                }
+            }
+        )
     }
 }
 
@@ -2939,6 +3158,645 @@ internal fun ObservationPlanScreen(
 private fun EmptyPlanCard(text: String) {
     Card(colors = CardDefaults.cardColors(containerColor = AstraSurface.copy(alpha = 0.72f))) {
         Text(text, Modifier.fillMaxWidth().padding(18.dp), color = AstraTextMuted)
+    }
+}
+
+@Composable
+private fun LogbookEntryCard(
+    entry: ObservationLogEntry,
+    context: Context,
+    dateFormat: DateTimeFormatter,
+    onOpenInSky: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onShowPhoto: (File) -> Unit
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = AstraSurface)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(entry.objectName, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
+                    val subtitle = buildList {
+                        if (entry.objectCatalogId.isNotBlank()) add(entry.objectCatalogId)
+                        add(entry.objectType.label)
+                    }.joinToString(" · ")
+                    Text(subtitle, color = AstraBlue, fontSize = 12.sp)
+                    val dateStr = runCatching {
+                        dateFormat.format(Instant.ofEpochSecond(entry.timestampEpochSeconds))
+                    }.getOrDefault("")
+                    if (dateStr.isNotBlank()) {
+                        Text(dateStr, color = AstraTextMuted, fontSize = 12.sp)
+                    }
+                }
+                Row {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Rounded.Edit, "Bearbeiten", tint = AstraBlue, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Rounded.Delete, "Löschen", tint = Color(0xFFFF8B8B), modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+
+            if (entry.seeingRating > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Seeing:", fontSize = 12.sp, color = AstraTextMuted)
+                    repeat(5) { index ->
+                        val active = index < entry.seeingRating
+                        Icon(
+                            imageVector = if (active) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = null,
+                            tint = if (active) StarGold else AstraOutline,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            if (entry.equipment.isNotBlank()) {
+                Text("Ausrüstung: ${entry.equipment}", fontSize = 13.sp, color = Color(0xFFD0DCF0))
+            }
+
+            if (entry.notes.isNotBlank()) {
+                Text(entry.notes, fontSize = 14.sp, color = Color.White)
+            }
+
+            if (entry.locationName != null || entry.latitude != null) {
+                val locStr = buildString {
+                    append("Ort: ")
+                    if (!entry.locationName.isNullOrBlank()) append(entry.locationName)
+                    if (entry.latitude != null && entry.longitude != null) {
+                        if (!entry.locationName.isNullOrBlank()) append(" (")
+                        append("${entry.latitude.format(2)}°, ${entry.longitude.format(2)}°")
+                        if (!entry.locationName.isNullOrBlank()) append(")")
+                    }
+                }
+                Text(locStr, fontSize = 11.sp, color = AstraTextMuted)
+            }
+
+            entry.photoFileName?.let { fileName ->
+                val photoFile = remember(fileName) { ObservationLogbookStore.getPhotoFile(context, fileName) }
+                if (photoFile.exists()) {
+                    val bitmap = remember(photoFile) {
+                        runCatching { BitmapFactory.decodeFile(photoFile.absolutePath) }.getOrNull()
+                    }
+                    if (bitmap != null) {
+                        Row(
+                            Modifier
+                                .clickable { onShowPhoto(photoFile) }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Beobachtungsfoto",
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clipToBounds()
+                                    .background(NightBlue, RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Column {
+                                Text("Foto ansehen", color = AstraBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Tippen zum Vergrößern", color = AstraTextMuted, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (entry.objectCatalogId.isNotBlank()) {
+                TextButton(
+                    onClick = onOpenInSky,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Text("In Karte öffnen")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ObservationLogEntryDialog(
+    initialEntry: ObservationLogEntry? = null,
+    initialObject: CelestialObject? = null,
+    currentLocation: GeoPoint?,
+    onDismiss: () -> Unit,
+    onSave: (ObservationLogEntry) -> Unit
+) {
+    val context = LocalContext.current
+    var name by remember { mutableStateOf(initialEntry?.objectName ?: initialObject?.name ?: "") }
+    var catalogId by remember { mutableStateOf(initialEntry?.objectCatalogId ?: initialObject?.catalogId ?: "") }
+    var objectType by remember { mutableStateOf(initialEntry?.objectType ?: initialObject?.objectType ?: CelestialType.STAR) }
+    var notes by remember { mutableStateOf(initialEntry?.notes ?: "") }
+    var equipment by remember { mutableStateOf(initialEntry?.equipment ?: "") }
+    var seeing by remember { mutableIntStateOf(initialEntry?.seeingRating ?: 0) }
+    var attachLocation by remember { mutableStateOf(initialEntry?.latitude != null) }
+    var locationCustomName by remember { mutableStateOf(initialEntry?.locationName ?: "") }
+    var photoFileName by remember { mutableStateOf(initialEntry?.photoFileName) }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let {
+            val saved = ObservationLogbookStore.savePhotoFromUri(context, it)
+            if (saved != null) {
+                photoFileName = saved
+            }
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = NightBlue),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 620.dp)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    if (initialEntry == null) "Beobachtung eintragen" else "Beobachtung bearbeiten",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Objektname") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AstraBlue,
+                        unfocusedBorderColor = AstraOutline,
+                        focusedLabelColor = AstraBlue,
+                        unfocusedLabelColor = AstraTextMuted
+                    )
+                )
+
+                OutlinedTextField(
+                    value = catalogId,
+                    onValueChange = { catalogId = it },
+                    label = { Text("Katalog-ID (optional, z. B. M 31)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AstraBlue,
+                        unfocusedBorderColor = AstraOutline,
+                        focusedLabelColor = AstraBlue,
+                        unfocusedLabelColor = AstraTextMuted
+                    )
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Seeing-Bewertung (1 bis 5 Sterne)", fontSize = 12.sp, color = AstraTextMuted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        (1..5).forEach { star ->
+                            IconButton(
+                                onClick = { seeing = if (seeing == star) 0 else star },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (star <= seeing) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                    contentDescription = "$star Sterne",
+                                    tint = if (star <= seeing) StarGold else AstraOutline,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                        if (seeing > 0) {
+                            val seeingLabel = when (seeing) {
+                                1 -> "Sehr schlecht"
+                                2 -> "Mäßig"
+                                3 -> "Durchschnittlich"
+                                4 -> "Gut"
+                                5 -> "Exzellent"
+                                else -> ""
+                            }
+                            Text(seeingLabel, fontSize = 12.sp, color = StarGold)
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = equipment,
+                    onValueChange = { equipment = it },
+                    label = { Text("Ausrüstung (z. B. 8\" Dobson, 10x50)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AstraBlue,
+                        unfocusedBorderColor = AstraOutline,
+                        focusedLabelColor = AstraBlue,
+                        unfocusedLabelColor = AstraTextMuted
+                    )
+                )
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Beobachtungsnotizen") },
+                    minLines = 3,
+                    maxLines = 6,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AstraBlue,
+                        unfocusedBorderColor = AstraOutline,
+                        focusedLabelColor = AstraBlue,
+                        unfocusedLabelColor = AstraTextMuted
+                    )
+                )
+
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(AstraSurface, RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = attachLocation,
+                            onCheckedChange = { attachLocation = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = AstraBlue,
+                                checkmarkColor = Night
+                            )
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Standort an Eintrag anhängen", fontSize = 13.sp, color = Color.White)
+                    }
+                    if (attachLocation) {
+                        if (currentLocation != null) {
+                            Text(
+                                "Aktuelle Koordinaten: ${currentLocation.latitude.format(3)}°, ${currentLocation.longitude.format(3)}°",
+                                fontSize = 11.sp,
+                                color = AstraSuccess
+                            )
+                        } else {
+                            Text("Kein Live-GPS aktiv. Optional Ortsnamen angeben.", fontSize = 11.sp, color = AstraTextMuted)
+                        }
+                        OutlinedTextField(
+                            value = locationCustomName,
+                            onValueChange = { locationCustomName = it },
+                            label = { Text("Ortsname (optional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = AstraBlue,
+                                unfocusedBorderColor = AstraOutline,
+                                focusedLabelColor = AstraBlue,
+                                unfocusedLabelColor = AstraTextMuted
+                            )
+                        )
+                        Text(
+                            "Standortdaten werden ausschließlich lokal auf diesem Gerät gespeichert.",
+                            fontSize = 10.sp,
+                            color = AstraTextMuted
+                        )
+                    }
+                }
+
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(AstraSurface, RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Foto (optional)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    photoFileName?.let { currentPhoto ->
+                        val photoFile = ObservationLogbookStore.getPhotoFile(context, currentPhoto)
+                        if (photoFile.exists()) {
+                            val bitmap = remember(currentPhoto) {
+                                runCatching { BitmapFactory.decodeFile(photoFile.absolutePath) }.getOrNull()
+                            }
+                            if (bitmap != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(60.dp).clipToBounds(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Button(
+                                        onClick = {
+                                            ObservationLogbookStore.deletePhotoFile(context, currentPhoto)
+                                            photoFileName = null
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A2020), contentColor = Color(0xFFFFB4B4))
+                                    ) {
+                                        Icon(Icons.Rounded.Delete, null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Entfernen", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    } ?: run {
+                        OutlinedButton(
+                            onClick = { photoLauncher.launch("image/*") },
+                            border = BorderStroke(1.dp, AstraOutline),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        ) {
+                            Icon(Icons.Rounded.AddPhotoAlternate, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Foto auswählen", fontSize = 12.sp)
+                        }
+                        Text(
+                            "Das Bild wird in den isolierten App-Speicher kopiert.",
+                            fontSize = 10.sp,
+                            color = AstraTextMuted
+                        )
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Abbrechen")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val finalLat = if (attachLocation) currentLocation?.latitude ?: initialEntry?.latitude else null
+                            val finalLon = if (attachLocation) currentLocation?.longitude ?: initialEntry?.longitude else null
+                            val finalLocName = if (attachLocation) locationCustomName.ifBlank { null } else null
+                            val newEntry = ObservationLogEntry(
+                                id = initialEntry?.id ?: UUID.randomUUID().toString(),
+                                objectCatalogId = catalogId.trim(),
+                                objectName = name.ifBlank { "Unbekannte Beobachtung" }.trim(),
+                                objectType = objectType,
+                                timestampEpochSeconds = initialEntry?.timestampEpochSeconds ?: Instant.now().epochSecond,
+                                notes = notes.trim(),
+                                equipment = equipment.trim(),
+                                seeingRating = seeing,
+                                locationName = finalLocName,
+                                latitude = finalLat,
+                                longitude = finalLon,
+                                photoFileName = photoFileName
+                            )
+                            onSave(newEntry)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AstraBlue, contentColor = Night)
+                    ) {
+                        Text("Speichern")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogbookExportImportDialog(
+    entries: List<ObservationLogEntry>,
+    onImport: (String, Boolean) -> LogbookImportResult,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var importText by remember { mutableStateOf("") }
+    var mergeMode by remember { mutableStateOf(true) }
+    var importResultMsg by remember { mutableStateOf<String?>(null) }
+    val zone = ZoneId.systemDefault()
+    val dateFormat = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMAN).withZone(zone) }
+
+    val parsedPreview = remember(importText) {
+        if (importText.isBlank()) emptyList()
+        else runCatching { ObservationLogbookStore.parseEntriesJson(importText) }.getOrDefault(emptyList())
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = NightBlue),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 620.dp)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("Tagebuch Export & Import", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AstraSurface),
+                    border = BorderStroke(1.dp, AstraOutline)
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Datenschutz & EXIF-Hinweis", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = StarGold)
+                        Text(
+                            "Exportiertes JSON enthält deine Beobachtungsnotizen im Klartext. Angehängte Fotos verbleiben auf dem Gerät. Bitte beachte: Falls du Fotodateien manuell weitergibst, können sie EXIF-Kameradaten (z. B. GPS-Koordinaten) enthalten.",
+                            fontSize = 11.sp,
+                            color = AstraTextMuted
+                        )
+                    }
+                }
+
+                Text("Export (${entries.size} Einträge lokal)", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val json = ObservationLogbookStore.exportJson(context)
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Astra Beobachtungstagebuch", json))
+                            Toast.makeText(context, "In Zwischenablage kopiert", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, AstraOutline),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Kopieren", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = {
+                            val json = ObservationLogbookStore.exportJson(context)
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                putExtra(Intent.EXTRA_TEXT, json)
+                                type = "text/plain"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Astra Beobachtungstagebuch"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
+                    ) {
+                        Icon(Icons.Rounded.Share, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Teilen", fontSize = 12.sp)
+                    }
+                }
+
+                HorizontalDivider(color = AstraOutline)
+
+                Text("Import", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("JSON-Daten einfügen:", fontSize = 12.sp, color = AstraTextMuted)
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                        if (text.isNotBlank()) importText = text
+                    }) {
+                        Text("Aus Zwischenablage", fontSize = 12.sp)
+                    }
+                }
+
+                OutlinedTextField(
+                    value = importText,
+                    onValueChange = {
+                        importText = it
+                        importResultMsg = null
+                    },
+                    label = { Text("JSON-Inhalt") },
+                    minLines = 3,
+                    maxLines = 6,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AstraBlue,
+                        unfocusedBorderColor = AstraOutline,
+                        focusedLabelColor = AstraBlue,
+                        unfocusedLabelColor = AstraTextMuted
+                    )
+                )
+
+                if (importText.isNotBlank()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AstraSurface),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Vorschau:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = StarGold)
+                            if (parsedPreview.isEmpty()) {
+                                Text("Keine gültigen Einträge erkannt.", fontSize = 11.sp, color = Color(0xFFFF8B8B))
+                            } else {
+                                Text("Erkannte Einträge: ${parsedPreview.size}", fontSize = 12.sp, color = AstraSuccess)
+                                val minTime = parsedPreview.minOf { it.timestampEpochSeconds }
+                                val maxTime = parsedPreview.maxOf { it.timestampEpochSeconds }
+                                val minDate = dateFormat.format(Instant.ofEpochSecond(minTime))
+                                val maxDate = dateFormat.format(Instant.ofEpochSecond(maxTime))
+                                Text("Zeitraum: $minDate bis $maxDate", fontSize = 11.sp, color = AstraTextMuted)
+                            }
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = mergeMode,
+                            onCheckedChange = { mergeMode = it },
+                            colors = CheckboxDefaults.colors(checkedColor = AstraBlue, checkmarkColor = Night)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (mergeMode) "Mit vorhandenen Einträgen zusammenführen" else "Vorhandene Einträge überschreiben",
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            val res = onImport(importText, mergeMode)
+                            importResultMsg = res.message
+                            if (res.success) {
+                                Toast.makeText(context, res.message, Toast.LENGTH_SHORT).show()
+                                onDismiss()
+                            }
+                        },
+                        enabled = parsedPreview.isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(containerColor = AstraBlue, contentColor = Night),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Jetzt ${parsedPreview.size} Einträge importieren")
+                    }
+                }
+
+                importResultMsg?.let { msg ->
+                    Text(msg, color = Color(0xFFFF8B8B), fontSize = 12.sp)
+                }
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Schließen")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullPhotoDialog(
+    photoFile: File,
+    onDismiss: () -> Unit
+) {
+    val bitmap = remember(photoFile) {
+        runCatching { BitmapFactory.decodeFile(photoFile.absolutePath) }.getOrNull()
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Night),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Beobachtungsfoto",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                            .clipToBounds(),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text("Foto konnte nicht geladen werden.", color = AstraTextMuted)
+                }
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
+                ) {
+                    Text("Schließen")
+                }
+            }
+        }
     }
 }
 

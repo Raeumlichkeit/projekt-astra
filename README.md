@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.5` · Version Code `23` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.5 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.5).
+**Beta-Stand:** `1.1.9-pre.6` · Version Code `24` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.6 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.6).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -17,12 +17,22 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Gelände | Lokales 360°-Profil aus GLO-90-Höhendaten mit Offline-Fallback und Geländeverdeckung |
 | Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme |
 | Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
-| Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Qualitäts-Score und Schnellaktionen |
+| Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Beobachtungstagebuch mit Fotos, Seeing & Export/Import |
 | AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
 | Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+
+## Neu in 1.1.9-pre.6 · Beta
+
+- **Beobachtungstagebuch (P2.9):**
+  - **Beobachtungen protokollieren:** Eigene Beobachtungen erfassen mit Datum, Notizen, Seeing-Rating (1 bis 5 Sterne) und Ausrüstung (Teleskop/Fernglas/Okulare).
+  - **Direkt aus der Sternkarte:** In den Objektdetails kann direkt per Klick auf „Beobachten“ ein neuer Eintrag für das ausgewählte Objekt angelegt werden.
+  - **Optionale eigene Fotos:** Bilder werden in das isolierte App-Verzeichnis kopiert und können im Tagebuch als Thumbnail oder im Vollbild betrachtet werden.
+  - **100 % lokaler Datenschutz:** Standortdaten sind optional und standardmäßig deaktiviert (Opt-in). Keine Cloud-Synchronisierung, Ausschluss von automatischen Backups.
+  - **Löschen & Dateibereinigung:** Einzelne Einträge bearbeiten und löschen (inkl. Foto-Bereinigung) sowie vollständiges Löschen mit Sicherheitsabfrage.
+  - **JSON-Export & -Import:** Mit Datenbegrenzung (10 MB / 5.000 Einträge), Vorschau, Zusammenführen/Ersetzen und EXIF-Datenschutzhinweis. Testhinweise: [1.1.9-pre.6](play-store/pre-release-1.1.9-pre.6.md).
 
 ## Neu in 1.1.9-pre.4 · Beta
 
