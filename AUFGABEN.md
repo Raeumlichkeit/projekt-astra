@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.7.
+Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.8.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -133,9 +133,11 @@ Umgesetzt in Version 1.1.9-pre.7 (`OpticsProfiles.kt`, `OpticsProfilesTest.kt`, 
 
 ### 11. AR-Zielhilfe
 
-- [ ] Für ein ausgewähltes Ziel Richtungspfeile und Winkelabstand zur aktuellen Blickrichtung anzeigen.
-- [ ] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
-- [ ] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
+- [x] Für ein ausgewähltes Ziel Richtungspfeile und Winkelabstand zur aktuellen Blickrichtung anzeigen.
+- [x] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
+- [x] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
+
+Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.kt`, `ArTargetGuidanceUi.kt`, `MainActivity.kt`). Haversine-basierte Winkelabstandsberechnung und 3D-Kamerarelativvektor für präzise Richtungsanzeige. Pulsierende Zielkreuz-Markierung im Sichtfeld, kreisförmige Kantenzeiger mit Pfeil und Gradangabe für Off-Screen-Objekte. Status-Banner mit Zielname, Typ, Entfernung und Sensorqualität (Hoch/Mittel/Niedrig). Verständliche Kennzeichnung für Ziele hinter dem Gerät (> 90°) und unter dem lokalen Horizont/Geländeprofil. Kalibrierungshinweis bei niedriger Sensorqualität; keine falsche Genauigkeit bei unsicherer Ausrichtung. 7 Testmethoden für Distanz, Normalisierung, Kameravektoren, Pfeilwinkel, Edge-Clamping und Horizonterkennung.
 
 ### 12. Robustheit und Darstellung
 

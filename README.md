@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.7` · Version Code `25` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.7 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.7).
+**Beta-Stand:** `1.1.9-pre.8` · Version Code `26` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.8 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.8).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -19,11 +19,22 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
 | Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Beobachtungstagebuch mit Fotos, Seeing & Export/Import |
 | Optik & FOV | Frei einstellbarer Sichtfeldkreis (0,1°–30,0°), Telrad-Sucher (0,5°/2°/4°), Geräteprofile (10×50, 8×42, Dobson), 0°/90°/180°/270°-Drehung, Zenitspiegel-Spiegelung, aufrechte Beschriftungen, inverse Touch-Präzision |
-| AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
+| AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay, AR-Zielhilfe mit Richtungspfeilen, Winkelabstand, Sensorqualität und Horizonterkennung; Kamera bleibt optional und speichert keine Bilder |
 | Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+
+## Neu in 1.1.9-pre.8 · Beta
+
+- **AR-Zielhilfe (P2.11):**
+  - **Richtungspfeile & Winkelabstand:** Für jedes ausgewählte Himmelsobjekt wird der Winkelabstand zur aktuellen Blickrichtung berechnet und als Gradangabe angezeigt.
+  - **Zielkreuz-Markierung:** Pulsierendes Fadenkreuz wenn sich das Ziel im Sichtfeld befindet.
+  - **Kantenzeiger:** Kreisförmige Pfeile am Bildschirmrand mit Richtungsangabe und Gradabstand für Off-Screen-Objekte.
+  - **Status-Banner:** Oberer Informationsbalken mit Zielname, Objekttyp, Entfernung und Schließen-Button.
+  - **Hinter-dem-Gerät-Erkennung:** Ziele > 90° von der Blickrichtung werden als „Umdrehen" mit spezieller Farbgebung markiert.
+  - **Horizont- und Geländeerkennung:** Objekte unter dem lokalen Horizont oder Geländeprofil werden als orange Warnung angezeigt.
+  - **Sensorqualität:** Anzeige der Sensorgenauigkeit (Hoch/Mittel/Niedrig) mit Kalibrierungshinweis bei unzuverlässiger Ausrichtung. Testhinweise: [1.1.9-pre.8](play-store/pre-release-1.1.9-pre.8.md).
 
 ## Neu in 1.1.9-pre.7 · Beta
 

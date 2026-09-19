@@ -797,6 +797,7 @@ internal fun SkyScreen(
     var opticsSettings by remember { mutableStateOf(OpticsStore.loadSettings(context)) }
     var opticsProfiles by remember { mutableStateOf(OpticsStore.loadProfiles(context)) }
     var showOpticsSheet by remember { mutableStateOf(false) }
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     val skyInstant = skyTime.instant
     LifecycleStartEffect(Unit) {
         displayZone = ZoneId.systemDefault()
@@ -1094,7 +1095,8 @@ internal fun SkyScreen(
         }
 
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))
-            .testTag("sky-viewport")) {
+            .testTag("sky-viewport")
+            .onSizeChanged { viewportSize = it }) {
             if (arEnabled && cameraPermissionGranted) CameraPreview { cameraFov = it }
             val shouldRenderTexture = firstMapFrameRendered && (!arEnabled || (appearance.showInAr && appearance.mode != MilkyWayMode.OFF))
             if (shouldRenderTexture) {
@@ -1182,6 +1184,47 @@ internal fun SkyScreen(
                         }
                     }
                 }
+            }
+            val currentTarget = selection.target
+            val currentTargetPos = targetPosition
+            if (currentTarget != null && currentTargetPos != null && (arEnabled || selection.tracking) &&
+                viewportSize.width > 0 && viewportSize.height > 0) {
+                val guidance = remember(
+                    currentTarget,
+                    currentTargetPos,
+                    viewAzimuth,
+                    viewAltitude,
+                    arEnabled,
+                    cameraFov,
+                    manualFov,
+                    viewportSize,
+                    orientation.accuracy,
+                    orientation.available,
+                    terrainState
+                ) {
+                    ArTargetGuidanceCalculator.calculateGuidance(
+                        targetName = currentTarget.name,
+                        targetTypeLabel = currentTarget.typeLabel,
+                        targetPosition = currentTargetPos,
+                        currentAzimuth = viewAzimuth.toDouble(),
+                        currentAltitude = viewAltitude.toDouble(),
+                        horizontalFov = if (arEnabled) cameraFov else manualFov.toDouble(),
+                        width = viewportSize.width.toFloat(),
+                        height = viewportSize.height.toFloat(),
+                        terrainProfile = (terrainState as? TerrainState.Ready)?.profile,
+                        sensorAccuracy = orientation.accuracy,
+                        sensorAvailable = orientation.available
+                    )
+                }
+                ArTargetGuidanceOverlay(
+                    guidance = guidance,
+                    onOpenCalibration = { showCalibration = true },
+                    onDismissTarget = {
+                        selection = selection.release()
+                        targetMessage = null
+                    },
+                    redLightMode = redLightMode
+                )
             }
         }
 
