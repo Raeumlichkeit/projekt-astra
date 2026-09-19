@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.6` · Version Code `24` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.6 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.6).
+**Beta-Stand:** `1.1.9-pre.7` · Version Code `25` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.7 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.7).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -11,18 +11,29 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 
 | Bereich | Enthalten |
 | --- | --- |
-| Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont und 88 IAU-Sternbildgrenzen |
+| Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont, 88 IAU-Sternbildgrenzen, Optik & FOV-Kreis/Telrad mit Drehung und Spiegelung |
 | Himmel | Offline-HYG-Katalog mit 5.041 Sternen, optional 1.016 OpenNGC-Deep-Sky-Objekte, Sonne, Mond und sieben Planeten |
 | Milchstraße | Offline gebündelte NASA/Gaia-Darstellung mit natürlichem oder verstärktem Stil und Helligkeitsregler |
 | Gelände | Lokales 360°-Profil aus GLO-90-Höhendaten mit Offline-Fallback und Geländeverdeckung |
 | Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme |
 | Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
 | Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Beobachtungstagebuch mit Fotos, Seeing & Export/Import |
+| Optik & FOV | Frei einstellbarer Sichtfeldkreis (0,1°–30,0°), Telrad-Sucher (0,5°/2°/4°), Geräteprofile (10×50, 8×42, Dobson), 0°/90°/180°/270°-Drehung, Zenitspiegel-Spiegelung, aufrechte Beschriftungen, inverse Touch-Präzision |
 | AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
 | Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+
+## Neu in 1.1.9-pre.7 · Beta
+
+- **Fernglas- und Teleskop-Sichtfeld & Orientierung (P2.10):**
+  - **Sichtfeld-Kreis (FOV Overlay):** Frei skalierbarer Kreis (0,1° bis 30,0°) mit Winkelgrößenbeschriftung und Zentrierfadenkreuz.
+  - **Telrad-Sucher:** Spezieller 3-Ring-Telrad-Modus mit 0,5°, 2,0° und 4,0° Ringen und klassischem Teilstrichkreuz.
+  - **Geräteprofile:** Vorkonfigurierte Profile (10×50 Fernglas, 8×42 Fernglas, 8" Dobson mit 25 mm und 10 mm Plössl) sowie eigene Profile mit Brennweite, Öffnung, Okularbrennweite und scheinbarem Gesichtsfeld. Automatische Kennzeichnung von Vergrößerung ($V = F / f$), wahrem Gesichtsfeld ($TFOV \approx AFOV / V$) und Austrittspupille als Näherungswerte.
+  - **Drehung & Spiegelung:** Bildorientierung um 0°, 90°, 180° (Newton-Spiegeltelekop) oder 270° drehen sowie horizontal spiegeln (Zenitspiegel). Stern- und Objektnamen bleiben standardmäßig aufrecht lesbar (oder können optional mitrotieren).
+  - **Exakte Touch-Präzision & Wischgesten:** Inverse Koordinatentransformation sorgt dafür, dass getippte Sterne auch unter Spiegelung/Drehung absolut millimetergenau getroffen werden; Wischgesten bewegen die Karte stets natürlich unter dem Finger.
+  - **Status-Badge:** Schneller Überblick über aktive Modifikationen mit 1-Klick-Zurücksetzen („Standard“). AR bleibt strikt unbeeinflusst. Testhinweise: [1.1.9-pre.7](play-store/pre-release-1.1.9-pre.7.md).
 
 ## Neu in 1.1.9-pre.6 · Beta
 

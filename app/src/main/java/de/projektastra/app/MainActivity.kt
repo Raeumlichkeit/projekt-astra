@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -116,6 +117,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -146,6 +148,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
@@ -212,6 +215,7 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.tan
 
 private val Night = Color(0xFF07101F)
 private val NightBlue = Color(0xFF0D1C34)
@@ -790,6 +794,9 @@ internal fun SkyScreen(
     var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
     var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
     var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
+    var opticsSettings by remember { mutableStateOf(OpticsStore.loadSettings(context)) }
+    var opticsProfiles by remember { mutableStateOf(OpticsStore.loadProfiles(context)) }
+    var showOpticsSheet by remember { mutableStateOf(false) }
     val skyInstant = skyTime.instant
     LifecycleStartEffect(Unit) {
         displayZone = ZoneId.systemDefault()
@@ -986,6 +993,9 @@ internal fun SkyScreen(
                         Icon(Icons.Rounded.Schedule, null, Modifier.size(18.dp)); Text(" Zeit")
                     }
                     TextButton(onClick = { showLayersPanel = true }) { Text("Ebenen & Namen") }
+                    if (!arEnabled) TextButton(onClick = { showOpticsSheet = true }) {
+                        Icon(Icons.Rounded.Explore, null, Modifier.size(18.dp)); Text(" Optik & FOV")
+                    }
                     TextButton(onClick = { showDeepSky = !showDeepSky },
                         modifier = Modifier.semantics { stateDescription = if (showDeepSky) "Ein" else "Aus" }) {
                         Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
@@ -1120,8 +1130,59 @@ internal fun SkyScreen(
                 targetPosition = targetPosition.takeUnless { selection.target?.needsDeepSky == true && !showDeepSky },
                 targetLabel = selection.target?.name,
                 labelDensity = appearance.labelDensity,
+                opticsSettings = opticsSettings,
                 onFirstFrameRendered = { firstMapFrameRendered = true }
             )
+            if (!arEnabled && opticsSettings.isCustomized) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clickable { showOpticsSheet = true },
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xDD0A1526),
+                    border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.6f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val statusParts = buildList {
+                            val activeProfile = opticsProfiles.firstOrNull { it.id == opticsSettings.activeProfileId }
+                            if (activeProfile != null) add(activeProfile.name)
+                            if (opticsSettings.mirrored) add("Gespiegelt")
+                            if (opticsSettings.rotationDegrees % 360f != 0f) add("${opticsSettings.rotationDegrees.toInt()}°")
+                            if (opticsSettings.telradMode) add("Telrad")
+                            else if (opticsSettings.fovCircleEnabled) add("FOV ${String.format(Locale.US, "%.1f°", opticsSettings.currentFovDegrees)}")
+                        }
+                        Text(
+                            text = statusParts.joinToString(" · "),
+                            color = StarGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        TextButton(
+                            onClick = {
+                                val reset = opticsSettings.copy(
+                                    mirrored = false,
+                                    rotationDegrees = 0f,
+                                    fovCircleEnabled = false,
+                                    telradMode = false,
+                                    activeProfileId = null
+                                )
+                                opticsSettings = reset
+                                OpticsStore.saveSettings(context, reset)
+                            },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Rounded.RestartAlt, contentDescription = "Optik zurücksetzen", modifier = Modifier.size(14.dp), tint = AstraBlue)
+                            Spacer(Modifier.width(2.dp))
+                            Text("Standard", fontSize = 11.sp, color = AstraBlue)
+                        }
+                    }
+                }
+            }
         }
 
         selection.target?.let { target ->
@@ -1193,6 +1254,29 @@ internal fun SkyScreen(
             }
         }
         }
+    }
+
+    if (showOpticsSheet) {
+        OpticsFovSheet(
+            settings = opticsSettings,
+            profiles = opticsProfiles,
+            onUpdateSettings = {
+                opticsSettings = it
+                OpticsStore.saveSettings(context, it)
+            },
+            onSaveProfile = { profile ->
+                opticsProfiles = OpticsStore.saveProfile(context, profile)
+            },
+            onDeleteProfile = { id ->
+                opticsProfiles = OpticsStore.deleteProfile(context, id)
+                if (opticsSettings.activeProfileId == id) {
+                    val updated = opticsSettings.copy(activeProfileId = null)
+                    opticsSettings = updated
+                    OpticsStore.saveSettings(context, updated)
+                }
+            },
+            onDismiss = { showOpticsSheet = false }
+        )
     }
 
     if (showTimeControls) SkyTimeSheet(skyTime, displayZone, redLightMode,
@@ -1435,6 +1519,7 @@ internal fun SkyCanvas(
     targetPosition: HorizontalCoordinates? = null,
     labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL,
     targetLabel: String? = null,
+    opticsSettings: OpticsSettings = OpticsSettings(),
     onFirstFrameRendered: () -> Unit = {}
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -1446,21 +1531,32 @@ internal fun SkyCanvas(
     Canvas(
         modifier.fillMaxSize().clipToBounds()
             .onSizeChanged { canvasSize = it }
-            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov, arMode) {
+            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov, arMode, opticsSettings) {
                 detectTapGestures { tap ->
+                    val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
+                    val effectiveTap = if (!arMode && opticsSettings.isCustomized) {
+                        opticsSettings.inverseTransformScreenPoint(tap, center)
+                    } else {
+                        tap
+                    }
                     val projection = SkyProjection(viewAzimuth, viewAltitude,
                         canvasSize.width.toFloat(), canvasSize.height.toFloat(), horizontalFov, perspective = !arMode)
                     val closest = objects.mapNotNull { item ->
                         projection.point(item.position, padding = 32f)
-                            ?.let { point -> item to hypot((point.x - tap.x).toDouble(), (point.y - tap.y).toDouble()) }
+                            ?.let { point -> item to hypot((point.x - effectiveTap.x).toDouble(), (point.y - effectiveTap.y).toDouble()) }
                     }.minByOrNull { it.second }
                     if (closest != null && closest.second <= 42.0) onSelect(closest.first)
                 }
             }
-            .pointerInput(gesturesEnabled, canvasSize) {
+            .pointerInput(gesturesEnabled, canvasSize, arMode, opticsSettings) {
                 if (!gesturesEnabled) return@pointerInput
-                detectTransformGestures { _, pan, zoom, _ ->
+                detectTransformGestures { _, rawPan, zoom, _ ->
                     if (canvasSize.width <= 0 || canvasSize.height <= 0) return@detectTransformGestures
+                    val pan = if (!arMode && opticsSettings.isCustomized) {
+                        opticsSettings.transformPanDelta(rawPan)
+                    } else {
+                        rawPan
+                    }
                     val verticalFov = latestFov * canvasSize.height / canvasSize.width
                     val nextAzimuth = normalizeDegrees(
                         latestAzimuth - pan.x / canvasSize.width * latestFov
@@ -1485,6 +1581,10 @@ internal fun SkyCanvas(
             }
         }
         val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov, perspective = !arMode)
+        val canvasCenter = Offset(size.width / 2f, size.height / 2f)
+        val applyOptics = !arMode && opticsSettings.isCustomized
+        val keepLabelsUpright = applyOptics && !opticsSettings.rotateLabels
+
         val labels = mutableListOf<SkyLabelCandidate>()
         val labelPaints = mutableMapOf<String, android.graphics.Paint>()
         fun addLabel(
@@ -1493,6 +1593,7 @@ internal fun SkyCanvas(
             anchorGap: Float = 6.dp.toPx()
         ) {
             if (!projection.contains(point)) return
+            val anchor = if (keepLabelsUpright) opticsSettings.transformScreenPoint(point, canvasCenter) else point
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 this.textSize = textSize
                 this.color = color
@@ -1500,35 +1601,43 @@ internal fun SkyCanvas(
                 setShadowLayer(1.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
             }
             val metrics = paint.fontMetrics
-            labels += SkyLabelCandidate(id, text, point.x, point.y, kind, textSize,
+            labels += SkyLabelCandidate(id, text, anchor.x, anchor.y, kind, textSize,
                 metrics.top, metrics.bottom, anchorGap, rank)
             labelPaints[id] = paint
         }
-        if (showGrid) drawSkyGrid(viewAzimuth, viewAltitude)
-        drawMilkyWay(milkyWay, projection)
+
+        val withOpticsTransform: (DrawScope.() -> Unit) -> Unit = { block ->
+            if (applyOptics) {
+                withTransform({
+                    if (opticsSettings.rotationDegrees % 360f != 0f) {
+                        rotate(opticsSettings.rotationDegrees, canvasCenter)
+                    }
+                    if (opticsSettings.mirrored) {
+                        scale(-1f, 1f, canvasCenter)
+                    }
+                }) {
+                    block()
+                }
+            } else {
+                block()
+            }
+        }
+
+        // Collect labels
         milkyWay.asSequence().filterIndexed { index, _ -> index % 20 == 0 }
             .filter { targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE }
             .mapNotNull { projection.point(it) }.firstOrNull()?.let { point ->
                 addLabel("milky-way", "MILCHSTRASSE", point, SkyLabelKind.MILKY_WAY,
                     10.sp.toPx(), android.graphics.Color.rgb(184, 210, 255), 180)
             }
-        drawIauBoundaries(constellationBoundaries, projection, arMode)
+
         val projected = objects.mapNotNull { item ->
             projection.point(item.position, padding = 32f)?.let { item to it }
         }
         val byHip = projected.mapNotNull { (item, point) -> item.celestial.hipId?.let { it to point } }.toMap()
-        ConstellationLines.connections.forEach { (from, to) ->
-            val start = objectsByHip[from]?.position
-            val end = objectsByHip[to]?.position
-            if (start != null && end != null) {
-                projection.segments(start, end, padding = 1f).forEach { segment ->
-                    drawLine(AstraBlue.copy(alpha = if (arMode) 0.65f else 0.23f), segment.start, segment.end, if (arMode) 2f else 1.1f)
-                }
-            }
-        }
+
         ConstellationLines.labels.forEach { label ->
             byHip[label.anchorHip]?.let { point ->
-                if (showConstellationIllustrations) drawConstellationIllustration(label.name, point, arMode)
                 val position = objectsByHip[label.anchorHip]?.position
                 if (position != null && targetVisibility(position, terrainProfile) == TargetVisibility.ABOVE) {
                     addLabel("constellation-${label.name}", label.name.uppercase(Locale.GERMAN), point,
@@ -1537,40 +1646,9 @@ internal fun SkyCanvas(
                 }
             }
         }
+
         projected.forEach { (item, point) ->
             val objectData = item.celestial
-            val radius = when (objectData.objectType) {
-                CelestialType.SUN -> 14f
-                CelestialType.MOON -> 13f
-                CelestialType.PLANET -> (10f - objectData.magnitude.toFloat() * 0.45f).coerceIn(5f, 12f)
-                CelestialType.STAR -> (3.4f * 10.0.pow(-0.10 * objectData.magnitude).toFloat()).coerceIn(0.72f, 5.2f)
-                else -> (6f + (objectData.majorAxisArcMinutes ?: 0.0).toFloat() / 12f).coerceIn(6f, 15f)
-            }
-            when (objectData.objectType) {
-                CelestialType.STAR -> {
-                    val color = starColor(objectData.colorIndex)
-                    val alpha = (1f - (objectData.magnitude.toFloat() - 1.5f).coerceAtLeast(0f) * 0.115f).coerceIn(0.42f, 1f)
-                    if (objectData.magnitude < 2.0) {
-                        drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0f)),
-                            center = point, radius = radius * 4.5f), radius * 4.5f, point)
-                    }
-                    drawCircle(color, radius, point, alpha = alpha)
-                    if (radius > 2f) drawCircle(Color.White, radius * 0.4f, point, alpha = 0.78f)
-                }
-                CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> {
-                    drawCircle(solarSystemColor(objectData.solarBody), radius * 1.8f, point, alpha = 0.18f)
-                    drawCircle(solarSystemColor(objectData.solarBody), radius, point)
-                }
-                else -> {
-                    drawCircle(deepSkyColor(objectData.objectType), radius, point, style = Stroke(2.5f))
-                    drawLine(
-                        deepSkyColor(objectData.objectType).copy(alpha = 0.7f),
-                        point - Offset(radius * 0.55f, 0f),
-                        point + Offset(radius * 0.55f, 0f),
-                        1.5f
-                    )
-                }
-            }
             val shouldLabel = when (objectData.objectType) {
                 CelestialType.STAR -> objectData.magnitude < (if (labelDensity == SkyLabelDensity.RICH) 4.0 else 1.5) &&
                     !objectData.name.startsWith("HIP ")
@@ -1589,6 +1667,7 @@ internal fun SkyCanvas(
                     12.sp.toPx(), android.graphics.Color.WHITE, rank = objectData.magnitude)
             }
         }
+
         val horizonPoints = (0..120).mapNotNull { step ->
             val azimuth = step * 3.0
             projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0))
@@ -1610,6 +1689,7 @@ internal fun SkyCanvas(
             addLabel("selected-target", targetLabel, selectedPoint, SkyLabelKind.TARGET,
                 13.sp.toPx(), orientationColor, anchorGap = 22.dp.toPx())
         }
+
         val placedLabels = layoutSkyLabels(labels, size.width, size.height, labelDensity,
             padding = 8.dp.toPx(), separation = 5.dp.toPx(),
             measureText = { label, text -> labelPaints.getValue(label.id).measureText(text) },
@@ -1617,25 +1697,172 @@ internal fun SkyCanvas(
                 label.kind == SkyLabelKind.ORIENTATION ||
                     listOf(bounds.left, (bounds.left + bounds.right) / 2f, bounds.right).all { x ->
                         listOf(bounds.top, bounds.bottom).all { y ->
-                            projection.coordinates(Offset(x, y))?.let {
+                            val pt = if (keepLabelsUpright) opticsSettings.inverseTransformScreenPoint(Offset(x, y), canvasCenter) else Offset(x, y)
+                            projection.coordinates(pt)?.let {
                                 targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE
                             } == true
                         }
                     }
             })
-        // Celestial labels remain below the ground layer, including narrow terrain peaks between samples.
-        placedLabels.filter { it.candidate.kind != SkyLabelKind.ORIENTATION }.forEach { label ->
-            drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
-                labelPaints.getValue(label.candidate.id))
+
+        // Draw celestial graphics (mirrored/rotated when active)
+        withOpticsTransform {
+            if (showGrid) drawSkyGrid(viewAzimuth, viewAltitude)
+            drawMilkyWay(milkyWay, projection)
+            drawIauBoundaries(constellationBoundaries, projection, arMode)
+
+            ConstellationLines.connections.forEach { (from, to) ->
+                val start = objectsByHip[from]?.position
+                val end = objectsByHip[to]?.position
+                if (start != null && end != null) {
+                    projection.segments(start, end, padding = 1f).forEach { segment ->
+                        drawLine(AstraBlue.copy(alpha = if (arMode) 0.65f else 0.23f), segment.start, segment.end, if (arMode) 2f else 1.1f)
+                    }
+                }
+            }
+            ConstellationLines.labels.forEach { label ->
+                byHip[label.anchorHip]?.let { point ->
+                    if (showConstellationIllustrations) drawConstellationIllustration(label.name, point, arMode)
+                }
+            }
+
+            projected.forEach { (item, point) ->
+                val objectData = item.celestial
+                val radius = when (objectData.objectType) {
+                    CelestialType.SUN -> 14f
+                    CelestialType.MOON -> 13f
+                    CelestialType.PLANET -> (10f - objectData.magnitude.toFloat() * 0.45f).coerceIn(5f, 12f)
+                    CelestialType.STAR -> (3.4f * 10.0.pow(-0.10 * objectData.magnitude).toFloat()).coerceIn(0.72f, 5.2f)
+                    else -> (6f + (objectData.majorAxisArcMinutes ?: 0.0).toFloat() / 12f).coerceIn(6f, 15f)
+                }
+                when (objectData.objectType) {
+                    CelestialType.STAR -> {
+                        val color = starColor(objectData.colorIndex)
+                        val alpha = (1f - (objectData.magnitude.toFloat() - 1.5f).coerceAtLeast(0f) * 0.115f).coerceIn(0.42f, 1f)
+                        if (objectData.magnitude < 2.0) {
+                            drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0f)),
+                                center = point, radius = radius * 4.5f), radius * 4.5f, point)
+                        }
+                        drawCircle(color, radius, point, alpha = alpha)
+                        if (radius > 2f) drawCircle(Color.White, radius * 0.4f, point, alpha = 0.78f)
+                    }
+                    CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> {
+                        drawCircle(solarSystemColor(objectData.solarBody), radius * 1.8f, point, alpha = 0.18f)
+                        drawCircle(solarSystemColor(objectData.solarBody), radius, point)
+                    }
+                    else -> {
+                        drawCircle(deepSkyColor(objectData.objectType), radius, point, style = Stroke(2.5f))
+                        drawLine(
+                            deepSkyColor(objectData.objectType).copy(alpha = 0.7f),
+                            point - Offset(radius * 0.55f, 0f),
+                            point + Offset(radius * 0.55f, 0f),
+                            1.5f
+                        )
+                    }
+                }
+            }
         }
-        if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
-        else drawSphericalTerrainHorizon(terrainProfile, projection)
-        selectedPoint?.let { point ->
-            drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
+
+        // Draw celestial labels
+        val drawCelestialLabels = {
+            placedLabels.filter { it.candidate.kind != SkyLabelKind.ORIENTATION }.forEach { label ->
+                drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
+                    labelPaints.getValue(label.candidate.id))
+            }
         }
-        placedLabels.filter { it.candidate.kind == SkyLabelKind.ORIENTATION }.forEach { label ->
-            drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
-                labelPaints.getValue(label.candidate.id))
+        if (applyOptics && opticsSettings.rotateLabels) {
+            withOpticsTransform { drawCelestialLabels() }
+        } else {
+            drawCelestialLabels()
+        }
+
+        // Draw terrain & selection ring
+        withOpticsTransform {
+            if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
+            else drawSphericalTerrainHorizon(terrainProfile, projection)
+            selectedPoint?.let { point ->
+                drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
+            }
+        }
+
+        // Draw orientation labels
+        val drawOrientationLabels = {
+            placedLabels.filter { it.candidate.kind == SkyLabelKind.ORIENTATION }.forEach { label ->
+                drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
+                    labelPaints.getValue(label.candidate.id))
+            }
+        }
+        if (applyOptics && opticsSettings.rotateLabels) {
+            withOpticsTransform { drawOrientationLabels() }
+        } else {
+            drawOrientationLabels()
+        }
+
+        // FOV Circle / Telrad reticle overlay (always centered in view, outside transform)
+        if (!arMode && (opticsSettings.fovCircleEnabled || opticsSettings.telradMode)) {
+            fun fovDiameterToRadiusPx(deg: Double): Float {
+                val fovRad = Math.toRadians(deg.coerceAtLeast(0.001) / 2.0)
+                val screenFovRad = Math.toRadians(horizontalFov.coerceIn(1.0, 179.0) / 2.0)
+                return ((size.width / (2.0 * tan(screenFovRad))) * tan(fovRad)).toFloat()
+            }
+
+            if (opticsSettings.telradMode) {
+                val ringColor = Color(0xFFFF5252).copy(alpha = 0.85f)
+                val ringStroke = Stroke(width = 1.5.dp.toPx())
+                val r05 = fovDiameterToRadiusPx(0.5)
+                val r20 = fovDiameterToRadiusPx(2.0)
+                val r40 = fovDiameterToRadiusPx(4.0)
+
+                listOf(r05, r20, r40).forEach { r ->
+                    if (r > 0.5f) {
+                        drawCircle(ringColor, radius = r, center = canvasCenter, style = ringStroke)
+                    }
+                }
+
+                val crosshairColor = Color(0xFFFF5252).copy(alpha = 0.65f)
+                val tickLen = 8.dp.toPx()
+                val gap = 4.dp.toPx()
+                drawLine(crosshairColor, canvasCenter - Offset(0f, gap + tickLen), canvasCenter - Offset(0f, gap), strokeWidth = 1.5.dp.toPx())
+                drawLine(crosshairColor, canvasCenter + Offset(0f, gap), canvasCenter + Offset(0f, gap + tickLen), strokeWidth = 1.5.dp.toPx())
+                drawLine(crosshairColor, canvasCenter - Offset(gap + tickLen, 0f), canvasCenter - Offset(gap, 0f), strokeWidth = 1.5.dp.toPx())
+                drawLine(crosshairColor, canvasCenter + Offset(gap, 0f), canvasCenter + Offset(gap + tickLen, 0f), strokeWidth = 1.5.dp.toPx())
+
+                val telradPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    textSize = 11.sp.toPx()
+                    color = android.graphics.Color.rgb(255, 82, 82)
+                    setShadowLayer(2.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
+                }
+                val labelText = "Telrad 0.5° / 2° / 4°"
+                val textWidth = telradPaint.measureText(labelText)
+                val textY = (canvasCenter.y - r40 - 8.dp.toPx()).coerceAtLeast(18.dp.toPx())
+                drawContext.canvas.nativeCanvas.drawText(labelText, canvasCenter.x - textWidth / 2f, textY, telradPaint)
+            } else if (opticsSettings.fovCircleEnabled) {
+                val fovDeg = opticsSettings.currentFovDegrees
+                val radiusPx = fovDiameterToRadiusPx(fovDeg)
+                if (radiusPx > 1f) {
+                    val fovColor = Color(0xFF64B5F6).copy(alpha = 0.75f)
+                    val stroke = Stroke(width = 1.5.dp.toPx())
+                    drawCircle(fovColor, radius = radiusPx, center = canvasCenter, style = stroke)
+
+                    val crosshairColor = fovColor.copy(alpha = 0.5f)
+                    val tickLen = 6.dp.toPx()
+                    val gap = 3.dp.toPx()
+                    drawLine(crosshairColor, canvasCenter - Offset(0f, gap + tickLen), canvasCenter - Offset(0f, gap), strokeWidth = 1.dp.toPx())
+                    drawLine(crosshairColor, canvasCenter + Offset(0f, gap), canvasCenter + Offset(0f, gap + tickLen), strokeWidth = 1.dp.toPx())
+                    drawLine(crosshairColor, canvasCenter - Offset(gap + tickLen, 0f), canvasCenter - Offset(gap, 0f), strokeWidth = 1.dp.toPx())
+                    drawLine(crosshairColor, canvasCenter + Offset(gap, 0f), canvasCenter + Offset(gap + tickLen, 0f), strokeWidth = 1.dp.toPx())
+
+                    val fovPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        textSize = 11.sp.toPx()
+                        color = android.graphics.Color.rgb(100, 181, 246)
+                        setShadowLayer(2.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
+                    }
+                    val labelText = "FOV ${String.format(Locale.US, "%.2f°", fovDeg)}"
+                    val textWidth = fovPaint.measureText(labelText)
+                    val textY = (canvasCenter.y - radiusPx - 8.dp.toPx()).coerceAtLeast(18.dp.toPx())
+                    drawContext.canvas.nativeCanvas.drawText(labelText, canvasCenter.x - textWidth / 2f, textY, fovPaint)
+                }
+            }
         }
     }
 }

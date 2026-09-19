@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.6.
+Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.7.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -124,10 +124,12 @@ Umgesetzt in Version 1.1.9-pre.6 (`ObservationLogbook.kt`, `ObservationLogbookSt
 
 ### 10. Fernglas- und Teleskop-Sichtfeld
 
-- [ ] Sichtfeld als Kreis mit frei eingebbarer Winkelgröße über der Karte anzeigen.
-- [ ] Optional lokale Geräteprofile mit Brennweite, Okularbrennweite und scheinbarem Gesichtsfeld anbieten; berechnete Werte als Näherung kennzeichnen.
-- [ ] Kartenansicht passend zum Instrument drehen oder spiegeln; Zustand sichtbar machen und einfach zurücksetzen können.
-- [ ] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
+- [x] Sichtfeld als Kreis mit frei eingebbarer Winkelgröße über der Karte anzeigen (inkl. Telrad-Sucher 0,5° / 2,0° / 4,0°).
+- [x] Optional lokale Geräteprofile mit Brennweite, Okularbrennweite und scheinbarem Gesichtsfeld anbieten; berechnete Werte als Näherung kennzeichnen.
+- [x] Kartenansicht passend zum Instrument drehen oder spiegeln; Zustand sichtbar machen und einfach zurücksetzen können.
+- [x] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
+
+Umgesetzt in Version 1.1.9-pre.7 (`OpticsProfiles.kt`, `OpticsProfilesTest.kt`, `OpticsFovSheet.kt`, `MainActivity.kt`). Frei skalierbarer Sichtfeldkreis (0,1° bis 30,0°) und Telrad-Sucher (0,5° / 2° / 4° Kreise mit Fadenkreuz). Geräteprofile für Ferngläser (10×50, 8×42) und Teleskope (8" Dobson 25 mm / 10 mm Plössl) sowie eigene Profile mit Brennweite, Öffnung, Okularbrennweite und scheinbarem Gesichtsfeld (AFOV). Automatische Kennzeichnung von Vergrößerung, wahrem Gesichtsfeld und Austrittspupille als Näherungswerte. Drehung um 0°, 90°, 180° (Newton-Invertierung), 270° und horizontale Spiegelung (Zenitspiegel) mit wählbarer Beschriftungsausrichtung (aufrecht oder mitrotierend). Millimetergenaue Objektauswahl per inverser Koordinatentransformation und an Wischgesten angepasste Panning-Deltas. Dezentes Status-Badge über der Karte mit 1-Klick-Reset („Standard“). AR bleibt strikt unbeeinflusst und alle Einstellungen werden 100 % lokal ohne Cloud-Sync gespeichert.
 
 ### 11. AR-Zielhilfe
 
