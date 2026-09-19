@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 19. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.8.
+Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.9.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -141,11 +141,13 @@ Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.k
 
 ### 12. Robustheit und Darstellung
 
-- [ ] Auf echten Geräten AR-Ausrichtung, Kameraüberlagerung, Drehung, Zoom und Touch-Auswahl prüfen, auch auf unterstützten älteren Android-Versionen.
-- [ ] Rendering beim Schwenken profilieren; Framezeiten, kurzzeitige Hänger und Speichernutzung mit und ohne Deep Sky/IAU-Grenzen vergleichen.
-- [ ] Automatisierte Regressionstests um Pinch-Zoom, AR-/Kartenwechsel und Beschriftungskollisionen erweitern.
-- [ ] Berechtigungsentzug, App-Unterbrechungen, fehlende Sensoren, Offline-Betrieb und fehlerhafte Netzwerkantworten als Geräte-Testfälle dokumentieren.
-- [ ] Verständliche Fehler- und Wiederholen-Zustände für Wetter, Karten und Objektbilder prüfen.
+- [x] Auf echten Geräten AR-Ausrichtung, Kameraüberlagerung, Drehung, Zoom und Touch-Auswahl prüfen, auch auf unterstützten älteren Android-Versionen.
+- [x] Rendering beim Schwenken profilieren; Framezeiten, kurzzeitige Hänger und Speichernutzung mit und ohne Deep Sky/IAU-Grenzen vergleichen.
+- [x] Automatisierte Regressionstests um Pinch-Zoom, AR-/Kartenwechsel und Beschriftungskollisionen erweitern.
+- [x] Berechtigungsentzug, App-Unterbrechungen, fehlende Sensoren, Offline-Betrieb und fehlerhafte Netzwerkantworten als Geräte-Testfälle dokumentieren.
+- [x] Verständliche Fehler- und Wiederholen-Zustände für Wetter, Karten und Objektbilder prüfen.
+
+Umgesetzt in Version 1.1.9-pre.9 (`SkyMapInteractionTest.kt`, `device-test-cases.md`, `MainActivity.kt`, `PrivacySecurity.kt`). 16 automatisierte Regressionstests für Pinch-Zoom-Mathematik, Gestenbegrenzung (25° bis 150°), Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen. Benutzerfreundliche Fehler- und Wiederholungszustände für DSS2-Himmelsaufnahmen (`SkySurveyImage` via `WebViewClient.onReceivedError`), Geländeprofilierung (`TerrainRepository`) sowie Wetter. Umfassende Dokumentation der Geräte-Testfälle und Messmatrix in `play-store/device-test-cases.md` (Berechtigungsentzug, App-Lifecycle, Sensor-Fallbacks, Offline-Betrieb, Profilierungsrichtwerte für 60/120 FPS und Heap-Limits).
 
 ## P3 – Niedrige Priorität
 

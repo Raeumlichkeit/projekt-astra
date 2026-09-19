@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.8` · Version Code `26` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.8 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.8).
+**Beta-Stand:** `1.1.9-pre.9` · Version Code `27` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.9 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.9).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -15,7 +15,7 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Himmel | Offline-HYG-Katalog mit 5.041 Sternen, optional 1.016 OpenNGC-Deep-Sky-Objekte, Sonne, Mond und sieben Planeten |
 | Milchstraße | Offline gebündelte NASA/Gaia-Darstellung mit natürlichem oder verstärktem Stil und Helligkeitsregler |
 | Gelände | Lokales 360°-Profil aus GLO-90-Höhendaten mit Offline-Fallback und Geländeverdeckung |
-| Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme |
+| Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme mit Retry-Option |
 | Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
 | Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Beobachtungstagebuch mit Fotos, Seeing & Export/Import |
 | Optik & FOV | Frei einstellbarer Sichtfeldkreis (0,1°–30,0°), Telrad-Sucher (0,5°/2°/4°), Geräteprofile (10×50, 8×42, Dobson), 0°/90°/180°/270°-Drehung, Zenitspiegel-Spiegelung, aufrechte Beschriftungen, inverse Touch-Präzision |
@@ -24,6 +24,14 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+
+## Neu in 1.1.9-pre.9 · Beta
+
+- **Robustheit & Darstellung (P2.12):**
+  - **Fehler- und Ladezustände für DSS2-Himmelsaufnahmen:** Ladeindikator beim Abruf sowie verständliche Fehlermeldung mit „Erneut versuchen“-Button bei Timeouts oder Serverfehlern.
+  - **Geländeprofil-Retry:** Direkter Wiederholungs-Button bei fehlgeschlagener oder offline gebliebener GLO-90-Geländeprofilierung.
+  - **Automatisierte Regressionstests:** 16 neue Tests in `SkyMapInteractionTest.kt` für Pinch-to-Zoom (25° bis 150°), Panning-Präzision, Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen.
+  - **Dokumentierte Geräte-Testfälle:** Vollständige Testmatrix in `play-store/device-test-cases.md` für Berechtigungsentzug, App-Unterbrechungen, Sensor-Fallbacks, Offline-Betrieb und Rendering-Profilierung (60/120 FPS Benchmark). Testhinweise: [1.1.9-pre.9](play-store/pre-release-1.1.9-pre.9.md).
 
 ## Neu in 1.1.9-pre.8 · Beta
 

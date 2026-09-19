@@ -812,9 +812,11 @@ internal fun SkyScreen(
         if (arEnabled) selection = selection.release()
         wasArEnabled = arEnabled
     }
+    var terrainRetry by remember { mutableIntStateOf(0) }
     LaunchedEffect(
         (observer.latitude * 1_000).roundToInt(),
-        (observer.longitude * 1_000).roundToInt()
+        (observer.longitude * 1_000).roundToInt(),
+        terrainRetry
     ) {
         if (SecureNetwork.options.terrain) {
             terrainState = TerrainState.Loading
@@ -1034,11 +1036,21 @@ internal fun SkyScreen(
                         Text(if (redLightMode) "Rotlicht ausschalten" else "Rotlicht einschalten")
                     }
                 }
-                Text(when (terrainState) {
-                    TerrainState.Loading -> "Geländeprofil wird geladen …"
-                    is TerrainState.Ready -> "Geländehorizont · GLO-90"
-                    TerrainState.Unavailable -> "Flacher Horizont · Gelände offline"
-                }, color = AstraTextMuted, fontSize = 11.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(when (terrainState) {
+                        TerrainState.Loading -> "Geländeprofil wird geladen …"
+                        is TerrainState.Ready -> "Geländehorizont · GLO-90"
+                        TerrainState.Unavailable -> "Flacher Horizont · Gelände offline"
+                    }, color = AstraTextMuted, fontSize = 11.sp)
+                    if (terrainState == TerrainState.Unavailable && SecureNetwork.available && SecureNetwork.options.terrain) {
+                        Text(
+                            "Erneut versuchen",
+                            color = AstraBlue,
+                            fontSize = 11.sp,
+                            modifier = Modifier.clickable { terrainRetry++ }
+                        )
+                    }
+                }
                 if (!orientation.available && arEnabled) Text("Kein Richtungssensor – statische Ansicht",
                     color = StarGold, fontSize = 12.sp)
                 if (!arEnabled) Text("Wischen zum Bewegen · Zwei Finger zum Zoomen · Zurücksetzen: Süden, 35° Höhe, 95° Sichtfeld",
@@ -2229,6 +2241,10 @@ private fun SkySurveyImage(objectData: CelestialObject) {
         return
     }
     val context = LocalContext.current
+    var loadError by remember(objectData) { mutableStateOf(false) }
+    var isLoading by remember(objectData) { mutableStateOf(true) }
+    var retryKey by remember(objectData) { mutableIntStateOf(0) }
+
     val fieldOfView = remember(objectData) {
         if (objectData.objectType == CelestialType.STAR) 0.35
         else (((objectData.majorAxisArcMinutes ?: 12.0) / 60.0) * 2.4).coerceIn(0.25, 4.0)
@@ -2239,8 +2255,15 @@ private fun SkySurveyImage(objectData: CelestialObject) {
             "&fov=$fieldOfView&coordsys=icrs&ra=${objectData.raHours * 15.0}" +
             "&dec=${objectData.decDegrees}&format=jpg&stretch=asinh"
     }
-    val webView = remember(context, imageUrl) {
-        PrivateWebViews.create(context, javascript = false).apply {
+    val webView = remember(context, imageUrl, retryKey) {
+        loadError = false
+        isLoading = true
+        PrivateWebViews.create(
+            context = context,
+            javascript = false,
+            onError = { loadError = true; isLoading = false },
+            onFinished = { isLoading = false }
+        ).apply {
             settings.builtInZoomControls = true
             settings.displayZoomControls = false
             settings.loadWithOverviewMode = true
@@ -2258,7 +2281,34 @@ private fun SkySurveyImage(objectData: CelestialObject) {
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Night)
     ) {
-        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize()) {
+            if (!loadError) {
+                AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+            }
+            if (isLoading && !loadError) {
+                Box(Modifier.fillMaxSize().background(Night.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+                    Text("Himmelsaufnahme wird geladen …", color = AstraBlue, fontSize = 12.sp)
+                }
+            }
+            if (loadError) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Himmelsaufnahme konnte nicht geladen werden.",
+                        color = StarGold,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { retryKey++ }) {
+                        Text("Erneut versuchen")
+                    }
+                }
+            }
+        }
     }
 }
 
