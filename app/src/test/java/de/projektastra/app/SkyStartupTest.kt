@@ -90,4 +90,87 @@ class SkyStartupTest {
         assertTrue("All positions must be valid coordinates",
             initialVisible.all { it.position.azimuth in 0.0..360.0 && it.position.altitude in -90.0..90.0 })
     }
+
+    @Test
+    fun locationStoreParsesValidCoordinatesAccurately() {
+        val parsed = LocationStore.parseLocation(
+            rememberEnabled = true,
+            hasSaved = true,
+            latStr = "48.137154",
+            lonStr = "11.576124",
+            altStr = "519.0"
+        )
+        assertNotNull("Valid saved location must parse successfully", parsed)
+        assertEquals(48.137154, parsed!!.latitude, 0.000001)
+        assertEquals(11.576124, parsed.longitude, 0.000001)
+        assertEquals(519.0, parsed.altitudeMeters, 0.01)
+    }
+
+    @Test
+    fun locationStoreReturnsNullWhenRememberIsDisabledOrNotSaved() {
+        // Disabled remember preference
+        val disabled = LocationStore.parseLocation(
+            rememberEnabled = false,
+            hasSaved = true,
+            latStr = "52.52",
+            lonStr = "13.405",
+            altStr = "34.0"
+        )
+        org.junit.Assert.assertNull("When remember is disabled, parsed location must be null", disabled)
+
+        // No saved location
+        val notSaved = LocationStore.parseLocation(
+            rememberEnabled = true,
+            hasSaved = false,
+            latStr = "52.52",
+            lonStr = "13.405",
+            altStr = "34.0"
+        )
+        org.junit.Assert.assertNull("When hasSaved is false, parsed location must be null", notSaved)
+    }
+
+    @Test
+    fun locationStoreRejectsInvalidOrOutOfBoundsCoordinates() {
+        val outOfBoundsLat = LocationStore.parseLocation(
+            rememberEnabled = true,
+            hasSaved = true,
+            latStr = "95.0",
+            lonStr = "13.405",
+            altStr = "0.0"
+        )
+        org.junit.Assert.assertNull("Latitude > 90 must be rejected", outOfBoundsLat)
+
+        val outOfBoundsLon = LocationStore.parseLocation(
+            rememberEnabled = true,
+            hasSaved = true,
+            latStr = "52.52",
+            lonStr = "200.0",
+            altStr = "0.0"
+        )
+        org.junit.Assert.assertNull("Longitude > 180 must be rejected", outOfBoundsLon)
+
+        val malformed = LocationStore.parseLocation(
+            rememberEnabled = true,
+            hasSaved = true,
+            latStr = "invalid_lat",
+            lonStr = "13.405",
+            altStr = "0.0"
+        )
+        org.junit.Assert.assertNull("Malformed number string must be rejected", malformed)
+    }
+
+    @Test
+    fun locationStoreDefaultsAltitudeWhenMissing() {
+        val parsed = LocationStore.parseLocation(
+            rememberEnabled = true,
+            hasSaved = true,
+            latStr = "53.5511",
+            lonStr = "9.9937",
+            altStr = null
+        )
+        assertNotNull(parsed)
+        assertEquals(53.5511, parsed!!.latitude, 0.0001)
+        assertEquals(9.9937, parsed.longitude, 0.0001)
+        assertEquals(0.0, parsed.altitudeMeters, 0.0001)
+    }
 }

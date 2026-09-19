@@ -45,6 +45,8 @@ internal fun OnlineConsentDialog(onChoice: (Boolean) -> Unit) {
 @Composable
 internal fun PrivacyControls(
     options: PrivacyOptions,
+    rememberLocation: Boolean,
+    onRememberLocationChange: (Boolean) -> Unit,
     requestOnline: () -> Unit,
     setOptions: (PrivacyOptions) -> Unit,
     clearMaps: () -> Unit
@@ -52,6 +54,11 @@ internal fun PrivacyControls(
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Deine Daten", style = MaterialTheme.typography.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Standort für die Sternkarte merken", Modifier.weight(1f))
+                Switch(rememberLocation, onCheckedChange = onRememberLocationChange)
+            }
+            Text("Speichert deinen letzten Beobachtungsort lokal auf diesem Gerät, sodass die Sternkarte sofort passend ausgerichtet startet. Kein Cloud-Backup. Bei Ausschalten wird der Ort sofort gelöscht.")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Online-Wetter und Karten", Modifier.weight(1f))
                 Switch(options.online, onCheckedChange = {

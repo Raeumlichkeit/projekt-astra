@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.2` · Version Code `20` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.2 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.2).
+**Beta-Stand:** `1.1.9-pre.3` · Version Code `21` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.3 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.3).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -23,11 +23,20 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.9-pre.2 · Beta
+## Neu in 1.1.9-pre.3 · Beta
 
-Die Sternkarte priorisiert nun das Zeichnen des ersten Basiskarten-Rahmens: Horizont, Planeten, Navigationssterne und Nachthimmelhintergrund erscheinen ohne Wartezeit auf den schwereren GPU- und Milchstraßentextur-Ladevorgang. Erst nach dem ersten sichtbaren Rahmen wird der OpenGL ES-Shader gestartet und die 3840-Pixel-Gaia-Milchstraße im Hintergrund dekodiert.
+Nach einmaliger Standortfreigabe merkt sich Astra den Beobachtungsort lokal auf dem Gerät (`LocationStore` in den privaten Einstellungen `astra_settings`). Bei jedem weiteren Start lädt die Sternkarte direkt diesen Ort und zeigt sofort deinen passenden Nachthimmel – ohne dass der Freigabeknopf erneut gedrückt werden muss.
 
-Schlägt die GPU-Initialisierung oder das Texturdekodieren auf leistungsschwachen Geräten fehl, bleibt die Basiskarte mit dunklem Nachthimmelhintergrund vollständig nutzbar. Unter **Ebenen & Namen** steht nun die Aktion **Textur erneut laden** zur Verfügung. Bei geringem Gerätespeicher oder knappem freiem Heap skaliert der Textur-Loader die Bildgröße automatisch herunter, um GC-Pausen und Speicherüberläufe zu verhindern; bei Speicherdruck des Systems (`onTrimMemory`) werden flüchtige Gelände- und Lichtcaches geleert. Der gemeinsame Katalogcache aus 1.1.9-pre.1 bleibt aktiv. Testhinweise: [1.1.9-pre.2](play-store/pre-release-1.1.9-pre.2.md).
+Volle Kontrolle und Opt-Out:
+- **Sternkarte:** Bei hinterlegtem Standort wird der große Standortbutton ausgeblendet und stattdessen in der Kartenbedienung die Aktion **Auf Demo zurücksetzen** angeboten. Ein Klick löscht die gespeicherten Koordinaten sofort und kehrt zur Berlin-Demo zurück.
+- **Info / Deine Daten:** Ein neuer Schalter **Standort für die Sternkarte merken** erlaubt das dauerhafte Deaktivieren; beim Ausschalten werden gespeicherte Koordinaten rückstandsfrei entfernt.
+- **100 % Datenschutz:** Kein Cloud-Backup (`allowBackup="false"`, `data_extraction_rules.xml`), Koordinaten verlassen das Gerät niemals. Testhinweise: [1.1.9-pre.3](play-store/pre-release-1.1.9-pre.3.md).
+
+## Basiskartenstart seit 1.1.9-pre.2 · Beta
+
+Die Sternkarte priorisiert das Zeichnen des ersten Basiskarten-Rahmens: Horizont, Planeten, Navigationssterne und Nachthimmelhintergrund erscheinen ohne Wartezeit auf den schwereren GPU- und Milchstraßentextur-Ladevorgang. Erst nach dem ersten sichtbaren Rahmen wird der OpenGL ES-Shader gestartet und die 3840-Pixel-Gaia-Milchstraße im Hintergrund dekodiert.
+
+Schlägt die GPU-Initialisierung oder das Texturdekodieren auf leistungsschwachen Geräten fehl, bleibt die Basiskarte mit dunklem Nachthimmelhintergrund vollständig nutzbar. Unter **Ebenen & Namen** steht die Aktion **Textur erneut laden** zur Verfügung. Bei geringem Gerätespeicher oder knappem freiem Heap skaliert der Textur-Loader die Bildgröße automatisch herunter, um GC-Pausen und Speicherüberläufe zu verhindern; bei Speicherdruck des Systems (`onTrimMemory`) werden flüchtige Gelände- und Lichtcaches geleert. Der gemeinsame Katalogcache aus 1.1.9-pre.1 bleibt aktiv. Testhinweise: [1.1.9-pre.2](play-store/pre-release-1.1.9-pre.2.md).
 
 ## Wetteraktualisierung seit 1.1.8-pre.1
 

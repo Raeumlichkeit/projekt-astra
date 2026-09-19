@@ -307,8 +307,10 @@ private fun AstraApp(
     skyFullscreen: Boolean,
     setSkyFullscreen: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
     var tab by remember { mutableStateOf(AstraTab.SKY) }
-    var location by remember { mutableStateOf<GeoPoint?>(null) }
+    var location by remember { mutableStateOf(LocationStore.getSavedLocation(context)) }
+    var rememberLocation by remember { mutableStateOf(LocationStore.isRememberEnabled(context)) }
     var permissionGranted by remember { mutableStateOf(false) }
     var cameraGranted by remember { mutableStateOf(false) }
     var arEnabled by remember { mutableStateOf(false) }
@@ -342,7 +344,6 @@ private fun AstraApp(
         }
     }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
-    val context = LocalContext.current
     var favoriteObjectIds by remember { mutableStateOf(ObservationStore.favoriteObjectIds(context)) }
     var privacy by remember { mutableStateOf(PrivacySettings.load(context)) }
     var showOnlineConsent by remember { mutableStateOf(!PrivacySettings.hasDecision(context)) }
@@ -385,7 +386,12 @@ private fun AstraApp(
             PackageManager.PERMISSION_GRANTED
     }
 
-    LocationEffect(permissionGranted, locationRefreshKey) { location = it }
+    LocationEffect(permissionGranted, locationRefreshKey) { newLoc ->
+        location = newLoc
+        if (rememberLocation) {
+            LocationStore.saveLocation(context, newLoc)
+        }
+    }
     LaunchedEffect(tab) { if (tab != AstraTab.SKY) setSkyFullscreen(false) }
 
     Scaffold(
@@ -472,7 +478,14 @@ private fun AstraApp(
                             objectData.catalogId !in favoriteObjectIds
                         )
                     },
-                    onLocationPermissionResult = { permissionGranted = it },
+                    onLocationPermissionResult = { granted ->
+                        permissionGranted = granted
+                        if (granted) locationRefreshKey++
+                    },
+                    onResetLocation = {
+                        LocationStore.clearLocation(context)
+                        location = null
+                    },
                     toggleAr = {
                         if (arEnabled) arEnabled = false
                         else if (cameraGranted) {
@@ -555,8 +568,19 @@ private fun AstraApp(
                             }
                         }
                     )
-                    AstraTab.ABOUT -> AboutScreen(redLightMode, setRedLightMode, privacy,
-                        { showOnlineConsent = true }, updatePrivacy)
+                    AstraTab.ABOUT -> AboutScreen(
+                        redLightMode = redLightMode,
+                        setRedLightMode = setRedLightMode,
+                        privacy = privacy,
+                        rememberLocation = rememberLocation,
+                        onRememberLocationChange = { enabled ->
+                            LocationStore.setRememberEnabled(context, enabled)
+                            rememberLocation = enabled
+                            if (!enabled) location = null
+                        },
+                        requestOnline = { showOnlineConsent = true },
+                        setPrivacy = updatePrivacy
+                    )
                 }
             }
         }
@@ -673,6 +697,7 @@ internal fun SkyScreen(
     toggleRedLightMode: () -> Unit,
     toggleFavorite: (CelestialObject) -> Unit,
     onLocationPermissionResult: (Boolean) -> Unit,
+    onResetLocation: () -> Unit,
     toggleAr: () -> Unit
 ) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
@@ -822,7 +847,12 @@ internal fun SkyScreen(
                     Text(if (catalogs.failed) "Offline-Katalog unvollständig · Suche zum Wiederholen öffnen"
                         else "Offline-Katalog wird geladen …", fontSize = 12.sp, color = AstraTextMuted)
                 }
-                Text(if (location != null) "GPS-Standort" else "Standort: Berlin Demo", fontSize = 12.sp, color = AstraTextMuted)
+                Text(
+                    if (location != null) (if (locationPermissionGranted) "GPS-Standort" else "Gespeicherter Standort")
+                    else "Standort: Berlin Demo",
+                    fontSize = 12.sp,
+                    color = AstraTextMuted
+                )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { showSearch = true }) {
@@ -940,7 +970,7 @@ internal fun SkyScreen(
                     color = StarGold, fontSize = 12.sp)
                 if (!arEnabled) Text("Wischen zum Bewegen · Zwei Finger zum Zoomen · Zurücksetzen: Süden, 35° Höhe, 95° Sichtfeld",
                     color = AstraTextMuted, fontSize = 11.sp)
-                if (!locationPermissionGranted) {
+                if (location == null) {
                     Text("Ohne Standortfreigabe zeigt die Karte Berlin als Demo. Dein Standort richtet den Himmel auf dem Gerät aus.",
                         color = AstraTextMuted, fontSize = 12.sp)
                     LocationButton(onPermissionResult = onLocationPermissionResult,
@@ -950,6 +980,36 @@ internal fun SkyScreen(
                         textColor = if (redLightMode) Color(0xFFFF7868) else Night,
                         iconTint = if (redLightMode) Color(0xFFFF7868) else Night,
                         cornerRadius = 20.dp, pressedCornerRadius = 12.dp)
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (locationPermissionGranted) "Standort: GPS aktiv" else "Standort: Lokal gespeichert",
+                                color = if (redLightMode) Color(0xFFFF7868) else StarGold,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Wird auf diesem Gerät gemerkt · Kein Cloud-Backup",
+                                color = AstraTextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                        TextButton(
+                            onClick = onResetLocation,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = if (redLightMode) Color(0xFFFF7868) else StarGold
+                            )
+                        ) {
+                            Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Auf Demo zurücksetzen", fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }
@@ -2684,6 +2744,8 @@ private fun AboutScreen(
     redLightMode: Boolean,
     setRedLightMode: (Boolean) -> Unit,
     privacy: PrivacyOptions,
+    rememberLocation: Boolean,
+    onRememberLocationChange: (Boolean) -> Unit,
     requestOnline: () -> Unit,
     setPrivacy: (PrivacyOptions) -> Unit
 ) {
@@ -2727,7 +2789,7 @@ private fun AboutScreen(
             icon = Icons.Rounded.Public,
             body = "5.041 reale Sterne, Sonne, Mond, Planeten, Milchstraße, alle 88 IAU-Sternbildgrenzen und optional 1.016 Deep-Sky-Objekte werden passend zu Standort und Uhrzeit berechnet. Favoriten, Beobachtungslisten, Wetter und Ereignisse helfen bei der Planung."
         )
-        PrivacyControls(privacy, requestOnline, setPrivacy) {
+        PrivacyControls(privacy, rememberLocation, onRememberLocationChange, requestOnline, setPrivacy) {
             val cleared = runCatching { PublicTileCache.clear(context); PrivateWebViews.clearBrowserStorage() }.isSuccess
             android.widget.Toast.makeText(context,
                 if (cleared) "Kartencache gelöscht" else "Kartencache konnte nicht vollständig gelöscht werden",
