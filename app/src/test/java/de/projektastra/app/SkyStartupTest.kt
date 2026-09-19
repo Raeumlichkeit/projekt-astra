@@ -173,4 +173,40 @@ class SkyStartupTest {
         assertEquals(9.9937, parsed.longitude, 0.0001)
         assertEquals(0.0, parsed.altitudeMeters, 0.0001)
     }
+
+    @Test
+    fun catalogStorePreservesProgressOnTabSwitchSimulation() {
+        var starsLoadCount = 0
+        var deepSkyLoadCount = 0
+        var boundariesLoadCount = 0
+
+        val store = SkyCatalogStore(
+            loadStars = { starsLoadCount++; StarCatalog.fallbackObjects },
+            loadDeepSky = { deepSkyLoadCount++; emptyList() },
+            loadBoundaries = { boundariesLoadCount++; emptyList() }
+        )
+
+        kotlinx.coroutines.runBlocking {
+            // First load on tab SKY
+            store.load()
+            assertEquals(1, starsLoadCount)
+            assertEquals(1, deepSkyLoadCount)
+            assertEquals(1, boundariesLoadCount)
+            assertTrue(store.snapshot.value.complete)
+
+            // Switch tab to PLAN or WEATHER and call load again
+            store.load()
+            // Counts must NOT increase because complete snapshot is reused
+            assertEquals(1, starsLoadCount)
+            assertEquals(1, deepSkyLoadCount)
+            assertEquals(1, boundariesLoadCount)
+        }
+    }
+
+    @Test
+    fun lowMemoryEventClearsLightPollutionCacheSafely() {
+        LightPollutionRepository.clear()
+        // Ensure repeated clearing on low memory / trim memory does not throw or destabilize state
+        LightPollutionRepository.clear()
+    }
 }

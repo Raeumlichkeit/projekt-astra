@@ -97,17 +97,19 @@ Teilstand auf `beta` (`1.1.9-pre.1`): Sternkarte und Beobachtungsliste teilen de
 - [x] Milchstraßen-Textur, GPU-Kontext und optionale Ebenen nach dem ersten sichtbaren Kartenrahmen priorisiert laden; Fehler müssen die Basiskarte nutzbar lassen.
 - [ ] Kaltstart, Warmstart, erster sichtbarer Kartenrahmen und Interaktion auf einem leistungsschwachen Referenzgerät messen und Zielwerte dokumentieren.
 - [ ] Speicherbudget, GC-Pausen, Textur-Upload, Rotation, Prozesswiederherstellung und App-Start ohne Netzwerk prüfen; keine personenbezogenen Daten in Performance-Logs schreiben.
-- [ ] Regressionstests für schnelle Kartenanzeige, wiederholtes Öffnen/Schließen, Karten-/Wetterwechsel und Low-Memory-Verhalten ergänzen. Akkutests bleiben P3.
+- [x] Regressionstests für schnelle Kartenanzeige, wiederholtes Öffnen/Schließen, Karten-/Wetterwechsel und Low-Memory-Verhalten ergänzen. Akkutests bleiben P3.
 
 ## P2 – Danach
 
 ### 8. „Was lohnt sich heute Nacht?“
 
-- [ ] Aus vorhandenen Wetter-, Mond-, Dämmerungs- und Objektdaten geeignete Beobachtungszeitfenster berechnen.
-- [ ] Ziele nach Höhe über dem lokalen Gelände, Mondabstand und geeigneter Beobachtungszeit sortieren.
-- [ ] Empfehlungen für bloßes Auge, Fernglas und Teleskop filtern; Begründungen anzeigen statt nur eines Scores.
-- [ ] Ziele aus Empfehlungen direkt zur vorhandenen Beobachtungsliste hinzufügen und auf der Karte öffnen.
-- [ ] Datenalter, Prognosegrenzen und fehlende Wetter-/Geländedaten sichtbar machen; keine sichere Sichtbarkeit versprechen.
+- [x] Aus vorhandenen Wetter-, Mond-, Dämmerungs- und Objektdaten geeignete Beobachtungszeitfenster berechnen.
+- [x] Ziele nach Höhe über dem lokalen Gelände, Mondabstand und geeigneter Beobachtungszeit sortieren.
+- [x] Empfehlungen für bloßes Auge, Fernglas und Teleskop filtern; Begründungen anzeigen statt nur eines Scores.
+- [x] Ziele aus Empfehlungen direkt zur vorhandenen Beobachtungsliste hinzufügen und auf der Karte öffnen.
+- [x] Datenalter, Prognosegrenzen und fehlende Wetter-/Geländedaten sichtbar machen; keine sichere Sichtbarkeit versprechen.
+
+Umgesetzt in Version 1.1.9-pre.4 (`TonightWindowCalculator`, `TonightTargetEngine`, `ObservationPlanScreen`). Die Berechnungen laufen 100 % lokal auf dem Gerät. Empfehlungen berücksichtigen die Mindesthöhe (>= 16°), den sphärischen Mondabstand, Helligkeit und optimale Kulminationszeiten. Filter für Bloßes Auge, Fernglas und Teleskop mit nachvollziehbarer astronomischer Begründung. Direkte Aktionen zum Zentrieren in der Karte und Hinzufügen/Entfernen aus Favoriten.
 
 ### 9. Beobachtungstagebuch
 

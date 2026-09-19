@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.3` · Version Code `21` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.3 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.3).
+**Beta-Stand:** `1.1.9-pre.4` · Version Code `22` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.4 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.4).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -17,13 +17,29 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Gelände | Lokales 360°-Profil aus GLO-90-Höhendaten mit Offline-Fallback und Geländeverdeckung |
 | Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme |
 | Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
+| Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Qualitäts-Score und Schnellaktionen |
 | AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
 | Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.9-pre.3 · Beta
+## Neu in 1.1.9-pre.4 · Beta
+
+Im Reiter **Plan** („Beobachtungsplaner“) gibt es zwei neue, lokal berechnete Bereiche:
+- **Beobachtungsfenster heute Nacht („Heute Nacht im Überblick“):**
+  - Zeigt das exakte lokale Fenster der astronomischen Dunkelheit bzw. nautischen Dämmerung, Sonnenunter- und -aufgangszeiten.
+  - Mondstatus mit Beleuchtungsgrad in Prozent, Mondphase und Auf-/Untergangszeiten.
+  - Bedingungen: Bei aktiver Internetverbindung wird die stündliche Bewölkungsvorhersage ausgewertet („Optimale Bedingungen ab 22:00 Uhr bei klarem Himmel“); bei Offline-Betrieb wird transparent die rein astronomische Dunkelheit ausgewiesen.
+- **Empfehlungsengine („Was lohnt sich heute Nacht?“):**
+  - Berechnet für ausgewählte Himmelshighlights (Planeten, Doppelsterne, Nebel, Galaxien, Sternhaufen) den Verlauf über die Nacht.
+  - Schließt Objekte unter 16° Horizonthöhe strikt aus.
+  - Berücksichtigt den sphärischen Winkelabstand zum Mond, um blendfreie Beobachtungen zu gewährleisten.
+  - Filterchips für **Alle**, **Bloßes Auge**, **Fernglas** und **Teleskop**.
+  - Schnellaktionen direkt in der Karte: **In Karte öffnen** (zentriert das Objekt sofort im Sternkarten-Tab) und **Merken** (Favoriten-Stern).
+  - 100 % Privacy First: Berechnungen laufen vollständig lokal auf dem Gerät. Testhinweise: [1.1.9-pre.4](play-store/pre-release-1.1.9-pre.4.md).
+
+## Dauerhafter Standort seit 1.1.9-pre.3 · Beta
 
 Nach einmaliger Standortfreigabe merkt sich Astra den Beobachtungsort lokal auf dem Gerät (`LocationStore` in den privaten Einstellungen `astra_settings`). Bei jedem weiteren Start lädt die Sternkarte direkt diesen Ort und zeigt sofort deinen passenden Nachthimmel – ohne dass der Freigabeknopf erneut gedrückt werden muss.
 

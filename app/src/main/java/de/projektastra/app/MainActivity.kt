@@ -82,6 +82,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -566,7 +568,15 @@ private fun AstraApp(
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             }
-                        }
+                        },
+                        toggleFavorite = { objectData ->
+                            favoriteObjectIds = ObservationStore.setObjectFavorite(
+                                context,
+                                objectData.catalogId,
+                                objectData.catalogId !in favoriteObjectIds
+                            )
+                        },
+                        privacy = privacy
                     )
                     AstraTab.ABOUT -> AboutScreen(
                         redLightMode = redLightMode,
@@ -2592,6 +2602,8 @@ internal fun ObservationPlanScreen(
     removeFavorite: (String) -> Unit,
     removeEvent: (SavedSkyEvent) -> Unit,
     requestNotifications: () -> Unit,
+    toggleFavorite: ((CelestialObject) -> Unit)? = null,
+    privacy: PrivacyOptions = PrivacyOptions(),
     catalogStore: SkyCatalogStore? = null
 ) {
     val context = LocalContext.current
@@ -2607,6 +2619,38 @@ internal fun ObservationPlanScreen(
     val favorites = remember(catalog, favoriteIds) { catalog.filter { it.catalogId in favoriteIds } }
     val zone = ZoneId.systemDefault()
     val dateFormat = DateTimeFormatter.ofPattern("EEE, d. MMM yyyy · HH:mm", Locale.GERMAN).withZone(zone)
+    val timeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.GERMAN).withZone(zone)
+
+    var weatherSnapshot by remember { mutableStateOf<WeatherSnapshot?>(null) }
+    LaunchedEffect(observer, privacy.online) {
+        if (privacy.online) {
+            WeatherRepository.load(observer) { result ->
+                weatherSnapshot = result.getOrNull()
+            }
+        } else {
+            weatherSnapshot = null
+        }
+    }
+
+    val tonightWindow = remember(observer, instant, weatherSnapshot, zone) {
+        TonightWindowCalculator.calculate(
+            observer = observer,
+            now = instant,
+            weather = weatherSnapshot,
+            zone = zone
+        )
+    }
+
+    var selectedEquipment by remember { mutableStateOf(ObservationEquipment.ALL) }
+    val recommendedTargets = remember(observer, tonightWindow, instant, selectedEquipment, catalogs.objectsReady) {
+        TonightTargetEngine.evaluate(
+            observer = observer,
+            window = tonightWindow,
+            now = instant,
+            equipmentFilter = selectedEquipment,
+            zone = zone
+        )
+    }
 
     Column(
         Modifier.fillMaxSize().background(
@@ -2617,7 +2661,7 @@ internal fun ObservationPlanScreen(
         Spacer(Modifier.height(6.dp))
         AstraScreenHeader(
             eyebrow = "ASTRA PLAN",
-            title = "Beobachtungsliste",
+            title = "Beobachtungsplaner",
             subtitle = "${favoriteIds.size} vorgemerkte Objekte · ${savedEvents.size} Ereignisse",
             icon = Icons.Rounded.Bookmarks
         )
@@ -2626,6 +2670,161 @@ internal fun ObservationPlanScreen(
             TextButton(onClick = { catalogRetry++ }) { Text("Katalog erneut laden") }
         } else if (!catalogs.complete) {
             Text("Offline-Katalog wird geladen · Vormerkungen bleiben erhalten", color = AstraTextMuted)
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = AstraSurface),
+            border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.75f)),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.DarkMode, null, tint = AstraBlue)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Beobachtungsfenster heute Nacht", fontWeight = FontWeight.Bold)
+                        Text(
+                            tonightWindow.nightDateText,
+                            color = AstraTextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                HorizontalDivider(color = AstraOutline.copy(alpha = 0.4f))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "Dunkelheit: ${tonightWindow.darknessText}",
+                        fontSize = 13.sp,
+                        color = Color.White
+                    )
+                    Text(
+                        "Sonnenuntergang: ${tonightWindow.sunsetText} · Sonnenaufgang: ${tonightWindow.sunrisesText}",
+                        fontSize = 12.sp,
+                        color = AstraTextMuted
+                    )
+                    Text(
+                        "Mond: ${tonightWindow.moonSummary} · ${tonightWindow.moonPhaseName} (${tonightWindow.moonPhasePercent}%)",
+                        fontSize = 13.sp,
+                        color = StarGold
+                    )
+                    Text(
+                        "Bedingungen: ${tonightWindow.bestWindowSummary}",
+                        fontSize = 13.sp,
+                        color = AstraSuccess
+                    )
+                    Text(
+                        tonightWindow.weatherNotice,
+                        fontSize = 12.sp,
+                        color = AstraTextMuted
+                    )
+                }
+                Text(
+                    "Alle Berechnungen erfolgen lokal auf deinem Gerät. Reale Sichtbarkeit hängt von Wetter, Dunst und Lichtverschmutzung ab.",
+                    color = AstraTextMuted,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        AstraSectionTitle("Was lohnt sich heute Nacht?", "Ausgewählte Highlights über 16° Höhe")
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ObservationEquipment.values().forEach { eq ->
+                FilterChip(
+                    selected = selectedEquipment == eq,
+                    onClick = { selectedEquipment = eq },
+                    label = { Text(eq.label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AstraBlue,
+                        selectedLabelColor = Night,
+                        containerColor = AstraSurfaceHigh,
+                        labelColor = Color.White
+                    )
+                )
+            }
+        }
+
+        if (recommendedTargets.isEmpty()) {
+            EmptyPlanCard("Keine geeigneten Objekte für diesen Ausrüstungsfilter über 16° Höhe gefunden.")
+        } else {
+            recommendedTargets.take(8).forEach { target ->
+                val isFav = target.objectData.catalogId in favoriteIds
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AstraSurface),
+                    border = BorderStroke(1.dp, AstraOutline.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(target.objectData.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                Text(
+                                    target.highlightTitle,
+                                    color = AstraBlue,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = AstraSurfaceHigh),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    "${target.equipment.label} · Score ${target.qualityScore}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    fontSize = 11.sp,
+                                    color = StarGold,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Text(
+                            "Beste Zeit: ${timeFormat.format(target.peakInstant)} Uhr (Höhe: ${target.peakAltitudeDegrees.format(0)}°)" +
+                                if (target.moonSeparationDegrees >= 0) " · Mondabstand: ${target.moonSeparationDegrees.format(0)}°" else "",
+                            fontSize = 12.sp,
+                            color = AstraSuccess
+                        )
+                        Text(
+                            target.reason,
+                            fontSize = 12.sp,
+                            color = AstraTextMuted
+                        )
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { openObject(target.objectData.catalogId) }) {
+                                Text("In Karte öffnen")
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (isFav) {
+                                        removeFavorite(target.objectData.catalogId)
+                                    } else {
+                                        toggleFavorite?.invoke(target.objectData)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (isFav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                    contentDescription = if (isFav) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen",
+                                    tint = if (isFav) StarGold else AstraTextMuted
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Card(
