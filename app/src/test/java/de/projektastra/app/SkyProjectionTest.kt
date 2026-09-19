@@ -175,4 +175,33 @@ class SkyProjectionTest {
         }
         assertEquals(400.0 * 800.0, groundArea, 0.1)
     }
+
+    @Test fun wideFovStereographicPreservesShapesWithoutExtremeGnomonicDistortion() {
+        val view = SkyProjection(0.0, 0.0, 1000f, 1000f, 150.0, true)
+        val p0 = view.point(sky(0.0, 0.0))!!
+        val p10 = view.point(sky(10.0, 0.0))!!
+        val distCenter = p10.x - p0.x
+
+        val p65 = view.point(sky(65.0, 0.0))!!
+        val p75 = view.point(sky(75.0, 0.0))!!
+        val distEdge = p75.x - p65.x
+
+        val distortionRatio = distEdge / distCenter
+        // Gnomonic would produce ~9x magnification stretch at 75°, stereographic is only ~1.49x
+        assertTrue("Stereographic distortion ratio should be gentle (< 1.7x), was $distortionRatio",
+            distortionRatio in 1.3..1.7)
+    }
+
+    @Test fun stereographicConformalIsometryMaintainsEqualRadialAndTangentialScale() {
+        val view = SkyProjection(0.0, 0.0, 1000f, 1000f, 150.0, true)
+        val center = view.point(sky(50.0, 0.0))!!
+        val dAz = view.point(sky(52.0, 0.0))!!
+        val dAlt = view.point(sky(50.0, 2.0))!!
+
+        val deltaX = kotlin.math.hypot((dAz.x - center.x).toDouble(), (dAz.y - center.y).toDouble())
+        val deltaY = kotlin.math.hypot((dAlt.x - center.x).toDouble(), (dAlt.y - center.y).toDouble())
+        val scaleRatio = deltaX / deltaY
+        // Conformal projection preserves aspect ratios locally (deltaX == deltaY within 2%)
+        assertEquals(1.0, scaleRatio, 0.02)
+    }
 }

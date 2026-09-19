@@ -30,12 +30,15 @@ void main() {
         if (abs(alt) > PI * 0.5) { gl_FragColor = vec4(0.0); return; }
         direction = vec3(cos(alt) * sin(az), cos(alt) * cos(az), sin(alt));
     } else {
-        float focal = resolution.x / (2.0 * tan(view.z * 0.5));
+        float focal = resolution.x / (2.0 * tan(view.z * 0.25));
         vec2 offset = vec2(pixel.x - resolution.x * 0.5, resolution.y * 0.5 - pixel.y) / focal;
+        float r2 = dot(offset, offset);
+        float denom = 1.0 + r2;
+        vec3 cam = vec3(2.0 * offset.x / denom, 2.0 * offset.y / denom, (1.0 - r2) / denom);
         vec3 right = vec3(cos(az), -sin(az), 0.0);
         vec3 up = vec3(-sin(alt) * sin(az), -sin(alt) * cos(az), cos(alt));
         vec3 forward = vec3(cos(alt) * sin(az), cos(alt) * cos(az), sin(alt));
-        direction = normalize(forward + right * offset.x + up * offset.y);
+        direction = normalize(right * cam.x + up * cam.y + forward * cam.z);
     }
     float horizonGlow = pow(1.0 - abs(direction.z), 5.0);
     vec3 background = mix(vec3(0.007, 0.012, 0.021), vec3(0.018, 0.028, 0.044), horizonGlow);

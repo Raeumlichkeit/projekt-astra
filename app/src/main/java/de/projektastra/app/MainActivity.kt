@@ -1145,6 +1145,7 @@ internal fun SkyScreen(
                 targetLabel = selection.target?.name,
                 labelDensity = appearance.labelDensity,
                 opticsSettings = opticsSettings,
+                redLightMode = redLightMode,
                 onFirstFrameRendered = { firstMapFrameRendered = true }
             )
             if (!arEnabled && opticsSettings.isCustomized) {
@@ -1154,8 +1155,8 @@ internal fun SkyScreen(
                         .padding(8.dp)
                         .clickable { showOpticsSheet = true },
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xDD0A1526),
-                    border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.6f))
+                    color = if (redLightMode) Color(0xDD1A0000) else Color(0xDD0A1526),
+                    border = BorderStroke(1.dp, if (redLightMode) Color(0xFFFF5252).copy(alpha = 0.6f) else Color(0xFF3B82F6).copy(alpha = 0.6f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1172,7 +1173,7 @@ internal fun SkyScreen(
                         }
                         Text(
                             text = statusParts.joinToString(" · "),
-                            color = StarGold,
+                            color = if (redLightMode) Color(0xFFFF7868) else StarGold,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -1190,9 +1191,9 @@ internal fun SkyScreen(
                             },
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
-                            Icon(Icons.Rounded.RestartAlt, contentDescription = "Optik zurücksetzen", modifier = Modifier.size(14.dp), tint = AstraBlue)
+                            Icon(Icons.Rounded.RestartAlt, contentDescription = "Optik zurücksetzen", modifier = Modifier.size(14.dp), tint = if (redLightMode) Color(0xFFFF7868) else AstraBlue)
                             Spacer(Modifier.width(2.dp))
-                            Text("Standard", fontSize = 11.sp, color = AstraBlue)
+                            Text("Standard", fontSize = 11.sp, color = if (redLightMode) Color(0xFFFF7868) else AstraBlue)
                         }
                     }
                 }
@@ -1330,7 +1331,8 @@ internal fun SkyScreen(
                     OpticsStore.saveSettings(context, updated)
                 }
             },
-            onDismiss = { showOpticsSheet = false }
+            onDismiss = { showOpticsSheet = false },
+            redLightMode = redLightMode
         )
     }
 
@@ -1575,6 +1577,7 @@ internal fun SkyCanvas(
     labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL,
     targetLabel: String? = null,
     opticsSettings: OpticsSettings = OpticsSettings(),
+    redLightMode: Boolean = false,
     onFirstFrameRendered: () -> Unit = {}
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -1856,9 +1859,9 @@ internal fun SkyCanvas(
         // FOV Circle / Telrad reticle overlay (always centered in view, outside transform)
         if (!arMode && (opticsSettings.fovCircleEnabled || opticsSettings.telradMode)) {
             fun fovDiameterToRadiusPx(deg: Double): Float {
-                val fovRad = Math.toRadians(deg.coerceAtLeast(0.001) / 2.0)
-                val screenFovRad = Math.toRadians(horizontalFov.coerceIn(1.0, 179.0) / 2.0)
-                return ((size.width / (2.0 * tan(screenFovRad))) * tan(fovRad)).toFloat()
+                val halfAngle = Math.toRadians(deg.coerceAtLeast(0.001) / 4.0)
+                val screenQuarterFov = Math.toRadians(horizontalFov.coerceIn(1.0, 179.0) / 4.0)
+                return ((size.width / (2.0 * tan(screenQuarterFov))) * tan(halfAngle)).toFloat()
             }
 
             if (opticsSettings.telradMode) {
@@ -1895,7 +1898,7 @@ internal fun SkyCanvas(
                 val fovDeg = opticsSettings.currentFovDegrees
                 val radiusPx = fovDiameterToRadiusPx(fovDeg)
                 if (radiusPx > 1f) {
-                    val fovColor = Color(0xFF64B5F6).copy(alpha = 0.75f)
+                    val fovColor = if (redLightMode) Color(0xFFFF5252).copy(alpha = 0.85f) else Color(0xFF64B5F6).copy(alpha = 0.75f)
                     val stroke = Stroke(width = 1.5.dp.toPx())
                     drawCircle(fovColor, radius = radiusPx, center = canvasCenter, style = stroke)
 
@@ -1909,7 +1912,7 @@ internal fun SkyCanvas(
 
                     val fovPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                         textSize = 11.sp.toPx()
-                        color = android.graphics.Color.rgb(100, 181, 246)
+                        color = if (redLightMode) android.graphics.Color.rgb(255, 82, 82) else android.graphics.Color.rgb(100, 181, 246)
                         setShadowLayer(2.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
                     }
                     val labelText = "FOV ${String.format(Locale.US, "%.2f°", fovDeg)}"

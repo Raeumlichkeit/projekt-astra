@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.10.
+Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.11.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -130,6 +130,7 @@ Umgesetzt in Version 1.1.9-pre.6 (`ObservationLogbook.kt`, `ObservationLogbookSt
 - [x] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
 
 Umgesetzt in Version 1.1.9-pre.7 (`OpticsProfiles.kt`, `OpticsProfilesTest.kt`, `OpticsFovSheet.kt`, `MainActivity.kt`). Frei skalierbarer Sichtfeldkreis (0,1° bis 30,0°) und Telrad-Sucher (0,5° / 2° / 4° Kreise mit Fadenkreuz). Geräteprofile für Ferngläser (10×50, 8×42) und Teleskope (8" Dobson 25 mm / 10 mm Plössl) sowie eigene Profile mit Brennweite, Öffnung, Okularbrennweite und scheinbarem Gesichtsfeld (AFOV). Automatische Kennzeichnung von Vergrößerung, wahrem Gesichtsfeld und Austrittspupille als Näherungswerte. Drehung um 0°, 90°, 180° (Newton-Invertierung), 270° und horizontale Spiegelung (Zenitspiegel) mit wählbarer Beschriftungsausrichtung (aufrecht oder mitrotierend). Millimetergenaue Objektauswahl per inverser Koordinatentransformation und an Wischgesten angepasste Panning-Deltas. Dezentes Status-Badge über der Karte mit 1-Klick-Reset („Standard“). AR bleibt strikt unbeeinflusst und alle Einstellungen werden 100 % lokal ohne Cloud-Sync gespeichert.
+Erweitert in Version 1.1.9-pre.11 (`SkyProjection.kt`, `milky_way.frag`, `OpticsFovSheet.kt`, `MainActivity.kt`): Umstellung der manuellen Kartenperspektive von gnomonischer Rektilinearprojektion auf winkeltreue (konforme) stereografische Projektion. Dadurch entfällt die unnatürliche Dehnung und Verzerrung der Sternbilder am Bildrand und in den Ecken bei weitem Sichtfeld (bis 150° FOV). Milchstraßen-OpenGL-Fragment-Shader pixelgenau an die stereografische Projektionsmathematik angeglichen. Volle Rotlichtmodus-Unterstützung für das Optik-Status-Badge, den Optik-Einstellungs-Sheet und die Sichtfeldkreis-Darstellung.
 
 ### 11. AR-Zielhilfe
 
@@ -137,7 +138,7 @@ Umgesetzt in Version 1.1.9-pre.7 (`OpticsProfiles.kt`, `OpticsProfilesTest.kt`, 
 - [x] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
 - [x] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
 
-Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.kt`, `ArTargetGuidanceUi.kt`, `MainActivity.kt`). Haversine-basierte Winkelabstandsberechnung und 3D-Kamerarelativvektor für präzise Richtungsanzeige. Pulsierende Zielkreuz-Markierung im Sichtfeld, kreisförmige Kantenzeiger mit Pfeil und Gradangabe für Off-Screen-Objekte. Status-Banner mit Zielname, Typ, Entfernung und Sensorqualität (Hoch/Mittel/Niedrig). Verständliche Kennzeichnung für Ziele hinter dem Gerät (> 90°) und unter dem lokalen Horizont/Geländeprofil. Kalibrierungshinweis bei niedriger Sensorqualität; keine falsche Genauigkeit bei unsicherer Ausrichtung. 7 Testmethoden für Distanz, Normalisierung, Kameravektoren, Pfeilwinkel, Edge-Clamping und Horizonterkennung.
+Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.kt`, `ArTargetGuidanceUi.kt`, `MainActivity.kt`). Haversine-basierte Winkelabstandsberechnung und 3D-Kamerarelativvektor für präzise Richtungsanzeige. Pulsierende Zielkreuz-Markierung im Sichtfeld, kreisförmige Kantenzeiger mit Pfeil und Gradangabe für Off-Screen-Objekte. Status-Banner mit Zielname, Typ, Entfernung und Sensorqualität (Hoch/Mittel/Niedrig). Verständliche Kennzeichnung für Ziele hinter dem Gerät (> 90°) und unter dem lokalen Horizont/Geländeprofil. Kalibrierungshinweis bei niedriger Sensorqualität; keine falsche Genauigkeit bei unsicherer Ausrichtung. 8 Testmethoden für Distanz, Normalisierung, Kameravektoren, Pfeilwinkel, Edge-Clamping und Horizonterkennung.
 
 ### 12. Robustheit und Darstellung
 
@@ -147,7 +148,7 @@ Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.k
 - [x] Berechtigungsentzug, App-Unterbrechungen, fehlende Sensoren, Offline-Betrieb und fehlerhafte Netzwerkantworten als Geräte-Testfälle dokumentieren.
 - [x] Verständliche Fehler- und Wiederholen-Zustände für Wetter, Karten und Objektbilder prüfen.
 
-Umgesetzt in Version 1.1.9-pre.9 (`SkyMapInteractionTest.kt`, `device-test-cases.md`, `MainActivity.kt`, `PrivacySecurity.kt`). 16 automatisierte Regressionstests für Pinch-Zoom-Mathematik, Gestenbegrenzung (25° bis 150°), Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen. Benutzerfreundliche Fehler- und Wiederholungszustände für DSS2-Himmelsaufnahmen (`SkySurveyImage` via `WebViewClient.onReceivedError`), Geländeprofilierung (`TerrainRepository`) sowie Wetter. Umfassende Dokumentation der Geräte-Testfälle und Messmatrix in `play-store/device-test-cases.md` (Berechtigungsentzug, App-Lifecycle, Sensor-Fallbacks, Offline-Betrieb, Profilierungsrichtwerte für 60/120 FPS und Heap-Limits).
+Umgesetzt in Version 1.1.9-pre.9 (`SkyMapInteractionTest.kt`, `device-test-cases.md`, `MainActivity.kt`, `PrivacySecurity.kt`). 19 automatisierte Regressionstests für Pinch-Zoom-Mathematik, Gestenbegrenzung (25° bis 150°), Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen. Benutzerfreundliche Fehler- und Wiederholungszustände für DSS2-Himmelsaufnahmen (`SkySurveyImage` via `WebViewClient.onReceivedError`), Geländeprofilierung (`TerrainRepository`) sowie Wetter. Umfassende Dokumentation der Geräte-Testfälle und Messmatrix in `play-store/device-test-cases.md` (Berechtigungsentzug, App-Lifecycle, Sensor-Fallbacks, Offline-Betrieb, Profilierungsrichtwerte für 60/120 FPS und Heap-Limits).
 
 ## P3 – Niedrige Priorität
 

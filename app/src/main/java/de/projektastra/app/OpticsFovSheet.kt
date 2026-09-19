@@ -61,14 +61,38 @@ import androidx.compose.ui.window.Dialog
 import java.util.Locale
 import java.util.UUID
 
-private val NightBlue = Color(0xFF0D1C34)
-private val Night = Color(0xFF07101F)
-private val AstraSurface = Color(0xFF10243F)
-private val AstraSurfaceHigh = Color(0xFF163252)
-private val AstraBlue = Color(0xFF6DA8FF)
-private val StarGold = Color(0xFFFFD98A)
-private val AstraTextMuted = Color(0xFFAAB8CE)
-private val AstraOutline = Color(0xFF294466)
+private data class OpticsColors(
+    val nightBlue: Color,
+    val night: Color,
+    val astraSurface: Color,
+    val astraSurfaceHigh: Color,
+    val astraBlue: Color,
+    val starGold: Color,
+    val astraTextMuted: Color,
+    val astraOutline: Color
+)
+
+private val LocalOpticsColors = androidx.compose.runtime.staticCompositionLocalOf {
+    OpticsColors(
+        nightBlue = Color(0xFF0D1C34),
+        night = Color(0xFF07101F),
+        astraSurface = Color(0xFF10243F),
+        astraSurfaceHigh = Color(0xFF163252),
+        astraBlue = Color(0xFF6DA8FF),
+        starGold = Color(0xFFFFD98A),
+        astraTextMuted = Color(0xFFAAB8CE),
+        astraOutline = Color(0xFF294466)
+    )
+}
+
+private val NightBlue: Color @Composable get() = LocalOpticsColors.current.nightBlue
+private val Night: Color @Composable get() = LocalOpticsColors.current.night
+private val AstraSurface: Color @Composable get() = LocalOpticsColors.current.astraSurface
+private val AstraSurfaceHigh: Color @Composable get() = LocalOpticsColors.current.astraSurfaceHigh
+private val AstraBlue: Color @Composable get() = LocalOpticsColors.current.astraBlue
+private val StarGold: Color @Composable get() = LocalOpticsColors.current.starGold
+private val AstraTextMuted: Color @Composable get() = LocalOpticsColors.current.astraTextMuted
+private val AstraOutline: Color @Composable get() = LocalOpticsColors.current.astraOutline
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -78,14 +102,41 @@ internal fun OpticsFovSheet(
     onUpdateSettings: (OpticsSettings) -> Unit,
     onSaveProfile: (OpticsProfile) -> Unit,
     onDeleteProfile: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    redLightMode: Boolean = false
 ) {
-    var showNewProfileDialog by remember { mutableStateOf(false) }
+    val colors = remember(redLightMode) {
+        if (redLightMode) {
+            OpticsColors(
+                nightBlue = Color(0xFF1A0000),
+                night = Color(0xFF100000),
+                astraSurface = Color(0xFF2A0202),
+                astraSurfaceHigh = Color(0xFF3B0505),
+                astraBlue = Color(0xFFFF5252),
+                starGold = Color(0xFFFF8A80),
+                astraTextMuted = Color(0xFFCC6666),
+                astraOutline = Color(0xFF551111)
+            )
+        } else {
+            OpticsColors(
+                nightBlue = Color(0xFF0D1C34),
+                night = Color(0xFF07101F),
+                astraSurface = Color(0xFF10243F),
+                astraSurfaceHigh = Color(0xFF163252),
+                astraBlue = Color(0xFF6DA8FF),
+                starGold = Color(0xFFFFD98A),
+                astraTextMuted = Color(0xFFAAB8CE),
+                astraOutline = Color(0xFF294466)
+            )
+        }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(LocalOpticsColors provides colors) {
+        var showNewProfileDialog by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = NightBlue
-    ) {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            containerColor = NightBlue
+        ) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -406,6 +457,7 @@ internal fun OpticsFovSheet(
                 showNewProfileDialog = false
             }
         )
+    }
     }
 }
 

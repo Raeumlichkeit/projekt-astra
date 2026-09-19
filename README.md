@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.10` · Version Code `28` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.10 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.10).
+**Beta-Stand:** `1.1.9-pre.11` · Version Code `29` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.11 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.11).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -24,6 +24,14 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+
+## Neu in 1.1.9-pre.11 · Beta
+
+- **Winkeltreue stereografische Projektion (Entzerrung bei weitem FOV):**
+  - **Natürliche Sternfeldansicht beim Herauszoomen:** Umstellung der manuellen Sternkarten-Perspektive (`SkyProjection.kt`) von gnomonischer Rektilinearprojektion auf winkeltreue (konforme) stereografische Projektion. Beseitigt extreme Dehnungen und Verzerrungen an Bildrändern und Ecken bei weitem Sichtfeld (bis 150° FOV). Sternbilder behalten ihre Form ohne Verzerrung.
+  - **Pixelgenaue Shader-Anpassung:** Der OpenGL-Fragment-Shader (`milky_way.frag`) der Milchstraße berechnet den Kamerastrahl nun ebenfalls per inverser stereografischer Projektion, sodass Milchstraßenstrukturen, Sterne und Sternbildlinien auf subpixel-genau übereinstimmen.
+  - **Rotlichtmodus für Optik & FOV:** Vollständige Einbindung des Rotlichtmodus in das Optik-Status-Badge, den Optik-Einstellungs-Sheet (`OpticsFovSheet.kt`) und die Darstellung des Sichtfeldkreises auf der Sternkarte.
+  - **Neue Unit-Tests:** 185 bestandene Unit-Tests (+2 neue mathematische Verifikationstests für stereografische Konformität und Entzerrung). Testhinweise: [1.1.9-pre.11](play-store/pre-release-1.1.9-pre.11.md).
 
 ## Neu in 1.1.9-pre.10 · Beta
 

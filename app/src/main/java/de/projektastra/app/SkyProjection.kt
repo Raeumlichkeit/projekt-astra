@@ -11,7 +11,7 @@ import kotlin.math.tan
 
 internal data class SkySegment(val start: Offset, val end: Offset)
 
-/** Spherical perspective for the manual map; the existing AR mapping remains selectable. */
+/** Conformal stereographic perspective for the manual map; the existing AR mapping remains selectable. */
 internal class SkyProjection(
     private val centerAzimuth: Double,
     private val centerAltitude: Double,
@@ -25,7 +25,7 @@ internal class SkyProjection(
         horizontalFov.isFinite() && horizontalFov >= 1.0 && horizontalFov < 180.0
     private val pitchSin = sin(Math.toRadians(centerAltitude))
     private val pitchCos = cos(Math.toRadians(centerAltitude))
-    private val focalLength = width / (2.0 * tan(Math.toRadians(horizontalFov / 2)))
+    private val focalLength = width / (2.0 * tan(Math.toRadians(horizontalFov / 4)))
 
     private data class Vector(val x: Double, val y: Double, val z: Double) {
         fun between(other: Vector, fraction: Double) = Vector(
@@ -41,29 +41,38 @@ internal class SkyProjection(
             sin(altitude) * pitchSin + forward * pitchCos)
     }
 
-    private fun screen(vector: Vector) = Offset(
-        (width / 2.0 + focalLength * vector.x / vector.z).toFloat(),
-        (height / 2.0 - focalLength * vector.y / vector.z).toFloat())
+    private fun screen(vector: Vector): Offset {
+        val w = 1.0 + vector.z
+        return Offset(
+            (width / 2.0 + focalLength * vector.x / w).toFloat(),
+            (height / 2.0 - focalLength * vector.y / w).toFloat()
+        )
+    }
 
     fun coordinates(point: Offset): HorizontalCoordinates? {
         if (!valid || !point.x.isFinite() || !point.y.isFinite()) return null
         if (!perspective) return HorizontalCoordinates(
             (centerAzimuth + (point.x / width - 0.5) * horizontalFov + 360.0) % 360.0,
             centerAltitude + (height / 2.0 - point.y) * horizontalFov / width)
-        val right = (point.x - width / 2.0) / focalLength
-        val up = (height / 2.0 - point.y) / focalLength
-        val forward = pitchCos - up * pitchSin
-        val vertical = pitchSin + up * pitchCos
+        val u = (point.x - width / 2.0) / focalLength
+        val v = (height / 2.0 - point.y) / focalLength
+        val r2 = u * u + v * v
+        val denom = 1.0 + r2
+        val x = 2.0 * u / denom
+        val y = 2.0 * v / denom
+        val z = (1.0 - r2) / denom
+        val forward = z * pitchCos - y * pitchSin
+        val vertical = z * pitchSin + y * pitchCos
         return HorizontalCoordinates(
-            ((centerAzimuth + Math.toDegrees(atan2(right, forward))) % 360.0 + 360.0) % 360.0,
-            Math.toDegrees(asin((vertical / sqrt(1.0 + right * right + up * up)).coerceIn(-1.0, 1.0))))
+            ((centerAzimuth + Math.toDegrees(atan2(x, forward))) % 360.0 + 360.0) % 360.0,
+            Math.toDegrees(asin(vertical.coerceIn(-1.0, 1.0))))
     }
 
     fun point(position: HorizontalCoordinates, padding: Float = 0f): Offset? {
         if (!valid || !position.valid() || !padding.isFinite() || padding < 0f) return null
         val point = if (perspective) {
             val vector = camera(position)
-            if (vector.z <= 1e-6) return null
+            if (vector.z <= -0.999) return null
             screen(vector)
         } else screen(delta(position.azimuth - centerAzimuth), position.altitude)
         return point.takeIf { contains(it, padding) }
@@ -120,12 +129,15 @@ internal class SkyProjection(
         return vertices.map(::screen)
     }
 
-    private fun planeDistance(point: Vector, plane: Int, padding: Float): Double = when (plane) {
-        0 -> point.z - 1e-6
-        1 -> point.x * focalLength + (width / 2.0 + padding) * point.z
-        2 -> -point.x * focalLength + (width / 2.0 + padding) * point.z
-        3 -> point.y * focalLength + (height / 2.0 + padding) * point.z
-        else -> -point.y * focalLength + (height / 2.0 + padding) * point.z
+    private fun planeDistance(point: Vector, plane: Int, padding: Float): Double {
+        val w = 1.0 + point.z
+        return when (plane) {
+            0 -> point.z + 0.8
+            1 -> point.x * focalLength + (width / 2.0 + padding) * w
+            2 -> -point.x * focalLength + (width / 2.0 + padding) * w
+            3 -> point.y * focalLength + (height / 2.0 + padding) * w
+            else -> -point.y * focalLength + (height / 2.0 + padding) * w
+        }
     }
 
     private fun screen(azimuthDelta: Double, altitude: Double) = Offset(
