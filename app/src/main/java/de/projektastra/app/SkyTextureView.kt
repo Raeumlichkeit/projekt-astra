@@ -35,9 +35,17 @@ internal data class SkyTextureState(
 )
 
 @Composable
-internal fun SkyTextureLayer(state: SkyTextureState, modifier: Modifier = Modifier, onStatus: (Boolean) -> Unit = {}) {
+internal fun SkyTextureLayer(
+    state: SkyTextureState,
+    modifier: Modifier = Modifier,
+    retryTrigger: Int = 0,
+    onStatus: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     val view = remember(context) { SkyTextureView(context) }
+    androidx.compose.runtime.LaunchedEffect(retryTrigger) {
+        if (retryTrigger > 0) view.retry()
+    }
     LifecycleStartEffect(view) {
         view.setRenderingActive(true)
         onStopOrDispose { view.setRenderingActive(false) }
@@ -103,6 +111,11 @@ internal class SkyTextureView(context: Context) : TextureView(context), TextureV
 
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
 
+    fun retry() {
+        if (released) return
+        worker?.retry()
+    }
+
     fun releaseRenderer() {
         released = true
         setRenderingActive(false)
@@ -158,6 +171,13 @@ private class SkyTextureWorker(
         if (!closed.get() && queued.compareAndSet(false, true)) handler.post(draw)
     }
 
+    fun retry() {
+        if (!closed.get()) {
+            initializationFailed = false
+            if (queued.compareAndSet(false, true)) handler.post(draw)
+        }
+    }
+
     fun close(releaseTexture: Boolean) {
         if (closed.compareAndSet(false, true)) {
             handler.removeCallbacks(draw)
@@ -209,8 +229,10 @@ private class SkyTextureWorker(
         val maximum = IntArray(1)
         GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, maximum, 0)
         var sample = 1
-        val memory = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        if (memory.isLowRamDevice || memory.memoryClass < 192) sample = 2
+        val memory = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        val runtime = Runtime.getRuntime()
+        val availableMemory = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory())
+        if (memory?.isLowRamDevice == true || (memory?.memoryClass ?: 256) < 192 || availableMemory < 48L * 1024 * 1024) sample = 2
         while (3840 / sample > maximum[0] && sample < 8) sample *= 2
         check(maximum[0] >= 512)
         val bitmap = decodeTexture(sample)

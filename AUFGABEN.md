@@ -89,12 +89,12 @@ Umgesetzt in `1.1.8-pre.1`. Wetter und zugehöriger Ort werden atomar ersetzt; a
 
 ### 7. Schneller App- und Sternkartenstart
 
-- [ ] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
+- [x] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
 - [x] HYG-/OpenNGC-/IAU-Daten pro Prozess zwischenspeichern und bei wiederholtem Tabwechsel nicht erneut parsen (Sternkarte und Beobachtungsliste, `beta` / `1.1.9-pre.1`).
 
 Teilstand auf `beta` (`1.1.9-pre.1`): Sternkarte und Beobachtungsliste teilen denselben prozessweiten Katalogcache. Kataloge und ortsunabhängiger Suchindex werden gestuft außerhalb des UI-Threads geladen. Fertige Stufen bleiben beim Tabwechsel erhalten; Suchtext, Standort und aktuelle Planetenpositionen gehören nicht in diesen Cache. Loader-Fehler werden durchgereicht und fehlgeschlagene Stufen bleiben wiederholbar. Die kleine Ersatz-Sternkarte dient nur der Anzeige, nicht als vermeintlich vollständiger Cache. Vorgemerkte Objektziele warten auf die Objektkataloge; die Beobachtungsliste verwechselt noch nicht aufgelöste Favoriten nicht mit einer leeren Liste und löscht keine Vormerkungen. Dies garantiert noch keinen ersten gezeichneten Kartenrahmen vor den optionalen Ebenen; Textur/GPU, Gelände, Low-Memory-Verhalten und Referenzgeräte-Messungen bleiben offen.
 
-- [ ] Milchstraßen-Textur, GPU-Kontext und optionale Ebenen nach dem ersten sichtbaren Kartenrahmen priorisiert laden; Fehler müssen die Basiskarte nutzbar lassen.
+- [x] Milchstraßen-Textur, GPU-Kontext und optionale Ebenen nach dem ersten sichtbaren Kartenrahmen priorisiert laden; Fehler müssen die Basiskarte nutzbar lassen.
 - [ ] Kaltstart, Warmstart, erster sichtbarer Kartenrahmen und Interaktion auf einem leistungsschwachen Referenzgerät messen und Zielwerte dokumentieren.
 - [ ] Speicherbudget, GC-Pausen, Textur-Upload, Rotation, Prozesswiederherstellung und App-Start ohne Netzwerk prüfen; keine personenbezogenen Daten in Performance-Logs schreiben.
 - [ ] Regressionstests für schnelle Kartenanzeige, wiederholtes Öffnen/Schließen, Karten-/Wetterwechsel und Low-Memory-Verhalten ergänzen. Akkutests bleiben P3.

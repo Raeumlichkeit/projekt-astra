@@ -132,6 +132,16 @@ class SkyTextureRenderingTest {
         assertEquals("An unchanged view should render on demand only", idleCount, view.framesRendered.get())
     }
 
+    @Test fun retryResubmitsFrameWhenActive() {
+        val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
+        launch(initial)
+        awaitStableFrameCount()
+        val before = view.framesRendered.get()
+        instrumentation.runOnMainSync { view.retry() }
+        awaitFrameAfter(before)
+        assertTrue("Retry must render a new frame", view.framesRendered.get() > before)
+    }
+
     private fun state(ra: Double, dec: Double, mode: MilkyWayMode): SkyTextureState {
         val horizontal = frame.horizontal(ra, dec)
         return SkyTextureState(frame, horizontal.azimuth, horizontal.altitude, 60.0, false, SkyAppearance(mode))

@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.1` · Version Code `19` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.1).
+**Beta-Stand:** `1.1.9-pre.2` · Version Code `20` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.2 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.2).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -23,13 +23,11 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 | Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
 | Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
 
-## Neu in 1.1.9-pre.1 · Beta
+## Neu in 1.1.9-pre.2 · Beta
 
-Sternkarte und Beobachtungsliste teilen sich jetzt einen Katalogcache im Arbeitsspeicher. Sterne, Deep-Sky-Objekte, IAU-Grenzen und der statische Suchindex werden außerhalb des UI-Threads geladen und beim Tabwechsel wiederverwendet. Die kleine Ersatz-Sternkarte bleibt während des Ladens und bei Fehlern nutzbar.
+Die Sternkarte priorisiert nun das Zeichnen des ersten Basiskarten-Rahmens: Horizont, Planeten, Navigationssterne und Nachthimmelhintergrund erscheinen ohne Wartezeit auf den schwereren GPU- und Milchstraßentextur-Ladevorgang. Erst nach dem ersten sichtbaren Rahmen wird der OpenGL ES-Shader gestartet und die 3840-Pixel-Gaia-Milchstraße im Hintergrund dekodiert.
 
-Ladefehler werden nicht mehr als vollständige Kataloge gespeichert: **Katalog erneut laden** wiederholt nur die noch fehlenden Stufen. Die Beobachtungsliste zeigt ihren Ladezustand und behält alle vorgemerkten Objekt-IDs, auch wenn Namen noch nicht aufgelöst werden konnten. Suchtext, Standort und aktuelle Planetenpositionen bleiben außerhalb des gemeinsamen Caches.
-
-Das ist ein erster Teil von P1.7, keine Zusage einer bestimmten Startzeit. Textur-/GPU-Start, erste Kartenzeichnung, Low-Memory-Verhalten und Messungen auf schwachen echten Geräten stehen noch aus. Testhinweise: [1.1.9-pre.1](play-store/pre-release-1.1.9-pre.1.md).
+Schlägt die GPU-Initialisierung oder das Texturdekodieren auf leistungsschwachen Geräten fehl, bleibt die Basiskarte mit dunklem Nachthimmelhintergrund vollständig nutzbar. Unter **Ebenen & Namen** steht nun die Aktion **Textur erneut laden** zur Verfügung. Bei geringem Gerätespeicher oder knappem freiem Heap skaliert der Textur-Loader die Bildgröße automatisch herunter, um GC-Pausen und Speicherüberläufe zu verhindern; bei Speicherdruck des Systems (`onTrimMemory`) werden flüchtige Gelände- und Lichtcaches geleert. Der gemeinsame Katalogcache aus 1.1.9-pre.1 bleibt aktiv. Testhinweise: [1.1.9-pre.2](play-store/pre-release-1.1.9-pre.2.md).
 
 ## Wetteraktualisierung seit 1.1.8-pre.1
 

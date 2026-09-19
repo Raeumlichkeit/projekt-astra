@@ -217,6 +217,21 @@ class MainActivity : ComponentActivity() {
         LightPollutionRepository.clear()
         super.onStop()
     }
+
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_UI_HIDDEN) {
+            TerrainRepository.clear()
+            LightPollutionRepository.clear()
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        TerrainRepository.clear()
+        LightPollutionRepository.clear()
+    }
 }
 
 @Composable
@@ -685,6 +700,8 @@ internal fun SkyScreen(
     var showLayersPanel by remember { mutableStateOf(false) }
     var appearance by remember { mutableStateOf(SkyAppearancePreferences.load(context)) }
     var textureReady by remember { mutableStateOf<Boolean?>(null) }
+    var textureRetry by remember { mutableIntStateOf(0) }
+    var firstMapFrameRendered by remember { mutableStateOf(false) }
     var showCalibration by remember { mutableStateOf(false) }
     var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
     var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
@@ -947,8 +964,9 @@ internal fun SkyScreen(
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))
             .testTag("sky-viewport")) {
             if (arEnabled && cameraPermissionGranted) CameraPreview { cameraFov = it }
-            if (!arEnabled || (appearance.showInAr && appearance.mode != MilkyWayMode.OFF)) {
-                SkyTextureLayer(textureState, Modifier.fillMaxSize(), onStatus = { textureReady = it })
+            val shouldRenderTexture = firstMapFrameRendered && (!arEnabled || (appearance.showInAr && appearance.mode != MilkyWayMode.OFF))
+            if (shouldRenderTexture) {
+                SkyTextureLayer(textureState, Modifier.fillMaxSize(), retryTrigger = textureRetry, onStatus = { textureReady = it })
             }
             SkyCanvas(
                 objects = visible,
@@ -975,11 +993,12 @@ internal fun SkyScreen(
                     targetMessage = null
                     selected = it
                 },
-                drawBackground = arEnabled,
+                drawBackground = arEnabled || textureReady != true,
                 showGrid = appearance.showGrid,
                 targetPosition = targetPosition.takeUnless { selection.target?.needsDeepSky == true && !showDeepSky },
                 targetLabel = selection.target?.name,
-                labelDensity = appearance.labelDensity
+                labelDensity = appearance.labelDensity,
+                onFirstFrameRendered = { firstMapFrameRendered = true }
             )
         }
 
@@ -1038,8 +1057,15 @@ internal fun SkyScreen(
                     appearance = updated.normalized()
                     SkyAppearancePreferences.save(context, appearance)
                 }, showBoundaries, { showBoundaries = it }, showIllustrations, { showIllustrations = it })
-                if (textureReady == false) Text("Die Milchstraßentextur ist auf diesem Gerät gerade nicht verfügbar. Sterne und Objektinformationen bleiben nutzbar.",
-                    color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                if (textureReady == false) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Die Milchstraßentextur ist auf diesem Gerät gerade nicht verfügbar. Sterne und Objektinformationen bleiben nutzbar.",
+                            color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                        TextButton(onClick = { textureRetry++ }) {
+                            Text("Textur erneut laden")
+                        }
+                    }
+                }
                 Text("Milchstraßenhintergrund: NASA/Goddard SVS (Ernie Wright) · Gaia DR2: ESA/Gaia/DPAC. JPEG-Fassung: Wikimedia Commons / PantheraLeo1359531. Offline gebündelte Visualisierung aus Sterndaten, keine Kameraaufnahme.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             }
@@ -1274,9 +1300,11 @@ internal fun SkyCanvas(
     showGrid: Boolean = false,
     targetPosition: HorizontalCoordinates? = null,
     labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL,
-    targetLabel: String? = null
+    targetLabel: String? = null,
+    onFirstFrameRendered: () -> Unit = {}
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var firstFrameReported by remember { mutableStateOf(false) }
     val latestAzimuth by rememberUpdatedState(viewAzimuth)
     val latestAltitude by rememberUpdatedState(viewAltitude)
     val latestFov by rememberUpdatedState(horizontalFov)
@@ -1316,6 +1344,12 @@ internal fun SkyCanvas(
                 else Modifier.background(Color(0xFF03070D))
             )
     ) {
+        if (!firstFrameReported && size.width > 0f && size.height > 0f) {
+            firstFrameReported = true
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                onFirstFrameRendered()
+            }
+        }
         val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov, perspective = !arMode)
         val labels = mutableListOf<SkyLabelCandidate>()
         val labelPaints = mutableMapOf<String, android.graphics.Paint>()
