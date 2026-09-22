@@ -22,12 +22,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import de.projektastra.app.observation.ObservationCatalogMatcher
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +45,8 @@ internal fun SkySearchSheet(
     loading: Boolean = false,
     failed: Boolean = false,
     retry: () -> Unit = {},
-    movingTargets: List<SkySearchTarget> = emptyList()
+    movingTargets: List<SkySearchTarget> = emptyList(),
+    loggedObjectIds: Set<String> = emptySet()
 ) {
     var query by remember { mutableStateOf("") }
     val results = remember(index, query, movingTargets) { index.search(query, 41, movingTargets) }
@@ -87,7 +90,12 @@ internal fun SkySearchSheet(
                             val position = positionOf(target)
                             Column(Modifier.fillMaxWidth().clickable { open(target) }
                                 .padding(vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(target.name, fontWeight = FontWeight.Bold)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(target.name, fontWeight = FontWeight.Bold)
+                                    if (target.objectData.catalogId.isNotBlank() && ObservationCatalogMatcher.isObserved(target.objectData.catalogId, loggedObjectIds)) {
+                                        Text("✓ Im Logbuch", color = Color(0xFF76E0A0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
                                 Text("${target.typeLabel} · ${if (target.regionName == null) target.objectData.catalogId else "Referenzpunkt: ${target.objectData.name}"}",
                                     color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                                 Text("${targetVisibility(position, terrain).label} · Höhe ${String.format(Locale.GERMAN, "%.1f", position.altitude)}°",

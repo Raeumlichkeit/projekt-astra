@@ -17,3 +17,4 @@ __pycache__/
 *.hprof
 gradle/gradle-daemon-jvm.properties
 .codex-remote-attachments/
+.agents/

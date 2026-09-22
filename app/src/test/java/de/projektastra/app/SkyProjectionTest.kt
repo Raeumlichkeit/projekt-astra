@@ -204,4 +204,43 @@ class SkyProjectionTest {
         // Conformal projection preserves aspect ratios locally (deltaX == deltaY within 2%)
         assertEquals(1.0, scaleRatio, 0.02)
     }
+
+    @Test fun sphericalHorizonSeparatesSkyAndGroundCorrectly() {
+        val width = 1000f
+        val height = 2000f
+        val fov = 95.0
+        for (alt in listOf(0.0, 35.0, -35.0, 60.0, -60.0)) {
+            val v = SkyProjection(180.0, alt, width, height, fov, true)
+            val pts = (0..160).mapNotNull { step ->
+                val relAz = -120.0 + step * (240.0 / 160.0)
+                val sampleAz = ((180.0 + relAz) % 360.0 + 360.0) % 360.0
+                v.point(HorizontalCoordinates(sampleAz, 0.0), padding = 20f)
+            }
+            assertTrue("pts should not be empty for alt=$alt", pts.isNotEmpty())
+            val horizonMinY = pts.minOf { it.y }
+            val horizonMaxY = pts.maxOf { it.y }
+            val hCenter = v.point(HorizontalCoordinates(180.0, 0.0))!!
+            // When looking up (alt > 0), horizon curve is strictly in the lower half of the screen
+            if (alt > 0) {
+                assertTrue("Horizon should be in lower half for alt > 0, was minY=$horizonMinY", horizonMinY > height / 2)
+            } else if (alt < 0) {
+                // When looking down (alt < 0), horizon curve is in the upper half of the screen
+                assertTrue("Horizon should be in upper half for alt < 0, was maxY=$horizonMaxY", horizonMaxY < height / 2)
+            } else {
+                assertEquals("Horizon center should be at center of screen for alt=0", height / 2, hCenter.y, 1f)
+            }
+        }
+    }
+
+    @Test fun eyepieceNarrowFovIsValidAndProjectsProperly() {
+        val narrow = SkyProjection(180.0, 45.0, 1080f, 1920f, 0.5, perspective = true)
+        val centerPoint = narrow.point(HorizontalCoordinates(180.0, 45.0))
+        assertNotNull(centerPoint)
+        assertEquals(540f, centerPoint!!.x, 0.5f)
+        assertEquals(960f, centerPoint.y, 0.5f)
+
+        // Point outside the 0.5° FOV should return null
+        val outsidePoint = narrow.point(HorizontalCoordinates(182.0, 45.0))
+        assertNull(outsidePoint)
+    }
 }

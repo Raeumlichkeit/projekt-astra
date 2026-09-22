@@ -29,7 +29,8 @@ internal data class WeatherSnapshot(
     val updatedAt: String,
     val forecast: List<HourlyForecast>,
     val observedAt: Instant = Instant.EPOCH,
-    val fetchedAt: Instant = Instant.EPOCH
+    val fetchedAt: Instant = Instant.EPOCH,
+    val relativeHumidity: Double = 70.0
 )
 
 internal data class WeatherTarget(val point: GeoPoint, val demo: Boolean)
@@ -129,13 +130,18 @@ internal object WeatherParser {
                 hourlyNumber("wind_speed_10m", i, 500.0),
                 hourlyNumber("visibility", i, 1_000_000.0), instants[i])
         }
+        val humidity = if (current.has("relative_humidity_2m")) {
+            number(current.getDouble("relative_humidity_2m"), 0.0, 100.0)
+        } else {
+            70.0
+        }
         return WeatherSnapshot(
             number(current.getDouble("temperature_2m"), -150.0, 100.0),
             number(current.getDouble("cloud_cover"), 0.0, 100.0).toInt(),
             number(current.getDouble("wind_speed_10m"), 0.0, 500.0),
             forecast.first().visibility,
             DateTimeFormatter.ofPattern("dd.MM. HH:mm z").withZone(zone).format(observedAt),
-            forecast, observedAt, fetchedAt
+            forecast, observedAt, fetchedAt, humidity
         )
     }
 }
@@ -146,7 +152,7 @@ internal object WeatherRepository {
             val result = runCatching {
                 val approximate = NetworkPolicy.roundedLocation(point)
                 val url = "https://api.open-meteo.com/v1/forecast?latitude=${approximate.latitude}" +
-                    "&longitude=${approximate.longitude}&current=temperature_2m,cloud_cover,wind_speed_10m" +
+                    "&longitude=${approximate.longitude}&current=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m" +
                     "&hourly=visibility,cloud_cover,precipitation_probability,wind_speed_10m" +
                     "&forecast_days=2&timezone=auto&timeformat=unixtime"
                 WeatherParser.parse(JSONObject(String(SecureNetwork.get(url).bytes, Charsets.UTF_8)), Instant.now())

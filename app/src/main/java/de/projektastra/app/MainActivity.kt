@@ -92,8 +92,37 @@ import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ImportExport
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.automirrored.rounded.AltRoute
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Straighten
 import androidx.compose.material3.AlertDialog
+import android.view.KeyEvent
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.LinearProgressIndicator
+import de.projektastra.app.observation.ChallengeType
+import de.projektastra.app.observation.ObservationChallengeRegistry
+import de.projektastra.app.observation.ObservationCatalogMatcher
+import de.projektastra.app.observation.DewMonitor
+import de.projektastra.app.observation.DewRiskLevel
+import de.projektastra.app.observation.OpenAstronomyLogExport
+import de.projektastra.app.observation.SeeingScaleValidator
+import de.projektastra.app.hardware.CameraExposureController
+import de.projektastra.app.hardware.ArSensorFilter
+import de.projektastra.app.hardware.GloveModeZoomController
+import de.projektastra.app.hardware.OledThemeManager
+import de.projektastra.app.widget.AstraWidgetUpdater
+import de.projektastra.app.coordinates.CelestialMeasurement
+import de.projektastra.app.coordinates.CelestialMeasurementState
+import de.projektastra.app.coordinates.GridLineType
+import de.projektastra.app.coordinates.MeasurementPoint
+import de.projektastra.app.coordinates.SkyGridRenderer
+import de.projektastra.app.coordinates.StarHopCatalog
+import de.projektastra.app.coordinates.StarHopHud
+import de.projektastra.app.coordinates.StarHopReticleMode
+import de.projektastra.app.coordinates.StarHopRoute
+import de.projektastra.app.coordinates.StarHopSessionState
+import de.projektastra.app.coordinates.StarHopSheet
+import de.projektastra.app.coordinates.toEquatorial
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -144,6 +173,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -164,6 +194,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -193,6 +224,21 @@ import io.github.cosinekitty.astronomy.localSolarEclipsesAfter
 import io.github.cosinekitty.astronomy.lunarEclipsesAfter
 import io.github.cosinekitty.astronomy.rotationEqjEqd
 import io.github.cosinekitty.astronomy.rotationGalEqj
+import de.projektastra.app.ephemeris.JupiterMoonsCalculator
+import de.projektastra.app.ephemeris.JupiterMoonEvent
+import de.projektastra.app.ephemeris.JupiterSystemState
+import de.projektastra.app.ephemeris.MoonState
+import de.projektastra.app.ephemeris.SaturnSystemCalculator
+import de.projektastra.app.ephemeris.SaturnSystemState
+import de.projektastra.app.ephemeris.LunarTerminatorCalculator
+import de.projektastra.app.ephemeris.LunarTerminatorState
+import de.projektastra.app.ephemeris.LunarFeatureCatalog
+import de.projektastra.app.ephemeris.LunarFeatureHighlight
+import de.projektastra.app.ephemeris.TerminatorEventType
+import de.projektastra.app.ephemeris.Sgp4Propagator
+import de.projektastra.app.ephemeris.SatelliteCatalog
+import de.projektastra.app.ephemeris.SatellitePass
+import de.projektastra.app.ephemeris.SatellitePassPredictor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -228,6 +274,26 @@ private val AstraOutline = Color(0xFF294466)
 private val AstraSuccess = Color(0xFF76E0A0)
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        var volumeKeyZoomHandler: ((Boolean) -> Boolean)? = null
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            if (volumeKeyZoomHandler?.invoke(true) == true) return true
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (volumeKeyZoomHandler?.invoke(false) == true) return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) && volumeKeyZoomHandler != null) {
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         PrivacySettings.migrateLegacyBrowserData(this)
@@ -270,14 +336,20 @@ private fun AstraRoot() {
     val window = LocalActivity.current?.window
     val preferences = remember { context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE) }
     var redLightMode by remember { mutableStateOf(preferences.getBoolean("red_light_mode", false)) }
+    var oledBlackMode by remember { mutableStateOf(preferences.getBoolean("oled_black_mode", false)) }
     var skyFullscreen by rememberSaveable { mutableStateOf(false) }
     val setRedLightMode: (Boolean) -> Unit = {
         redLightMode = it
         preferences.edit { putBoolean("red_light_mode", it) }
     }
+    val setOledBlackMode: (Boolean) -> Unit = {
+        oledBlackMode = it
+        preferences.edit { putBoolean("oled_black_mode", it) }
+    }
     SideEffect {
         window?.let { window ->
             val systemBarColor = if (redLightMode) android.graphics.Color.rgb(24, 0, 0)
+            else if (oledBlackMode) android.graphics.Color.BLACK
             else android.graphics.Color.rgb(7, 16, 31)
             @Suppress("DEPRECATION")
             window.statusBarColor = systemBarColor
@@ -290,7 +362,7 @@ private fun AstraRoot() {
             }
         }
     }
-    AstraTheme(redLightMode) {
+    AstraTheme(redLightMode, oledBlackMode) {
         Box(
             Modifier.fillMaxSize().drawWithContent {
                 drawContent()
@@ -299,23 +371,27 @@ private fun AstraRoot() {
                 }
             }
         ) {
-            AstraApp(redLightMode, setRedLightMode, skyFullscreen) { skyFullscreen = it }
+            AstraApp(redLightMode, setRedLightMode, oledBlackMode, setOledBlackMode, skyFullscreen) { skyFullscreen = it }
         }
     }
 }
 
 @Composable
-private fun AstraTheme(redLightMode: Boolean, content: @Composable () -> Unit) {
+private fun AstraTheme(redLightMode: Boolean, oledMode: Boolean = false, content: @Composable () -> Unit) {
     val primary = if (redLightMode) Color(0xFFD35A4A) else AstraBlue
     val secondary = if (redLightMode) Color(0xFFFF725C) else StarGold
+    val bgColor = if (oledMode) Color.Black else Night
+    val surfaceColor = if (oledMode) Color.Black else NightBlue
+    val surfaceVarColor = if (oledMode) Color.Black else AstraSurface
+    val outlineColor = if (oledMode) Color(0xFF1E1E1E) else AstraOutline
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = primary,
             secondary = secondary,
-            background = Night,
-            surface = NightBlue,
-            surfaceVariant = AstraSurface,
-            outline = AstraOutline,
+            background = bgColor,
+            surface = surfaceColor,
+            surfaceVariant = surfaceVarColor,
+            outline = outlineColor,
             onBackground = Color(0xFFEAF1FF),
             onSurface = Color(0xFFEAF1FF)
         ),
@@ -334,6 +410,8 @@ private enum class AstraTab { SKY, WEATHER, EVENTS, PLAN, ABOUT }
 private fun AstraApp(
     redLightMode: Boolean,
     setRedLightMode: (Boolean) -> Unit,
+    oledBlackMode: Boolean = false,
+    setOledBlackMode: (Boolean) -> Unit = {},
     skyFullscreen: Boolean,
     setSkyFullscreen: (Boolean) -> Unit
 ) {
@@ -421,23 +499,24 @@ private fun AstraApp(
         location = newLoc
         if (rememberLocation) {
             LocationStore.saveLocation(context, newLoc)
+            AstraWidgetUpdater.updateAllWidgets(context)
         }
     }
     LaunchedEffect(tab) { if (tab != AstraTab.SKY) setSkyFullscreen(false) }
 
     Scaffold(
-        containerColor = Night,
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             if (!skyFullscreen) {
             val navigationColors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Night,
+                selectedIconColor = if (oledBlackMode) Color.Black else Night,
                 selectedTextColor = StarGold,
                 indicatorColor = StarGold,
                 unselectedIconColor = AstraTextMuted,
                 unselectedTextColor = AstraTextMuted
             )
-            NavigationBar(containerColor = Color(0xFF091426), tonalElevation = 0.dp) {
+            NavigationBar(containerColor = if (oledBlackMode) Color.Black else Color(0xFF091426), tonalElevation = 0.dp) {
                 NavigationBarItem(
                     selected = tab == AstraTab.SKY,
                     onClick = { tab = AstraTab.SKY },
@@ -528,7 +607,8 @@ private fun AstraApp(
                     },
                     onSaveLogEntry = { entry ->
                         logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
-                    }
+                    },
+                    logbookEntries = logbookEntries
                 )
                     AstraTab.WEATHER -> WeatherScreen(
                         location = location,
@@ -631,6 +711,8 @@ private fun AstraApp(
                     AstraTab.ABOUT -> AboutScreen(
                         redLightMode = redLightMode,
                         setRedLightMode = setRedLightMode,
+                        oledBlackMode = oledBlackMode,
+                        setOledBlackMode = setOledBlackMode,
                         privacy = privacy,
                         rememberLocation = rememberLocation,
                         onRememberLocationChange = { enabled ->
@@ -679,12 +761,18 @@ private fun LocationEffect(enabled: Boolean, refreshKey: Int, onLocation: (GeoPo
 }
 
 @Composable
-private fun rememberOrientation(observer: GeoPoint): OrientationState {
+private fun rememberOrientation(
+    observer: GeoPoint,
+    fovDegrees: Float = 45f,
+    pitchTrimDegrees: Float = 0f,
+    dampingEnabled: Boolean = true
+): OrientationState {
     val context = LocalContext.current
     var azimuth by remember { mutableFloatStateOf(180f) }
     var pitch by remember { mutableFloatStateOf(35f) }
     var available by remember { mutableStateOf(false) }
     var accuracy by remember { mutableIntStateOf(SensorManager.SENSOR_STATUS_UNRELIABLE) }
+    val sensorFilter = remember { ArSensorFilter() }
 
     val magneticDeclination = remember(observer) {
         GeomagneticField(
@@ -694,6 +782,10 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
             System.currentTimeMillis()
         ).declination
     }
+
+    val currentFov by rememberUpdatedState(fovDegrees)
+    val currentTrim by rememberUpdatedState(pitchTrimDegrees)
+    val currentDamping by rememberUpdatedState(dampingEnabled)
 
     LifecycleStartEffect(observer, magneticDeclination) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -716,9 +808,19 @@ private fun rememberOrientation(observer: GeoPoint): OrientationState {
                 SensorManager.getOrientation(remapped, angles)
                 val targetAzimuth = ((Math.toDegrees(angles[0].toDouble()) + magneticDeclination + 360.0) % 360.0).toFloat()
                 val targetPitch = (-Math.toDegrees(angles[1].toDouble())).toFloat().coerceIn(-90f, 90f)
-                val delta = ((targetAzimuth - azimuth + 540f) % 360f) - 180f
-                azimuth = (azimuth + delta * 0.18f + 360f) % 360f
-                pitch += (targetPitch - pitch) * 0.18f
+
+                val trim = currentTrim
+                val fov = currentFov
+                if (currentDamping) {
+                    sensorFilter.pitchTrimDegrees = trim
+                    val (filteredAz, filteredPitch) = sensorFilter.filter(targetAzimuth, targetPitch, fov)
+                    azimuth = filteredAz
+                    pitch = filteredPitch
+                } else {
+                    val delta = ((targetAzimuth - azimuth + 540f) % 360f) - 180f
+                    azimuth = (azimuth + delta * 0.18f + 360f) % 360f
+                    pitch += (targetPitch + trim.coerceIn(-15f, 15f) - pitch) * 0.18f
+                }
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, value: Int) {
@@ -759,10 +861,19 @@ internal fun SkyScreen(
     onLocationPermissionResult: (Boolean) -> Unit,
     onResetLocation: () -> Unit,
     toggleAr: () -> Unit,
-    onSaveLogEntry: (ObservationLogEntry) -> Unit = {}
+    onSaveLogEntry: (ObservationLogEntry) -> Unit = {},
+    logbookEntries: List<ObservationLogEntry> = emptyList()
 ) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
-    val orientation = rememberOrientation(observer)
+    val initialCameraFov = rememberCameraHorizontalFov()
+    var cameraFov by remember { mutableStateOf(initialCameraFov) }
+    var cameraExposureStep by rememberSaveable { mutableIntStateOf(0) }
+    var pitchTrimDegrees by rememberSaveable { mutableFloatStateOf(0f) }
+    var arDampingEnabled by rememberSaveable { mutableStateOf(true) }
+    val orientation = rememberOrientation(observer, cameraFov.toFloat(), pitchTrimDegrees, arDampingEnabled)
+    val loggedCatalogIds = remember(logbookEntries) {
+        ObservationCatalogMatcher.buildLoggedTokens(logbookEntries)
+    }
     val context = LocalContext.current
     val catalogStore = remember(context) { ProcessSkyCatalogs.get(context) }
     var catalogRetry by remember { mutableIntStateOf(0) }
@@ -770,8 +881,6 @@ internal fun SkyScreen(
     val stars = catalogs.stars ?: StarCatalog.fallbackObjects
     val deepSkyObjects = catalogs.deepSky.orEmpty()
     val iauBoundaries = catalogs.boundaries.orEmpty()
-    val initialCameraFov = rememberCameraHorizontalFov()
-    var cameraFov by remember { mutableStateOf(initialCameraFov) }
     var selected by remember { mutableStateOf<VisibleObject?>(null) }
     var logEntryTarget by remember { mutableStateOf<CelestialObject?>(null) }
     var showSearch by remember { mutableStateOf(false) }
@@ -785,20 +894,48 @@ internal fun SkyScreen(
     var showBoundaries by remember { mutableStateOf(false) }
     var showIllustrations by remember { mutableStateOf(false) }
     var showLayersPanel by remember { mutableStateOf(false) }
+    var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
+    var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
+    var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
     var appearance by remember { mutableStateOf(SkyAppearancePreferences.load(context)) }
+    DisposableEffect(appearance.gloveModeZoom, arEnabled) {
+        if (appearance.gloveModeZoom && !arEnabled) {
+            MainActivity.volumeKeyZoomHandler = { zoomIn ->
+                if (zoomIn) {
+                    manualFov = (manualFov / 1.25f).coerceAtLeast(25f)
+                } else {
+                    manualFov = (manualFov * 1.25f).coerceAtMost(150f)
+                }
+                true
+            }
+        } else {
+            MainActivity.volumeKeyZoomHandler = null
+        }
+        onDispose {
+            MainActivity.volumeKeyZoomHandler = null
+        }
+    }
     var textureReady by remember { mutableStateOf<Boolean?>(null) }
     var textureRetry by remember { mutableIntStateOf(0) }
     var firstMapFrameRendered by remember { mutableStateOf(false) }
     var showCalibration by remember { mutableStateOf(false) }
     var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
-    var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
-    var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
-    var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
     var opticsSettings by remember { mutableStateOf(OpticsStore.loadSettings(context)) }
     var opticsProfiles by remember { mutableStateOf(OpticsStore.loadProfiles(context)) }
     var showOpticsSheet by remember { mutableStateOf(false) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    var showMoonDetailSheet by remember { mutableStateOf(false) }
+    var measurementState by remember { mutableStateOf(CelestialMeasurementState()) }
+    var starHopSession by remember { mutableStateOf(StarHopSessionState()) }
+    var showStarHopSheet by remember { mutableStateOf(false) }
     val skyInstant = skyTime.instant
+    val satelliteCatalog = remember(context) { SatelliteCatalog.loadActiveSatellites(context) }
+    val passPredictor = remember { SatellitePassPredictor(Sgp4Propagator()) }
+    val satellitePasses = remember(satelliteCatalog, observer, skyInstant) {
+        satelliteCatalog.take(3).flatMap { tle ->
+            passPredictor.predictPasses(tle, observer, skyInstant, durationHours = 12)
+        }
+    }
     LifecycleStartEffect(Unit) {
         displayZone = ZoneId.systemDefault()
         onStopOrDispose { }
@@ -999,6 +1136,16 @@ internal fun SkyScreen(
                     if (!arEnabled) TextButton(onClick = { showOpticsSheet = true }) {
                         Icon(Icons.Rounded.Explore, null, Modifier.size(18.dp)); Text(" Optik & FOV")
                     }
+                    if (!arEnabled) TextButton(onClick = {
+                        measurementState = if (measurementState.isActive) measurementState.close() else CelestialMeasurementState(isActive = true)
+                    }) {
+                        Icon(Icons.Rounded.Straighten, null, Modifier.size(18.dp))
+                        Text(if (measurementState.isActive) " Messen ✓" else " Messen")
+                    }
+                    if (!arEnabled) TextButton(onClick = { showStarHopSheet = true }) {
+                        Icon(Icons.AutoMirrored.Rounded.AltRoute, null, Modifier.size(18.dp))
+                        Text(if (starHopSession.activeRoute != null) " Star-Hop (${starHopSession.activeStepIndex + 1}/${starHopSession.activeRoute!!.totalSteps})" else " Star-Hop")
+                    }
                     TextButton(onClick = { showDeepSky = !showDeepSky },
                         modifier = Modifier.semantics { stateDescription = if (showDeepSky) "Ein" else "Aus" }) {
                         Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
@@ -1009,6 +1156,22 @@ internal fun SkyScreen(
                     }) {
                         Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
                         Text(if (arEnabled) " Karte" else " AR · Jetzt")
+                    }
+                    if (arEnabled) {
+                        TextButton(onClick = { cameraExposureStep = (cameraExposureStep + 1) % 4 }) {
+                            Icon(Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
+                            Text(" Belichtung: +${cameraExposureStep} EV")
+                        }
+                        TextButton(onClick = {
+                            pitchTrimDegrees = if (pitchTrimDegrees >= 15f) -15f else pitchTrimDegrees + 5f
+                        }) {
+                            Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp))
+                            Text(" Trimm: ${if (pitchTrimDegrees >= 0) "+" else ""}${pitchTrimDegrees.toInt()}°")
+                        }
+                        TextButton(onClick = { arDampingEnabled = !arDampingEnabled }) {
+                            Icon(Icons.Rounded.Explore, null, Modifier.size(18.dp))
+                            Text(if (arDampingEnabled) " Dämpfung ✓" else " Dämpfung")
+                        }
                     }
                     if (!arEnabled) {
                         TextButton(onClick = {
@@ -1109,7 +1272,7 @@ internal fun SkyScreen(
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))
             .testTag("sky-viewport")
             .onSizeChanged { viewportSize = it }) {
-            if (arEnabled && cameraPermissionGranted) CameraPreview { cameraFov = it }
+            if (arEnabled && cameraPermissionGranted) CameraPreview(exposureStep = cameraExposureStep) { cameraFov = it }
             val shouldRenderTexture = firstMapFrameRendered && (!arEnabled || (appearance.showInAr && appearance.mode != MilkyWayMode.OFF))
             if (shouldRenderTexture) {
                 SkyTextureLayer(textureState, Modifier.fillMaxSize(), retryTrigger = textureRetry, onStatus = { textureReady = it })
@@ -1146,8 +1309,183 @@ internal fun SkyScreen(
                 labelDensity = appearance.labelDensity,
                 opticsSettings = opticsSettings,
                 redLightMode = redLightMode,
-                onFirstFrameRendered = { firstMapFrameRendered = true }
+                onFirstFrameRendered = { firstMapFrameRendered = true },
+                skyInstant = skyInstant,
+                satellitePasses = satellitePasses,
+                coordinateFrame = coordinateFrame,
+                skyAppearance = appearance,
+                measurementState = measurementState,
+                onMeasurementPointSelected = { pt ->
+                    measurementState = measurementState.selectPoint(pt)
+                },
+                starHopSession = starHopSession,
+                loggedCatalogIds = loggedCatalogIds
             )
+            if (!arEnabled && starHopSession.activeRoute != null) {
+                StarHopHud(
+                    session = starHopSession,
+                    onPreviousStep = { starHopSession = starHopSession.previousStep() },
+                    onNextStep = { starHopSession = starHopSession.nextStep() },
+                    onCenterWaypoint = { coords, fov ->
+                        val horiz = coordinateFrame.horizontal(coords.raHours, coords.decDegrees)
+                        manualAzimuth = horiz.azimuth.toFloat()
+                        manualAltitude = horiz.altitude.toFloat()
+                        manualFov = fov.toFloat().coerceIn(0.5f, 150f)
+                        selection = selection.release()
+                    },
+                    onOpenSheet = { showStarHopSheet = true },
+                    onDismissSession = { starHopSession = StarHopSessionState() },
+                    redLightMode = redLightMode,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+            if (!arEnabled && measurementState.isActive && measurementState.isComplete) {
+                val result = measurementState.result
+                val orig = measurementState.origin
+                val targ = measurementState.target
+                if (result != null && orig != null && targ != null) {
+                    val cardinalDir = when (((result.positionAngleDegrees + 22.5) / 45.0).toInt() % 8) {
+                        0 -> "N"
+                        1 -> "NO"
+                        2 -> "O"
+                        3 -> "SO"
+                        4 -> "S"
+                        5 -> "SW"
+                        6 -> "W"
+                        7 -> "NW"
+                        else -> "N"
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (redLightMode) Color(0xEE220000) else Color(0xEE0C1322),
+                        border = BorderStroke(1.dp, if (redLightMode) Color(0xFFFF5252).copy(alpha = 0.5f) else Color(0x334A688F)),
+                        shadowElevation = 8.dp
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Rounded.Straighten,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (redLightMode) Color(0xFFFF5252) else StarGold
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "Winkelmessung",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (redLightMode) Color(0xFFFF5252) else Color.White
+                                    )
+                                }
+                                IconButton(onClick = { measurementState = measurementState.close() }, modifier = Modifier.size(24.dp)) {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = "Messung schließen",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (redLightMode) Color(0xFFFF5252) else Color.White
+                                    )
+                                }
+                            }
+
+                            Text(
+                                "${orig.displayName}  ➔  ${targ.displayName}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (redLightMode) Color(0xFFFF8888) else Color(0xFFB0C4DE),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Column {
+                                    Text(
+                                        result.formattedDistance,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (redLightMode) Color(0xFFFF5252) else StarGold
+                                    )
+                                    Text(
+                                        "${String.format(Locale.US, "%.4f°", result.angularDistanceDegrees)}  ·  PW ${String.format(Locale.US, "%.1f° (%s)", result.positionAngleDegrees, cardinalDir)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (redLightMode) Color(0xFFFF8888) else Color(0xFF94A3B8)
+                                    )
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        onClick = { measurementState = measurementState.swapDirection() },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("1 ↔ 2", fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = { measurementState = measurementState.reset() },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (redLightMode) Color(0xFFFF5252) else AstraBlue,
+                                            contentColor = Color.Black
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Neu", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (!arEnabled && measurementState.isActive && !measurementState.isComplete) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (redLightMode) Color(0xEE220000) else Color(0xEE0C1322),
+                    border = BorderStroke(1.dp, if (redLightMode) Color(0xFFFF5252).copy(alpha = 0.5f) else Color(0x334A688F)),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Straighten,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (redLightMode) Color(0xFFFF5252) else StarGold
+                        )
+                        Text(
+                            text = if (measurementState.origin == null) "Punkt 1 (Start) am Himmel antippen"
+                                   else "Punkt 2 (Ziel) am Himmel antippen",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (redLightMode) Color(0xFFFF8888) else Color.White
+                        )
+                        IconButton(onClick = { measurementState = measurementState.close() }, modifier = Modifier.size(20.dp)) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Messung abbrechen",
+                                modifier = Modifier.size(14.dp),
+                                tint = if (redLightMode) Color(0xFFFF5252) else Color.White
+                            )
+                        }
+                    }
+                }
+            }
             if (!arEnabled && opticsSettings.isCustomized) {
                 Surface(
                     modifier = Modifier
@@ -1347,7 +1685,8 @@ internal fun SkyScreen(
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm XXX").withZone(displayZone).format(skyInstant),
         dismiss = { showSearch = false }, open = openTarget,
         loading = !catalogs.complete && !catalogs.failed, failed = catalogs.failed,
-        retry = { catalogRetry++ }, movingTargets = movingSearchTargets)
+        retry = { catalogRetry++ }, movingTargets = movingSearchTargets,
+        loggedObjectIds = loggedCatalogIds)
 
     selected?.let { original ->
         val target = SkySearchTarget(original.celestial)
@@ -1362,9 +1701,58 @@ internal fun SkyScreen(
                 terrain = (terrainState as? TerrainState.Ready)?.profile,
                 isFavorite = item.celestial.catalogId in favoriteObjectIds,
                 toggleFavorite = { toggleFavorite(item.celestial) },
-                onAddLogEntry = { logEntryTarget = it }
+                onAddLogEntry = { logEntryTarget = it },
+                onOpenMoonDetail = {
+                    showMoonDetailSheet = true
+                    selected = null
+                },
+                onStartMeasurement = { obj ->
+                    measurementState = CelestialMeasurementState(
+                        isActive = true,
+                        origin = MeasurementPoint.ObjectPoint(obj.celestial)
+                    )
+                    selected = null
+                },
+                onStartStarHop = { route ->
+                    starHopSession = StarHopSessionState(activeRoute = route)
+                    showStarHopSheet = true
+                    selected = null
+                },
+                isObservedInLogbook = ObservationCatalogMatcher.isObserved(item.celestial.catalogId, loggedCatalogIds)
             )
         }
+    }
+    if (showMoonDetailSheet) {
+        MoonDetailSheet(
+            skyInstant = skyInstant,
+            onDismissRequest = { showMoonDetailSheet = false },
+            onLogFeature = { celestial ->
+                logEntryTarget = celestial
+                showMoonDetailSheet = false
+            }
+        )
+    }
+    if (showStarHopSheet) {
+        StarHopSheet(
+            session = starHopSession,
+            onSessionChange = { starHopSession = it },
+            onCenterWaypoint = { coords, fov ->
+                val horiz = coordinateFrame.horizontal(coords.raHours, coords.decDegrees)
+                manualAzimuth = horiz.azimuth.toFloat()
+                manualAltitude = horiz.altitude.toFloat()
+                manualFov = fov.toFloat().coerceIn(0.5f, 150f)
+                selection = selection.release()
+            },
+            onDismissRequest = { showStarHopSheet = false },
+            onAddLogEntry = { catalogId ->
+                val targetObj = (stars + deepSkyObjects + solarSystem).firstOrNull {
+                    it.catalogId == catalogId || it.catalogId.contains(catalogId)
+                } ?: CelestialObject(name = catalogId, catalogId = catalogId, raHours = 0.0, decDegrees = 0.0, magnitude = 0.0, distanceLightYears = 0.0, spectralClass = "")
+                logEntryTarget = targetObj
+                showStarHopSheet = false
+            },
+            redLightMode = redLightMode
+        )
     }
     if (showCalibration) {
         ModalBottomSheet(onDismissRequest = { showCalibration = false }, containerColor = NightBlue) {
@@ -1426,10 +1814,11 @@ private fun CalibrationStep(number: String, text: String) {
 
 @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
 @Composable
-private fun CameraPreview(onHorizontalFov: (Double) -> Unit) {
+private fun CameraPreview(exposureStep: Int = 0, onHorizontalFov: (Double) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnHorizontalFov by rememberUpdatedState(onHorizontalFov)
+    val latestExposureStep by rememberUpdatedState(exposureStep)
     val previewView = remember(context) {
         PreviewView(context).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -1438,6 +1827,17 @@ private fun CameraPreview(onHorizontalFov: (Double) -> Unit) {
     }
 
     AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+
+    var activeCamera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    LaunchedEffect(latestExposureStep, activeCamera) {
+        activeCamera?.let { camera ->
+            runCatching {
+                val expController = CameraExposureController()
+                expController.setStep(latestExposureStep)
+                expController.applyToCamera(camera)
+            }
+        }
+    }
 
     DisposableEffect(lifecycleOwner, previewView) {
         val providerFuture = ProcessCameraProvider.getInstance(context)
@@ -1517,6 +1917,12 @@ private fun CameraPreview(onHorizontalFov: (Double) -> Unit) {
                             CameraSelector.DEFAULT_BACK_CAMERA,
                             boundPreview
                         )
+                        activeCamera = camera
+                        runCatching {
+                            val expController = CameraExposureController()
+                            expController.setStep(latestExposureStep)
+                            expController.applyToCamera(camera)
+                        }
                         boundCharacteristics = runCatching {
                             val cameraInfo = androidx.camera.camera2.interop.Camera2CameraInfo.from(camera.cameraInfo)
                             manager.getCameraCharacteristics(cameraInfo.cameraId)
@@ -1528,6 +1934,7 @@ private fun CameraPreview(onHorizontalFov: (Double) -> Unit) {
         }, ContextCompat.getMainExecutor(context))
         onDispose {
             disposed = true
+            activeCamera = null
             previewView.removeOnLayoutChangeListener(layoutListener)
             previewView.previewStreamState.removeObserver(streamObserver)
             preview?.let { provider?.unbind(it) }
@@ -1578,18 +1985,30 @@ internal fun SkyCanvas(
     targetLabel: String? = null,
     opticsSettings: OpticsSettings = OpticsSettings(),
     redLightMode: Boolean = false,
-    onFirstFrameRendered: () -> Unit = {}
+    onFirstFrameRendered: () -> Unit = {},
+    skyInstant: Instant = Instant.now(),
+    satellitePasses: List<SatellitePass> = emptyList(),
+    coordinateFrame: SkyCoordinateFrame? = null,
+    skyAppearance: SkyAppearance = SkyAppearance(),
+    measurementState: CelestialMeasurementState = CelestialMeasurementState(),
+    onMeasurementPointSelected: (MeasurementPoint) -> Unit = {},
+    starHopSession: StarHopSessionState = StarHopSessionState(),
+    loggedCatalogIds: Set<String> = emptySet()
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var firstFrameReported by remember { mutableStateOf(false) }
     val latestAzimuth by rememberUpdatedState(viewAzimuth)
     val latestAltitude by rememberUpdatedState(viewAltitude)
     val latestFov by rememberUpdatedState(horizontalFov)
+    val currentMeasurementState by rememberUpdatedState(measurementState)
+    val currentOnMeasurementPointSelected by rememberUpdatedState(onMeasurementPointSelected)
+    val currentCoordinateFrame by rememberUpdatedState(coordinateFrame)
+    val currentOnSelect by rememberUpdatedState(onSelect)
     val objectsByHip = remember(objects) { objects.mapNotNull { item -> item.celestial.hipId?.let { it to item } }.toMap() }
     Canvas(
         modifier.fillMaxSize().clipToBounds()
             .onSizeChanged { canvasSize = it }
-            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov, arMode, opticsSettings) {
+            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov, arMode, opticsSettings, measurementState.isActive) {
                 detectTapGestures { tap ->
                     val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
                     val effectiveTap = if (!arMode && opticsSettings.isCustomized) {
@@ -1603,7 +2022,20 @@ internal fun SkyCanvas(
                         projection.point(item.position, padding = 32f)
                             ?.let { point -> item to hypot((point.x - effectiveTap.x).toDouble(), (point.y - effectiveTap.y).toDouble()) }
                     }.minByOrNull { it.second }
-                    if (closest != null && closest.second <= 42.0) onSelect(closest.first)
+                    if (currentMeasurementState.isActive) {
+                        if (closest != null && closest.second <= 42.0) {
+                            currentOnMeasurementPointSelected(MeasurementPoint.ObjectPoint(closest.first.celestial))
+                        } else {
+                            val horiz = projection.coordinates(effectiveTap)
+                            val frame = currentCoordinateFrame
+                            if (horiz != null && frame != null) {
+                                val eq = frame.toEquatorial(horiz)
+                                currentOnMeasurementPointSelected(MeasurementPoint.CoordinatePoint(eq, horiz))
+                            }
+                        }
+                    } else {
+                        if (closest != null && closest.second <= 42.0) currentOnSelect(closest.first)
+                    }
                 }
             }
             .pointerInput(gesturesEnabled, canvasSize, arMode, opticsSettings) {
@@ -1765,9 +2197,53 @@ internal fun SkyCanvas(
 
         // Draw celestial graphics (mirrored/rotated when active)
         withOpticsTransform {
-            if (showGrid) drawSkyGrid(viewAzimuth, viewAltitude)
             drawMilkyWay(milkyWay, projection)
+
+            // Astronomical grids and reference lines
+            if (showGrid && !skyAppearance.showHorizontalGrid && !skyAppearance.showEquatorialGrid) {
+                drawSkyGrid(viewAzimuth, viewAltitude)
+            }
+            if (skyAppearance.showHorizontalGrid) {
+                val lod = SkyGridRenderer.getHorizontalLod(horizontalFov)
+                val lines = SkyGridRenderer.generateHorizontalGrid(lod.stepHoursOrAzDegrees, lod.stepDecOrAltDegrees)
+                lines.forEach { line ->
+                    val style = SkyGridRenderer.getLineStyle(line.type, line.isPrimary, redLightMode)
+                    SkyGridRenderer.renderGridLine(this, line, projection, style)
+                }
+            }
+            if (skyAppearance.showEquatorialGrid && coordinateFrame != null) {
+                val lod = SkyGridRenderer.getEquatorialLod(horizontalFov)
+                val lines = SkyGridRenderer.generateEquatorialGrid(lod.stepHoursOrAzDegrees, lod.stepDecOrAltDegrees)
+                val horizLines = SkyGridRenderer.toHorizontal(lines, coordinateFrame)
+                horizLines.forEach { line ->
+                    val style = SkyGridRenderer.getLineStyle(line.type, line.isPrimary, redLightMode)
+                    SkyGridRenderer.renderGridLine(this, line, projection, style)
+                }
+            }
+            if ((skyAppearance.showCelestialEquator || skyAppearance.showEcliptic || skyAppearance.showGalacticEquator) && coordinateFrame != null) {
+                val ref = SkyGridRenderer.generateReferenceLines()
+                if (skyAppearance.showCelestialEquator) {
+                    val horiz = SkyGridRenderer.toHorizontal(ref.celestialEquator, coordinateFrame)
+                    val style = SkyGridRenderer.getLineStyle(horiz.type, horiz.isPrimary, redLightMode)
+                    SkyGridRenderer.renderGridLine(this, horiz, projection, style)
+                }
+                if (skyAppearance.showEcliptic) {
+                    val horiz = SkyGridRenderer.toHorizontal(ref.ecliptic, coordinateFrame)
+                    val style = SkyGridRenderer.getLineStyle(horiz.type, horiz.isPrimary, redLightMode)
+                    SkyGridRenderer.renderGridLine(this, horiz, projection, style)
+                }
+                if (skyAppearance.showGalacticEquator) {
+                    val horiz = SkyGridRenderer.toHorizontal(ref.galacticEquator, coordinateFrame)
+                    val style = SkyGridRenderer.getLineStyle(horiz.type, horiz.isPrimary, redLightMode)
+                    SkyGridRenderer.renderGridLine(this, horiz, projection, style)
+                }
+            }
+
             drawIauBoundaries(constellationBoundaries, projection, arMode)
+
+            satellitePasses.forEach { pass ->
+                drawSatellitePassTrack(pass, projection, skyInstant, arMode)
+            }
 
             ConstellationLines.connections.forEach { (from, to) ->
                 val start = objectsByHip[from]?.position
@@ -1781,6 +2257,137 @@ internal fun SkyCanvas(
             ConstellationLines.labels.forEach { label ->
                 byHip[label.anchorHip]?.let { point ->
                     if (showConstellationIllustrations) drawConstellationIllustration(label.name, point, arMode)
+                }
+            }
+
+            // Star-Hop active route visualization
+            val activeRoute = starHopSession.activeRoute
+            if (activeRoute != null && activeRoute.steps.isNotEmpty() && coordinateFrame != null) {
+                val stepHorizs = activeRoute.steps.map { step ->
+                    coordinateFrame.horizontal(step.fieldCenterCoords.raHours, step.fieldCenterCoords.decDegrees)
+                }
+                stepHorizs.zipWithNext().forEach { (from, to) ->
+                    projection.segments(from, to, padding = 1f).forEach { segment ->
+                        drawLine(
+                            color = if (redLightMode) Color(0xFFFF5252).copy(alpha = 0.75f) else Color(0xFF64B5F6).copy(alpha = 0.65f),
+                            start = segment.start,
+                            end = segment.end,
+                            strokeWidth = 2.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
+                        )
+                    }
+                }
+                stepHorizs.forEachIndexed { idx, horiz ->
+                    projection.point(horiz, padding = 24f)?.let { pt ->
+                        val isActive = idx == starHopSession.activeStepIndex
+                        val isCompleted = activeRoute.steps[idx].isCompleted
+                        val waypointColor = when {
+                            isActive -> if (redLightMode) Color(0xFFFF1744) else StarGold
+                            isCompleted -> if (redLightMode) Color(0xFFB71C1C) else AstraSuccess
+                            else -> if (redLightMode) Color(0xFFEF5350).copy(alpha = 0.6f) else Color(0xFF90CAF9).copy(alpha = 0.6f)
+                        }
+                        drawCircle(
+                            color = waypointColor,
+                            radius = if (isActive) 12.dp.toPx() else 8.dp.toPx(),
+                            center = pt,
+                            style = Stroke(width = if (isActive) 2.5.dp.toPx() else 1.5.dp.toPx())
+                        )
+                        drawCircle(
+                            color = waypointColor.copy(alpha = if (isActive) 0.35f else 0.15f),
+                            radius = if (isActive) 12.dp.toPx() else 8.dp.toPx(),
+                            center = pt
+                        )
+                        if (isActive) {
+                            val rOuter = 20.dp.toPx()
+                            drawCircle(
+                                color = waypointColor.copy(alpha = 0.6f),
+                                radius = rOuter,
+                                center = pt,
+                                style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+                            )
+                            val crossLen = 6.dp.toPx()
+                            drawLine(waypointColor, pt - Offset(0f, rOuter + crossLen), pt - Offset(0f, rOuter - crossLen), 1.5.dp.toPx())
+                            drawLine(waypointColor, pt + Offset(0f, rOuter - crossLen), pt + Offset(0f, rOuter + crossLen), 1.5.dp.toPx())
+                            drawLine(waypointColor, pt - Offset(rOuter + crossLen, 0f), pt - Offset(rOuter - crossLen, 0f), 1.5.dp.toPx())
+                            drawLine(waypointColor, pt + Offset(rOuter - crossLen, 0f), pt + Offset(rOuter + crossLen, 0f), 1.5.dp.toPx())
+                        }
+                        val stepPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            textSize = 10.sp.toPx()
+                            isFakeBoldText = true
+                            color = if (redLightMode) android.graphics.Color.rgb(255, 82, 82) else android.graphics.Color.WHITE
+                            setShadowLayer(2.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
+                        }
+                        val stepNumStr = "${idx + 1}"
+                        val textW = stepPaint.measureText(stepNumStr)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            stepNumStr,
+                            pt.x - textW / 2f,
+                            pt.y + 3.5.dp.toPx(),
+                            stepPaint
+                        )
+                    }
+                }
+            }
+
+            // Celestial measurement visualization
+            if (measurementState.isActive && coordinateFrame != null) {
+                val originPt = measurementState.origin
+                val targetPt = measurementState.target
+                val measureColor = if (redLightMode) Color(0xFFFF5252) else Color(0xFF00E5FF)
+                val textMeasureColor = if (redLightMode) android.graphics.Color.rgb(255, 82, 82) else android.graphics.Color.rgb(0, 229, 255)
+
+                if (originPt != null) {
+                    val origHoriz = coordinateFrame.horizontal(originPt.equatorial.raHours, originPt.equatorial.decDegrees)
+                    projection.point(origHoriz, padding = 24f)?.let { pt ->
+                        drawCircle(measureColor, 7.dp.toPx(), pt, style = Stroke(2.dp.toPx()))
+                        drawCircle(measureColor, 2.5.dp.toPx(), pt)
+                    }
+                }
+
+                if (targetPt != null) {
+                    val targHoriz = coordinateFrame.horizontal(targetPt.equatorial.raHours, targetPt.equatorial.decDegrees)
+                    projection.point(targHoriz, padding = 24f)?.let { pt ->
+                        drawCircle(measureColor, 7.dp.toPx(), pt, style = Stroke(2.dp.toPx()))
+                        drawCircle(measureColor, 2.5.dp.toPx(), pt)
+                    }
+                }
+
+                if (originPt != null && targetPt != null) {
+                    val arc = CelestialMeasurement.interpolateGreatCircle(originPt.equatorial, targetPt.equatorial, numSegments = 24)
+                    val arcHoriz = arc.map { coordinateFrame.horizontal(it.raHours, it.decDegrees) }
+                    arcHoriz.zipWithNext().forEach { (from, to) ->
+                        projection.segments(from, to, padding = 1f).forEach { seg ->
+                            drawLine(
+                                color = measureColor,
+                                start = seg.start,
+                                end = seg.end,
+                                strokeWidth = 2.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+                            )
+                        }
+                    }
+
+                    val midEq = CelestialMeasurement.interpolateMidpoint(originPt.equatorial, targetPt.equatorial)
+                    val midHoriz = coordinateFrame.horizontal(midEq.raHours, midEq.decDegrees)
+                    projection.point(midHoriz, padding = 32f)?.let { midPt ->
+                        val result = measurementState.result
+                        if (result != null) {
+                            val badgeText = "${result.formattedDistance} (${String.format(Locale.US, "%.1f°", result.positionAngleDegrees)})"
+                            val badgePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                                textSize = 11.sp.toPx()
+                                color = textMeasureColor
+                                isFakeBoldText = true
+                                setShadowLayer(3.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
+                            }
+                            val textW = badgePaint.measureText(badgeText)
+                            drawContext.canvas.nativeCanvas.drawText(
+                                badgeText,
+                                midPt.x - textW / 2f,
+                                midPt.y - 8.dp.toPx(),
+                                badgePaint
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1805,8 +2412,16 @@ internal fun SkyCanvas(
                         if (radius > 2f) drawCircle(Color.White, radius * 0.4f, point, alpha = 0.78f)
                     }
                     CelestialType.SUN, CelestialType.MOON, CelestialType.PLANET -> {
-                        drawCircle(solarSystemColor(objectData.solarBody), radius * 1.8f, point, alpha = 0.18f)
-                        drawCircle(solarSystemColor(objectData.solarBody), radius, point)
+                        if (horizontalFov <= 45.0 && objectData.solarBody == Body.Jupiter) {
+                            drawZoomedJupiter(point, radius, skyInstant, projection)
+                        } else if (horizontalFov <= 45.0 && objectData.solarBody == Body.Saturn) {
+                            drawZoomedSaturn(point, radius, skyInstant, projection)
+                        } else if (horizontalFov <= 45.0 && objectData.solarBody == Body.Moon) {
+                            drawZoomedMoon(point, radius, skyInstant)
+                        } else {
+                            drawCircle(solarSystemColor(objectData.solarBody), radius * 1.8f, point, alpha = 0.18f)
+                            drawCircle(solarSystemColor(objectData.solarBody), radius, point)
+                        }
                     }
                     else -> {
                         drawCircle(deepSkyColor(objectData.objectType), radius, point, style = Stroke(2.5f))
@@ -1817,6 +2432,13 @@ internal fun SkyCanvas(
                             1.5f
                         )
                     }
+                }
+                if (ObservationCatalogMatcher.isObserved(objectData.catalogId, loggedCatalogIds)) {
+                    drawCircle(
+                        color = AstraSuccess,
+                        radius = 3.5.dp.toPx(),
+                        center = point + Offset(radius + 5f, -radius * 0.5f)
+                    )
                 }
             }
         }
@@ -1837,7 +2459,7 @@ internal fun SkyCanvas(
         // Draw terrain & selection ring
         withOpticsTransform {
             if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
-            else drawSphericalTerrainHorizon(terrainProfile, projection)
+            else drawSphericalTerrainHorizon(terrainProfile, projection, viewAzimuth, viewAltitude)
             selectedPoint?.let { point ->
                 drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
             }
@@ -1860,7 +2482,7 @@ internal fun SkyCanvas(
         if (!arMode && (opticsSettings.fovCircleEnabled || opticsSettings.telradMode)) {
             fun fovDiameterToRadiusPx(deg: Double): Float {
                 val halfAngle = Math.toRadians(deg.coerceAtLeast(0.001) / 4.0)
-                val screenQuarterFov = Math.toRadians(horizontalFov.coerceIn(1.0, 179.0) / 4.0)
+                val screenQuarterFov = Math.toRadians(horizontalFov.coerceIn(0.5, 179.0) / 4.0)
                 return ((size.width / (2.0 * tan(screenQuarterFov))) * tan(halfAngle)).toFloat()
             }
 
@@ -2054,25 +2676,47 @@ private fun DrawScope.drawTerrainHorizon(
     }
 }
 
-private fun DrawScope.drawSphericalTerrainHorizon(profile: TerrainProfile?, projection: SkyProjection) {
+private fun DrawScope.drawSphericalTerrainHorizon(
+    profile: TerrainProfile?,
+    projection: SkyProjection,
+    viewAzimuth: Double,
+    viewAltitude: Double
+) {
+    if (size.width <= 0f || size.height <= 0f) return
+
     val horizon = (0..120).map { step ->
         val azimuth = step * 3.0
         HorizontalCoordinates(azimuth, profile?.altitudeAt(azimuth) ?: 0.0)
     }
-    val nadir = HorizontalCoordinates(0.0, -90.0)
-    val ground = Path().apply {
-        horizon.zipWithNext().forEach { (from, to) ->
-            val polygon = projection.polygon(listOf(from, to, nadir))
-            if (polygon.size >= 3) {
-                moveTo(polygon.first().x, polygon.first().y)
-                polygon.drop(1).forEach { lineTo(it.x, it.y) }
-                close()
-            }
-        }
+
+    // Sample visible horizon curve across the observer's field of view
+    val points = (0..160).mapNotNull { step ->
+        val relAz = -120.0 + step * (240.0 / 160.0)
+        val sampleAz = ((viewAzimuth + relAz) % 360.0 + 360.0) % 360.0
+        val alt = profile?.altitudeAt(sampleAz) ?: 0.0
+        projection.point(HorizontalCoordinates(sampleAz, alt), padding = 20f)
     }
-    drawPath(ground, Color(0xFF03070D))
-    drawPath(projectedPath(horizon, projection, padding = 1.1f), StarGold.copy(alpha = 0.72f),
-        style = Stroke(2.2f, join = StrokeJoin.Round))
+
+    if (points.isNotEmpty()) {
+        val ground = Path().apply {
+            moveTo(-20f, points.first().y)
+            points.forEach { lineTo(it.x, it.y) }
+            lineTo(size.width + 20f, points.last().y)
+            lineTo(size.width + 20f, size.height + 20f)
+            lineTo(-20f, size.height + 20f)
+            close()
+        }
+        drawPath(ground, Color(0xFF03070D))
+    } else if (viewAltitude < 0.0) {
+        // Looking directly down at nadir: entire viewport is ground
+        drawRect(Color(0xFF03070D))
+    }
+
+    drawPath(
+        projectedPath(horizon, projection, padding = 1.1f),
+        StarGold.copy(alpha = 0.72f),
+        style = Stroke(2.2f, join = StrokeJoin.Round)
+    )
 }
 
 private fun DrawScope.drawSkyGrid(viewAzimuth: Double, viewAltitude: Double) {
@@ -2118,7 +2762,11 @@ private fun ObjectDetails(
     terrain: TerrainProfile?,
     isFavorite: Boolean,
     toggleFavorite: () -> Unit,
-    onAddLogEntry: ((CelestialObject) -> Unit)? = null
+    onAddLogEntry: ((CelestialObject) -> Unit)? = null,
+    onOpenMoonDetail: (() -> Unit)? = null,
+    onStartMeasurement: ((VisibleObject) -> Unit)? = null,
+    onStartStarHop: ((StarHopRoute) -> Unit)? = null,
+    isObservedInLogbook: Boolean = false
 ) {
     val objectData = item.celestial
     val path = remember(item.celestial, observer, skyInstant) {
@@ -2131,7 +2779,23 @@ private fun ObjectDetails(
         Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text(objectData.name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(objectData.name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            if (isObservedInLogbook) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF163228)),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        "✓ Im Logbuch",
+                        color = AstraSuccess,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
         Text(objectData.catalogId, color = AstraBlue)
         Text((if (simulated) "Simulation · " else "Jetzt · ") +
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss XXX").withZone(ZoneId.systemDefault()).format(skyInstant),
@@ -2165,6 +2829,37 @@ private fun ObjectDetails(
                     Text("Beobachten")
                 }
             }
+            if (onStartMeasurement != null) {
+                Button(
+                    onClick = { onStartMeasurement(item) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AstraSurfaceHigh,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Rounded.Straighten, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Abstand messen")
+                }
+            }
+            if (onStartStarHop != null) {
+                val matchingRoutes = remember<List<StarHopRoute>>(objectData.catalogId) {
+                    StarHopCatalog.findRoutesForTarget(objectData.catalogId)
+                }
+                if (matchingRoutes.isNotEmpty()) {
+                    Button(
+                        onClick = { onStartStarHop(matchingRoutes.first()) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AstraSurfaceHigh,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.AltRoute, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Star-Hop starten")
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
         DetailRow("Objekttyp", objectData.objectType.label)
@@ -2188,6 +2883,29 @@ private fun ObjectDetails(
             if (objectData.astronomyDescription.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
                 Text(objectData.astronomyDescription, color = Color(0xFFAAB8CE))
+            }
+            if (objectData.solarBody == Body.Jupiter) {
+                val jupiter = remember(skyInstant) { SolarSystemCatalog.jupiterSystem(skyInstant) }
+                Spacer(Modifier.height(18.dp))
+                Text("Galileische Monde", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                JupiterMoonsDiagram(jupiter)
+                Spacer(Modifier.height(8.dp))
+                JupiterMoonEventsBadges(jupiter)
+            } else if (objectData.solarBody == Body.Saturn) {
+                val saturn = remember(skyInstant) { SolarSystemCatalog.saturnSystem(skyInstant) }
+                Spacer(Modifier.height(18.dp))
+                Text("Ringsystem & Titan", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                DetailRow("Ringöffnungswinkel B", "${saturn.ringTiltDegrees.format(1)}° (${if (saturn.ringTiltDegrees >= 0) "Nordseite" else "Südseite"} sichtbar)")
+                DetailRow("Titan-Abstand", "${saturn.titanOffsetRS.format(1)} Saturnradien")
+                DetailRow("Titan-Positionswinkel", "${saturn.titanPositionAngle.format(0)}°")
+                Spacer(Modifier.height(8.dp))
+                SaturnRingsDiagram(saturn)
+            } else if (objectData.solarBody == Body.Moon) {
+                val terminator = remember(skyInstant) { LunarTerminatorCalculator.calculateTerminator(skyInstant) }
+                Spacer(Modifier.height(18.dp))
+                MoonTerminatorSummary(terminator, onOpenMoonDetail)
             }
         } else if (objectData.objectType == CelestialType.STAR) {
             DetailRow(
@@ -2379,6 +3097,7 @@ internal fun WeatherScreen(
     loadLight: (GeoPoint, Boolean, (LightPollutionState) -> Unit) -> Unit = LightPollutionRepository::load,
     mapContent: @Composable (GeoPoint, Int) -> Unit = { point, refresh -> WeatherMap(point, refresh) }
 ) {
+    val context = LocalContext.current
     val session = remember { WeatherRefreshSession() }
     val state = session.state
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -2397,7 +3116,14 @@ internal fun WeatherScreen(
         if (SecureNetwork.available) {
             val ticket = session.begin(target)
             loadWeather(observer) {
-                if (SecureNetwork.available) session.weather(ticket, it)
+                if (SecureNetwork.available) {
+                    session.weather(ticket, it)
+                    it.getOrNull()?.let { snapshot ->
+                        val score = (100 - snapshot.cloudCover).coerceIn(0, 100)
+                        AstraWidgetUpdater.saveWeatherScore(context, score)
+                        AstraWidgetUpdater.updateAllWidgets(context)
+                    }
+                }
             }
             loadLight(observer, refreshKey > 0) {
                 if (SecureNetwork.available) session.light(ticket, (it as? LightPollutionState.Ready)?.estimate)
@@ -3042,11 +3768,27 @@ internal fun ObservationPlanScreen(
     LaunchedEffect(observer, privacy.online) {
         if (privacy.online) {
             WeatherRepository.load(observer) { result ->
-                weatherSnapshot = result.getOrNull()
+                val snapshot = result.getOrNull()
+                weatherSnapshot = snapshot
+                if (snapshot != null) {
+                    val score = (100 - snapshot.cloudCover).coerceIn(0, 100)
+                    AstraWidgetUpdater.saveWeatherScore(context, score)
+                    AstraWidgetUpdater.updateAllWidgets(context)
+                }
             }
         } else {
             weatherSnapshot = null
         }
+    }
+
+    val loggedCatalogIds = remember(logbookEntries) {
+        ObservationCatalogMatcher.buildLoggedTokens(logbookEntries)
+    }
+    val challengeProgressList = remember(logbookEntries) {
+        ObservationChallengeRegistry.evaluateAll(logbookEntries)
+    }
+    val dewReport = remember(weatherSnapshot) {
+        weatherSnapshot?.let { DewMonitor.assessRisk(it.temperature, it.relativeHumidity) }
     }
 
     val tonightWindow = remember(observer, instant, weatherSnapshot, zone) {
@@ -3143,6 +3885,103 @@ internal fun ObservationPlanScreen(
             }
         }
 
+        dewReport?.let { dew ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Cloud, null, tint = AstraBlue)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Taupunkt & Beschlagsrisiko", fontWeight = FontWeight.Bold)
+                            Text("Sonntag (1990) Magnus-Tetens Formel · 100% offline", color = AstraTextMuted, fontSize = 11.sp)
+                        }
+                        val (chipBg, chipText) = when (dew.riskLevel) {
+                            DewRiskLevel.LOW -> Color(0xFF1B382B) to AstraSuccess
+                            DewRiskLevel.MODERATE -> Color(0xFF3E3317) to StarGold
+                            DewRiskLevel.HIGH -> Color(0xFF4A2218) to Color(0xFFFF9E80)
+                            DewRiskLevel.CRITICAL -> Color(0xFF4D1414) to Color(0xFFFF6E6E)
+                        }
+                        Surface(shape = RoundedCornerShape(8.dp), color = chipBg) {
+                            Text(
+                                text = dew.riskLevel.label,
+                                color = chipText,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = AstraOutline.copy(alpha = 0.4f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Lufttemperatur", fontSize = 11.sp, color = AstraTextMuted)
+                            Text("${dew.ambientTempCelsius.format(1)} °C", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        }
+                        Column {
+                            Text("Relative Feuchte", fontSize = 11.sp, color = AstraTextMuted)
+                            Text("${dew.relativeHumidityPercent.format(0)} %", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        }
+                        Column {
+                            Text("Taupunkt", fontSize = 11.sp, color = AstraTextMuted)
+                            Text("${dew.dewPointCelsius.format(1)} °C", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = StarGold)
+                        }
+                        val chipText = when (dew.riskLevel) {
+                            DewRiskLevel.LOW -> AstraSuccess
+                            DewRiskLevel.MODERATE -> StarGold
+                            DewRiskLevel.HIGH -> Color(0xFFFF9E80)
+                            DewRiskLevel.CRITICAL -> Color(0xFFFF6E6E)
+                        }
+                        Column {
+                            Text("Taumarge (ΔT)", fontSize = 11.sp, color = AstraTextMuted)
+                            Text("${dew.dewMarginCelsius.format(1)} K", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = chipText)
+                        }
+                    }
+                    Text(
+                        text = dew.riskLevel.description,
+                        fontSize = 11.sp,
+                        color = AstraTextMuted
+                    )
+                }
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Star, null, tint = StarGold)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Beobachtungs-Challenges", fontWeight = FontWeight.Bold)
+                        Text("Fortschritt synchronisiert mit deinem Beobachtungstagebuch", color = AstraTextMuted, fontSize = 11.sp)
+                    }
+                }
+                HorizontalDivider(color = AstraOutline.copy(alpha = 0.4f))
+                challengeProgressList.forEach { progress ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(progress.type.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text("${progress.observedCount} / ${progress.totalCount} (${progress.percentComplete.format(1)}%)", fontSize = 12.sp, color = StarGold)
+                        }
+                        LinearProgressIndicator(
+                            progress = { (progress.percentComplete / 100.0).toFloat().coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clipToBounds(),
+                            color = StarGold,
+                            trackColor = AstraSurfaceHigh
+                        )
+                        Text(progress.type.description, fontSize = 10.sp, color = AstraTextMuted)
+                    }
+                }
+            }
+        }
+
         AstraSectionTitle("Was lohnt sich heute Nacht?", "Ausgewählte Highlights über 16° Höhe")
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -3182,7 +4021,14 @@ internal fun ObservationPlanScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(target.objectData.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(target.objectData.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                    if (ObservationCatalogMatcher.isObserved(target.objectData.catalogId, loggedCatalogIds)) {
+                                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF163228)) {
+                                            Text("✓ Im Logbuch", color = AstraSuccess, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                        }
+                                    }
+                                }
                                 Text(
                                     target.highlightTitle,
                                     color = AstraBlue,
@@ -3323,13 +4169,20 @@ internal fun ObservationPlanScreen(
         }
         favorites.forEach { objectData ->
             val position = remember(objectData, observer, instant) { coordinatesAt(objectData, observer, instant) }
-            Card(colors = CardDefaults.cardColors(containerColor = AstraSurface)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Row(
                     Modifier.fillMaxWidth().padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(objectData.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(objectData.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            if (ObservationCatalogMatcher.isObserved(objectData.catalogId, loggedCatalogIds)) {
+                                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF163228)) {
+                                    Text("✓ Im Logbuch", color = AstraSuccess, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                }
+                            }
+                        }
                         Text("${objectData.objectType.label} · ${objectData.catalogId}", color = AstraBlue, fontSize = 12.sp)
                         Text(
                             "Jetzt: Az ${position.azimuth.format(0)}° · Höhe ${position.altitude.format(0)}°",
@@ -3479,7 +4332,7 @@ internal fun ObservationPlanScreen(
 
 @Composable
 private fun EmptyPlanCard(text: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = AstraSurface.copy(alpha = 0.72f))) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Text(text, Modifier.fillMaxWidth().padding(18.dp), color = AstraTextMuted)
     }
 }
@@ -3494,7 +4347,7 @@ private fun LogbookEntryCard(
     onDelete: () -> Unit,
     onShowPhoto: (File) -> Unit
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = AstraSurface)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -3538,6 +4391,15 @@ private fun LogbookEntryCard(
                         )
                     }
                 }
+            }
+
+            val conditions = buildList {
+                entry.seeingPickering?.let { add("Pickering: $it/10") }
+                entry.seeingAntoniadi?.let { add("Antoniadi: $it") }
+                entry.nelm?.let { add("Grenzgröße: ${it.format(1)} mag") }
+            }.joinToString(" · ")
+            if (conditions.isNotBlank()) {
+                Text("Bedingungen: $conditions", fontSize = 12.sp, color = StarGold)
             }
 
             if (entry.equipment.isNotBlank()) {
@@ -3623,6 +4485,9 @@ private fun ObservationLogEntryDialog(
     var attachLocation by remember { mutableStateOf(initialEntry?.latitude != null) }
     var locationCustomName by remember { mutableStateOf(initialEntry?.locationName ?: "") }
     var photoFileName by remember { mutableStateOf(initialEntry?.photoFileName) }
+    var seeingPickeringText by remember { mutableStateOf(initialEntry?.seeingPickering?.toString() ?: "") }
+    var seeingAntoniadi by remember { mutableStateOf(initialEntry?.seeingAntoniadi ?: "") }
+    var nelmText by remember { mutableStateOf(initialEntry?.nelm?.let { "%.1f".format(Locale.US, it) } ?: "") }
 
     val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -3635,7 +4500,7 @@ private fun ObservationLogEntryDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = NightBlue),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().heightIn(max = 620.dp)
         ) {
@@ -3713,6 +4578,48 @@ private fun ObservationLogEntryDialog(
                             Text(seeingLabel, fontSize = 12.sp, color = StarGold)
                         }
                     }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Standardisierte Seeing- & Himmelsbedingungen (optional)", fontSize = 12.sp, color = AstraTextMuted)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = seeingPickeringText,
+                            onValueChange = { seeingPickeringText = it },
+                            label = { Text("Pickering (1–10)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                focusedBorderColor = AstraBlue, unfocusedBorderColor = AstraOutline,
+                                focusedLabelColor = AstraBlue, unfocusedLabelColor = AstraTextMuted
+                            )
+                        )
+                        OutlinedTextField(
+                            value = seeingAntoniadi,
+                            onValueChange = { seeingAntoniadi = it },
+                            label = { Text("Antoniadi (I–V)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                focusedBorderColor = AstraBlue, unfocusedBorderColor = AstraOutline,
+                                focusedLabelColor = AstraBlue, unfocusedLabelColor = AstraTextMuted
+                            )
+                        )
+                    }
+                    OutlinedTextField(
+                        value = nelmText,
+                        onValueChange = { nelmText = it },
+                        label = { Text("Grenzgröße NELM / fst (z. B. 6.2 mag)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = AstraBlue, unfocusedBorderColor = AstraOutline,
+                            focusedLabelColor = AstraBlue, unfocusedLabelColor = AstraTextMuted
+                        )
+                    )
                 }
 
                 OutlinedTextField(
@@ -3871,6 +4778,9 @@ private fun ObservationLogEntryDialog(
                             val finalLat = if (attachLocation) currentLocation?.latitude ?: initialEntry?.latitude else null
                             val finalLon = if (attachLocation) currentLocation?.longitude ?: initialEntry?.longitude else null
                             val finalLocName = if (attachLocation) locationCustomName.ifBlank { null } else null
+                            val parsedPickering = seeingPickeringText.toIntOrNull()?.takeIf { SeeingScaleValidator.isValidPickering(it) }
+                            val parsedAntoniadi = seeingAntoniadi.trim().uppercase().takeIf { SeeingScaleValidator.isValidAntoniadi(it) }
+                            val parsedNelm = nelmText.replace(',', '.').toDoubleOrNull()?.takeIf { SeeingScaleValidator.isValidNelm(it) }
                             val newEntry = ObservationLogEntry(
                                 id = initialEntry?.id ?: UUID.randomUUID().toString(),
                                 objectCatalogId = catalogId.trim(),
@@ -3883,7 +4793,10 @@ private fun ObservationLogEntryDialog(
                                 locationName = finalLocName,
                                 latitude = finalLat,
                                 longitude = finalLon,
-                                photoFileName = photoFileName
+                                photoFileName = photoFileName,
+                                seeingPickering = parsedPickering,
+                                seeingAntoniadi = parsedAntoniadi,
+                                nelm = parsedNelm
                             )
                             onSave(newEntry)
                         },
@@ -3917,7 +4830,7 @@ private fun LogbookExportImportDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = NightBlue),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().heightIn(max = 620.dp)
         ) {
@@ -3945,20 +4858,22 @@ private fun LogbookExportImportDialog(
                 }
 
                 Text("Export (${entries.size} Einträge lokal)", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+
+                Text("1. JSON-Backup (Vollständige Sicherung)", fontSize = 12.sp, color = AstraTextMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = {
                             val json = ObservationLogbookStore.exportJson(context)
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Astra Beobachtungstagebuch", json))
-                            Toast.makeText(context, "In Zwischenablage kopiert", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "JSON in Zwischenablage kopiert", Toast.LENGTH_SHORT).show()
                         },
                         border = BorderStroke(1.dp, AstraOutline),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                     ) {
                         Icon(Icons.Rounded.ContentCopy, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Kopieren", fontSize = 12.sp)
+                        Text("JSON Kopieren", fontSize = 12.sp)
                     }
                     Button(
                         onClick = {
@@ -3967,13 +4882,79 @@ private fun LogbookExportImportDialog(
                                 putExtra(Intent.EXTRA_TEXT, json)
                                 type = "text/plain"
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, "Astra Beobachtungstagebuch"))
+                            context.startActivity(Intent.createChooser(sendIntent, "Astra Beobachtungstagebuch JSON"))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
                     ) {
                         Icon(Icons.Rounded.Share, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Teilen", fontSize = 12.sp)
+                        Text("JSON Teilen", fontSize = 12.sp)
+                    }
+                }
+
+                Text("2. OpenAstronomyLog 2.1 (OAL XML Standard)", fontSize = 12.sp, color = AstraTextMuted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val xml = ObservationLogbookStore.exportOalXml(entries)
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Astra OAL 2.1 XML", xml))
+                            Toast.makeText(context, "OAL XML in Zwischenablage kopiert", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, AstraOutline),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("OAL XML Kopieren", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = {
+                            val xml = ObservationLogbookStore.exportOalXml(entries)
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                putExtra(Intent.EXTRA_TEXT, xml)
+                                type = "application/xml"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Astra OAL XML Export"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
+                    ) {
+                        Icon(Icons.Rounded.Share, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("OAL Teilen", fontSize = 12.sp)
+                    }
+                }
+
+                Text("3. Rotlicht-Textzusammenfassung", fontSize = 12.sp, color = AstraTextMuted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val text = ObservationLogbookStore.exportFormattedText(entries)
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Astra Beobachtungszusammenfassung", text))
+                            Toast.makeText(context, "Zusammenfassung kopiert", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, AstraOutline),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Text Kopieren", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = {
+                            val text = ObservationLogbookStore.exportFormattedText(entries)
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                putExtra(Intent.EXTRA_TEXT, text)
+                                type = "text/plain"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Astra Beobachtungszusammenfassung"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
+                    ) {
+                        Icon(Icons.Rounded.Share, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Text Teilen", fontSize = 12.sp)
                     }
                 }
 
@@ -4090,7 +5071,7 @@ private fun FullPhotoDialog(
     }
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = Night),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -4127,6 +5108,8 @@ private fun FullPhotoDialog(
 private fun AboutScreen(
     redLightMode: Boolean,
     setRedLightMode: (Boolean) -> Unit,
+    oledBlackMode: Boolean = false,
+    setOledBlackMode: (Boolean) -> Unit = {},
     privacy: PrivacyOptions,
     rememberLocation: Boolean,
     onRememberLocationChange: (Boolean) -> Unit,
@@ -4166,6 +5149,25 @@ private fun AboutScreen(
                     Text("Schont die Dunkeladaption bei der Beobachtung", color = AstraTextMuted, fontSize = 12.sp)
                 }
                 Switch(checked = redLightMode, onCheckedChange = setRedLightMode)
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = AstraSurfaceHigh),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, StarGold.copy(alpha = 0.30f))
+        ) {
+            Row(
+                Modifier.fillMaxWidth().clickable { setOledBlackMode(!oledBlackMode) }.padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.DarkMode, contentDescription = null, tint = StarGold)
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("OLED Reinstschwarz (#000000)", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text("Schaltet UI-Hintergründe auf reines Schwarz zur maximalen Akku- und Dunkeladaptation", color = AstraTextMuted, fontSize = 12.sp)
+                }
+                Switch(checked = oledBlackMode, onCheckedChange = setOledBlackMode)
             }
         }
         AboutInfoCard(
@@ -4646,6 +5648,12 @@ internal object SolarSystemCatalog {
         val topocentric = horizon(time, place, current.ra, current.dec, Refraction.Normal)
         return HorizontalCoordinates(topocentric.azimuth, topocentric.altitude)
     }
+
+    fun jupiterSystem(instant: Instant): JupiterSystemState =
+        JupiterMoonsCalculator.calculate(instant)
+
+    fun saturnSystem(instant: Instant): SaturnSystemState =
+        SaturnSystemCalculator.calculate(instant)
 }
 
 internal fun coordinatesAt(
@@ -4707,3 +5715,378 @@ private fun cardinalDirection(azimuth: Float): String = when (((azimuth + 22.5f)
     6 -> "W"
     else -> "NW"
 }
+
+internal fun DrawScope.drawSatellitePassTrack(
+    pass: SatellitePass,
+    projection: SkyProjection,
+    currentTime: Instant,
+    arMode: Boolean
+) {
+    val points = pass.trackPoints
+    if (points.size < 2) return
+
+    for (i in 0 until points.size - 1) {
+        val p1 = points[i]
+        val p2 = points[i + 1]
+        val segments = projection.segments(p1.position, p2.position, padding = 2f)
+
+        val color = if (p1.isVisible) {
+            StarGold
+        } else {
+            Color(0xFF78909C).copy(alpha = 0.4f)
+        }
+        val strokeWidth = if (p1.isVisible) (if (arMode) 3.5f else 2.5f) else 1.2f
+
+        segments.forEach { seg ->
+            drawLine(color = color, start = seg.start, end = seg.end, strokeWidth = strokeWidth)
+        }
+    }
+
+    pass.timeMarkers.forEach { marker ->
+        val screenPos = projection.point(marker.position)
+        if (screenPos != null) {
+            drawCircle(
+                color = StarGold,
+                radius = 3.5f,
+                center = screenPos
+            )
+        }
+    }
+
+    if (currentTime >= pass.riseTime && currentTime <= pass.setTime) {
+        val activePoint = points.minByOrNull { abs(it.time.toEpochMilli() - currentTime.toEpochMilli()) }
+        if (activePoint != null) {
+            val screenPos = projection.point(activePoint.position)
+            if (screenPos != null) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(StarGold.copy(alpha = 0.45f), Color.Transparent),
+                        center = screenPos,
+                        radius = 24f
+                    ),
+                    radius = 24f,
+                    center = screenPos
+                )
+                drawCircle(color = StarGold, radius = 6f, center = screenPos)
+                drawCircle(color = Color.White, radius = 3f, center = screenPos)
+            }
+        }
+    }
+}
+
+internal fun DrawScope.drawZoomedJupiter(
+    center: Offset,
+    baseRadius: Float,
+    skyInstant: Instant,
+    projection: SkyProjection
+) {
+    val planetR = baseRadius.coerceIn(12f, 32f)
+    drawCircle(Color(0xFFD4A373), planetR, center)
+    val bandColor = Color(0xFF9C6644).copy(alpha = 0.6f)
+    drawLine(bandColor, center + Offset(-planetR * 0.9f, -planetR * 0.35f), center + Offset(planetR * 0.9f, -planetR * 0.35f), strokeWidth = planetR * 0.22f)
+    drawLine(bandColor, center + Offset(-planetR * 0.9f, planetR * 0.35f), center + Offset(planetR * 0.9f, planetR * 0.35f), strokeWidth = planetR * 0.22f)
+
+    val jupiter = JupiterMoonsCalculator.calculate(skyInstant)
+    jupiter.moons.forEach { moon ->
+        val scale = planetR * 1.5f
+        val moonX = center.x + (moon.offsetRJ * scale / 5.0).toFloat()
+        val moonY = center.y
+
+        if (moon.isShadowTransiting && moon.shadowOffsetRJ != null) {
+            val shadowX = center.x + (moon.shadowOffsetRJ * scale / 5.0).toFloat()
+            drawCircle(Color.Black, 2f, Offset(shadowX, moonY))
+        }
+
+        if (moon.event != JupiterMoonEvent.OCCULTATION && moon.event != JupiterMoonEvent.ECLIPSE) {
+            val moonColor = when (moon.name) {
+                "Io" -> Color(0xFFFFD54F)
+                "Europa" -> Color(0xFFE0F7FA)
+                "Ganymede" -> Color(0xFFCFD8DC)
+                else -> Color(0xFF90A4AE)
+            }
+            drawCircle(moonColor, 2.5f, Offset(moonX, moonY))
+        }
+    }
+}
+
+internal fun DrawScope.drawZoomedSaturn(
+    center: Offset,
+    baseRadius: Float,
+    skyInstant: Instant,
+    projection: SkyProjection
+) {
+    val planetR = baseRadius.coerceIn(10f, 26f)
+    val saturn = SaturnSystemCalculator.calculate(skyInstant)
+    val ringR = planetR * 2.3f
+    val bRad = Math.toRadians(saturn.ringTiltDegrees)
+    val ringMinorR = max(2f, ringR * abs(sin(bRad)).toFloat())
+
+    val ringColor = Color(0xFFE6D2B5).copy(alpha = 0.85f)
+    val ringInnerColor = Color(0xFFCBB282).copy(alpha = 0.7f)
+
+    drawCircle(Color(0xFFE8D39E), planetR, center)
+
+    drawOval(
+        color = ringColor,
+        topLeft = Offset(center.x - ringR, center.y - ringMinorR),
+        size = androidx.compose.ui.geometry.Size(ringR * 2f, ringMinorR * 2f),
+        style = Stroke(width = max(2.5f, planetR * 0.35f))
+    )
+    drawOval(
+        color = ringInnerColor,
+        topLeft = Offset(center.x - ringR * 0.75f, center.y - ringMinorR * 0.75f),
+        size = androidx.compose.ui.geometry.Size(ringR * 1.5f, ringMinorR * 1.5f),
+        style = Stroke(width = max(1.5f, planetR * 0.2f))
+    )
+
+    val titanScale = planetR * 3.5f
+    val paRad = Math.toRadians(saturn.titanPositionAngle - 90.0)
+    val titanDist = (saturn.titanOffsetRS / 20.0 * titanScale).toFloat()
+    val titanPos = center + Offset(titanDist * cos(paRad).toFloat(), titanDist * sin(paRad).toFloat())
+    drawCircle(Color(0xFFFFB74D), 2.5f, titanPos)
+}
+
+internal fun DrawScope.drawZoomedMoon(
+    center: Offset,
+    baseRadius: Float,
+    skyInstant: Instant
+) {
+    val moonR = baseRadius.coerceIn(16f, 38f)
+    val terminator = LunarTerminatorCalculator.calculateTerminator(skyInstant)
+
+    drawCircle(Color(0xFF1E232A), moonR, center)
+
+    val phase = terminator.phaseFraction.toFloat()
+    val brightColor = Color(0xFFECEFF1)
+    if (phase > 0.02f) {
+        drawCircle(brightColor, moonR, center)
+        if (phase < 0.98f) {
+            val isWaxing = terminator.colongitude in 270.0..360.0 || terminator.colongitude in 0.0..90.0
+            val shadowColor = Color(0xFF1E232A)
+            val shadowOvalWidth = moonR * 2f * abs(2f * phase - 1f)
+            if (phase < 0.5f) {
+                drawRect(
+                    color = shadowColor,
+                    topLeft = if (isWaxing) Offset(center.x - moonR, center.y - moonR) else Offset(center.x, center.y - moonR),
+                    size = androidx.compose.ui.geometry.Size(moonR, moonR * 2f)
+                )
+                drawOval(
+                    color = shadowColor,
+                    topLeft = Offset(center.x - shadowOvalWidth / 2f, center.y - moonR),
+                    size = androidx.compose.ui.geometry.Size(shadowOvalWidth, moonR * 2f)
+                )
+            } else {
+                drawRect(
+                    color = shadowColor,
+                    topLeft = if (isWaxing) Offset(center.x - moonR, center.y - moonR) else Offset(center.x, center.y - moonR),
+                    size = androidx.compose.ui.geometry.Size(moonR, moonR * 2f)
+                )
+                drawOval(
+                    color = brightColor,
+                    topLeft = Offset(center.x - shadowOvalWidth / 2f, center.y - moonR),
+                    size = androidx.compose.ui.geometry.Size(shadowOvalWidth, moonR * 2f)
+                )
+            }
+        }
+    }
+    drawCircle(Color.White.copy(alpha = 0.2f), moonR, center, style = Stroke(1f))
+}
+
+@Composable
+internal fun JupiterMoonsDiagram(jupiter: JupiterSystemState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text("Konfiguration der Galileischen Monde (Ost ↔ West)", fontSize = 11.sp, color = AstraTextMuted)
+            Spacer(Modifier.height(8.dp))
+            Canvas(modifier = Modifier.fillMaxWidth().height(80.dp)) {
+                val centerY = size.height / 2f
+                val centerX = size.width / 2f
+                val maxOffsetRJ = 28.0
+                val scale = (size.width / 2f - 24f) / maxOffsetRJ
+
+                drawLine(
+                    color = Color.White.copy(alpha = 0.12f),
+                    start = Offset(12f, centerY),
+                    end = Offset(size.width - 12f, centerY),
+                    strokeWidth = 1f
+                )
+
+                val jupW = 20.dp.toPx()
+                val jupH = 18.dp.toPx()
+                drawOval(
+                    color = Color(0xFFD4A373),
+                    topLeft = Offset(centerX - jupW / 2f, centerY - jupH / 2f),
+                    size = androidx.compose.ui.geometry.Size(jupW, jupH)
+                )
+                drawLine(
+                    color = Color(0xFF9C6644).copy(alpha = 0.7f),
+                    start = Offset(centerX - jupW * 0.45f, centerY - jupH * 0.2f),
+                    end = Offset(centerX + jupW * 0.45f, centerY - jupH * 0.2f),
+                    strokeWidth = 2.5f
+                )
+                drawLine(
+                    color = Color(0xFF9C6644).copy(alpha = 0.7f),
+                    start = Offset(centerX - jupW * 0.45f, centerY + jupH * 0.2f),
+                    end = Offset(centerX + jupW * 0.45f, centerY + jupH * 0.2f),
+                    strokeWidth = 2.5f
+                )
+
+                jupiter.moons.forEach { moon ->
+                    val moonX = (centerX + moon.offsetRJ * scale).toFloat()
+                    val moonColor = when (moon.name) {
+                        "Io" -> Color(0xFFFFD54F)
+                        "Europa" -> Color(0xFFE0F7FA)
+                        "Ganymede" -> Color(0xFFCFD8DC)
+                        else -> Color(0xFF90A4AE)
+                    }
+
+                    if (moon.isShadowTransiting && moon.shadowOffsetRJ != null) {
+                        val shadowX = (centerX + moon.shadowOffsetRJ * scale).toFloat()
+                        drawCircle(Color.Black, 3f, Offset(shadowX, centerY))
+                    }
+
+                    val isHidden = moon.event == JupiterMoonEvent.OCCULTATION || moon.event == JupiterMoonEvent.ECLIPSE || moon.isInEclipse
+                    val dotAlpha = if (isHidden) 0.35f else 1.0f
+                    drawCircle(moonColor.copy(alpha = dotAlpha), 4.5f, Offset(moonX, centerY))
+
+                    val textPaint = android.graphics.Paint().apply {
+                        color = if (isHidden) 0x66FFFFFF else android.graphics.Color.WHITE
+                        textSize = 10.sp.toPx()
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isAntiAlias = true
+                    }
+                    val labelY = if (moon.name == "Io" || moon.name == "Ganymede") centerY - 10f else centerY + 18f
+                    drawContext.canvas.nativeCanvas.drawText(moon.name.take(1), moonX, labelY, textPaint)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun JupiterMoonEventsBadges(jupiter: JupiterSystemState) {
+    val events = jupiter.activeEvents
+    if (events.isEmpty()) {
+        Text("Alle 4 Galileischen Monde frei sichtbar (keine Transite/Okkultationen)", fontSize = 12.sp, color = AstraTextMuted)
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            events.forEach { (moon, event) ->
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = AstraSurfaceHigh,
+                    border = BorderStroke(1.dp, StarGold.copy(alpha = 0.5f))
+                ) {
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Info, null, tint = StarGold, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("${moon.name}: ${event.label}", fontSize = 12.sp, color = StarGold, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SaturnRingsDiagram(saturn: SaturnSystemState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text("Saturn Ringsystem & Titan-Position", fontSize = 11.sp, color = AstraTextMuted)
+            Spacer(Modifier.height(8.dp))
+            Canvas(modifier = Modifier.fillMaxWidth().height(100.dp)) {
+                val center = Offset(size.width / 2f, size.height / 2f)
+                val planetR = 14.dp.toPx()
+                val ringMajor = 34.dp.toPx()
+                val bRad = Math.toRadians(saturn.ringTiltDegrees)
+                val ringMinor = max(3f, ringMajor * abs(sin(bRad)).toFloat())
+
+                drawCircle(Color(0xFFE8D39E), planetR, center)
+
+                drawOval(
+                    color = Color(0xFFE6D2B5).copy(alpha = 0.9f),
+                    topLeft = Offset(center.x - ringMajor, center.y - ringMinor),
+                    size = androidx.compose.ui.geometry.Size(ringMajor * 2f, ringMinor * 2f),
+                    style = Stroke(width = 4f)
+                )
+                drawOval(
+                    color = Color(0xFFCBB282).copy(alpha = 0.7f),
+                    topLeft = Offset(center.x - ringMajor * 0.78f, center.y - ringMinor * 0.78f),
+                    size = androidx.compose.ui.geometry.Size(ringMajor * 1.56f, ringMinor * 1.56f),
+                    style = Stroke(width = 2f)
+                )
+
+                val titanScale = (size.width / 2f - 24f) / 22.0f
+                val paRad = Math.toRadians(saturn.titanPositionAngle - 90.0)
+                val titanDist = (saturn.titanOffsetRS * titanScale).toFloat()
+                val titanX = center.x + titanDist * cos(paRad).toFloat()
+                val titanY = center.y + titanDist * sin(paRad).toFloat()
+
+                drawCircle(Color(0xFFFFB74D), 4f, Offset(titanX, titanY))
+                val textPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = 10.sp.toPx()
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                drawContext.canvas.nativeCanvas.drawText("Titan", titanX, titanY - 8f, textPaint)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun MoonTerminatorSummary(
+    terminator: LunarTerminatorState,
+    onOpenMoonDetail: (() -> Unit)?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Mondterminator & Oberflächenrelief", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            DetailRow("Colongitude C₀", "${terminator.colongitude.format(1)}°")
+            DetailRow(
+                "Optische Libration",
+                "L ${if (terminator.subEarthLon >= 0) "+" else ""}${terminator.subEarthLon.format(1)}° · B ${if (terminator.subEarthLat >= 0) "+" else ""}${terminator.subEarthLat.format(1)}°"
+            )
+            DetailRow("Morgenterminator", "${terminator.morningTerminatorLon(0.0).format(1)}° selenographische Länge")
+
+            val topFeatures = remember(terminator) {
+                LunarTerminatorCalculator.featuresNearTerminator(terminator).take(3)
+            }
+            if (topFeatures.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Im besten Relief am Terminator:", fontSize = 12.sp, color = StarGold, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    topFeatures.forEach { highlight ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("• ${highlight.feature.name} (${highlight.feature.type.label})", fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text("Sonnenhöhe ${highlight.sunElevationDegrees.format(1)}°", fontSize = 11.sp, color = AstraBlue)
+                        }
+                    }
+                }
+            }
+
+            if (onOpenMoonDetail != null) {
+                Spacer(Modifier.height(6.dp))
+                Button(
+                    onClick = onOpenMoonDetail,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AstraBlue)
+                ) {
+                    Icon(Icons.Rounded.Explore, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Mondkarte & Relief-Details öffnen")
+                }
+            }
+        }
+    }
+}
+

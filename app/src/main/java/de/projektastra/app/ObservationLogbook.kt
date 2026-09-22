@@ -20,7 +20,10 @@ internal data class ObservationLogEntry(
     val locationName: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val photoFileName: String? = null
+    val photoFileName: String? = null,
+    val seeingPickering: Int? = null, // 1..10
+    val seeingAntoniadi: String? = null, // I..V
+    val nelm: Double? = null // Naked Eye Limiting Magnitude (fst)
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -35,12 +38,25 @@ internal data class ObservationLogEntry(
         latitude?.let { put("latitude", it) }
         longitude?.let { put("longitude", it) }
         photoFileName?.let { put("photoFileName", it) }
+        seeingPickering?.let { put("seeingPickering", it) }
+        seeingAntoniadi?.let { put("seeingAntoniadi", it) }
+        nelm?.let { put("nelm", it) }
     }
 
     companion object {
         fun fromJsonObject(json: JSONObject): ObservationLogEntry {
             val typeName = json.optString("objectType", "STAR")
             val type = runCatching { CelestialType.valueOf(typeName) }.getOrDefault(CelestialType.STAR)
+            val pickering = if (json.has("seeingPickering") && !json.isNull("seeingPickering")) {
+                json.getInt("seeingPickering").coerceIn(1, 10)
+            } else null
+            val antoniadi = if (json.has("seeingAntoniadi") && !json.isNull("seeingAntoniadi")) {
+                json.getString("seeingAntoniadi").takeIf { it.isNotBlank() }
+            } else null
+            val nelm = if (json.has("nelm") && !json.isNull("nelm")) {
+                json.getDouble("nelm").coerceIn(0.0, 9.0)
+            } else null
+
             return ObservationLogEntry(
                 id = json.optString("id", UUID.randomUUID().toString()),
                 objectCatalogId = json.optString("objectCatalogId", ""),
@@ -53,7 +69,10 @@ internal data class ObservationLogEntry(
                 locationName = if (json.has("locationName") && !json.isNull("locationName")) json.getString("locationName") else null,
                 latitude = if (json.has("latitude") && !json.isNull("latitude")) json.getDouble("latitude") else null,
                 longitude = if (json.has("longitude") && !json.isNull("longitude")) json.getDouble("longitude") else null,
-                photoFileName = if (json.has("photoFileName") && !json.isNull("photoFileName")) json.getString("photoFileName") else null
+                photoFileName = if (json.has("photoFileName") && !json.isNull("photoFileName")) json.getString("photoFileName") else null,
+                seeingPickering = pickering,
+                seeingAntoniadi = antoniadi,
+                nelm = nelm
             )
         }
     }
@@ -185,6 +204,24 @@ internal object ObservationLogbookStore {
             put("entries", array)
         }
         return root.toString(2)
+    }
+
+    fun exportOalXml(context: Context): String {
+        val entries = loadEntries(context)
+        return de.projektastra.app.observation.OpenAstronomyLogExport.exportToXml(entries)
+    }
+
+    fun exportOalXml(entries: List<ObservationLogEntry>): String {
+        return de.projektastra.app.observation.OpenAstronomyLogExport.exportToXml(entries)
+    }
+
+    fun exportFormattedText(context: Context): String {
+        val entries = loadEntries(context)
+        return de.projektastra.app.observation.OpenAstronomyLogExport.exportFormattedTextSummary(entries)
+    }
+
+    fun exportFormattedText(entries: List<ObservationLogEntry>): String {
+        return de.projektastra.app.observation.OpenAstronomyLogExport.exportFormattedTextSummary(entries)
     }
 
     @Synchronized

@@ -75,7 +75,14 @@ internal data class SkyAppearance(
     val intensity: Float = 1f,
     val showInAr: Boolean = false,
     val showGrid: Boolean = false,
-    val labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL
+    val showEquatorialGrid: Boolean = false,
+    val showHorizontalGrid: Boolean = false,
+    val showCelestialEquator: Boolean = false,
+    val showEcliptic: Boolean = false,
+    val showGalacticEquator: Boolean = false,
+    val labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL,
+    val oledBlackMode: Boolean = false,
+    val gloveModeZoom: Boolean = true
 ) {
     fun normalized(): SkyAppearance = copy(
         intensity = if (intensity.isFinite()) intensity.coerceIn(MIN_INTENSITY, MAX_INTENSITY) else 1f
@@ -90,14 +97,28 @@ internal data class SkyAppearance(
             intensity: Float = 1f,
             showInAr: Boolean = false,
             showGrid: Boolean = false,
-            labelDensityName: String? = null
+            showEquatorialGrid: Boolean = false,
+            showHorizontalGrid: Boolean = false,
+            showCelestialEquator: Boolean = false,
+            showEcliptic: Boolean = false,
+            showGalacticEquator: Boolean = false,
+            labelDensityName: String? = null,
+            oledBlackMode: Boolean = false,
+            gloveModeZoom: Boolean = true
         ): SkyAppearance = SkyAppearance(
             mode = MilkyWayMode.entries.firstOrNull { it.name == modeName } ?: MilkyWayMode.NATURAL,
             intensity = intensity,
             showInAr = showInAr,
             showGrid = showGrid,
+            showEquatorialGrid = showEquatorialGrid,
+            showHorizontalGrid = showHorizontalGrid,
+            showCelestialEquator = showCelestialEquator,
+            showEcliptic = showEcliptic,
+            showGalacticEquator = showGalacticEquator,
             labelDensity = SkyLabelDensity.entries.firstOrNull { it.name == labelDensityName }
-                ?: SkyLabelDensity.NORMAL
+                ?: SkyLabelDensity.NORMAL,
+            oledBlackMode = oledBlackMode,
+            gloveModeZoom = gloveModeZoom
         ).normalized()
     }
 }
@@ -107,7 +128,14 @@ internal object SkyAppearancePreferences {
     private const val INTENSITY = "sky_appearance_intensity"
     private const val SHOW_IN_AR = "sky_appearance_show_in_ar"
     private const val SHOW_GRID = "sky_appearance_show_grid"
+    private const val SHOW_EQUATORIAL_GRID = "sky_appearance_show_equatorial_grid"
+    private const val SHOW_HORIZONTAL_GRID = "sky_appearance_show_horizontal_grid"
+    private const val SHOW_CELESTIAL_EQUATOR = "sky_appearance_show_celestial_equator"
+    private const val SHOW_ECLIPTIC = "sky_appearance_show_ecliptic"
+    private const val SHOW_GALACTIC_EQUATOR = "sky_appearance_show_galactic_equator"
     private const val LABEL_DENSITY = "sky_appearance_label_density"
+    private const val OLED_BLACK_MODE = "oled_black_mode"
+    private const val GLOVE_MODE_ZOOM = "glove_mode_zoom"
 
     fun load(context: Context): SkyAppearance {
         val preferences = context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE)
@@ -117,7 +145,14 @@ internal object SkyAppearancePreferences {
             intensity = runCatching { preferences.getFloat(INTENSITY, 1f) }.getOrDefault(1f),
             showInAr = runCatching { preferences.getBoolean(SHOW_IN_AR, false) }.getOrDefault(false),
             showGrid = runCatching { preferences.getBoolean(SHOW_GRID, false) }.getOrDefault(false),
-            labelDensityName = runCatching { preferences.getString(LABEL_DENSITY, null) }.getOrNull()
+            showEquatorialGrid = runCatching { preferences.getBoolean(SHOW_EQUATORIAL_GRID, false) }.getOrDefault(false),
+            showHorizontalGrid = runCatching { preferences.getBoolean(SHOW_HORIZONTAL_GRID, false) }.getOrDefault(false),
+            showCelestialEquator = runCatching { preferences.getBoolean(SHOW_CELESTIAL_EQUATOR, false) }.getOrDefault(false),
+            showEcliptic = runCatching { preferences.getBoolean(SHOW_ECLIPTIC, false) }.getOrDefault(false),
+            showGalacticEquator = runCatching { preferences.getBoolean(SHOW_GALACTIC_EQUATOR, false) }.getOrDefault(false),
+            labelDensityName = runCatching { preferences.getString(LABEL_DENSITY, null) }.getOrNull(),
+            oledBlackMode = runCatching { preferences.getBoolean(OLED_BLACK_MODE, false) }.getOrDefault(false),
+            gloveModeZoom = runCatching { preferences.getBoolean(GLOVE_MODE_ZOOM, true) }.getOrDefault(true)
         )
     }
 
@@ -128,7 +163,14 @@ internal object SkyAppearancePreferences {
             putFloat(INTENSITY, normalized.intensity)
             putBoolean(SHOW_IN_AR, normalized.showInAr)
             putBoolean(SHOW_GRID, normalized.showGrid)
+            putBoolean(SHOW_EQUATORIAL_GRID, normalized.showEquatorialGrid)
+            putBoolean(SHOW_HORIZONTAL_GRID, normalized.showHorizontalGrid)
+            putBoolean(SHOW_CELESTIAL_EQUATOR, normalized.showCelestialEquator)
+            putBoolean(SHOW_ECLIPTIC, normalized.showEcliptic)
+            putBoolean(SHOW_GALACTIC_EQUATOR, normalized.showGalacticEquator)
             putString(LABEL_DENSITY, normalized.labelDensity.name)
+            putBoolean(OLED_BLACK_MODE, normalized.oledBlackMode)
+            putBoolean(GLOVE_MODE_ZOOM, normalized.gloveModeZoom)
         }
     }
 }
@@ -228,9 +270,39 @@ internal fun SkyAppearanceControls(
         Text("Orientierung", style = MaterialTheme.typography.titleMedium)
         AppearanceSwitch(
             title = "Orientierungsgitter",
-            detail = "Hilfslinien zur Orientierung in der Sternkarte.",
+            detail = "Klassisches Raster zur Orientierung in der Sternkarte.",
             checked = current.showGrid,
             onCheckedChange = { onChange(current.copy(showGrid = it)) }
+        )
+        AppearanceSwitch(
+            title = "Äquatoriales Koordinatengitter",
+            detail = "Rektaszension (RA) und Deklination (Dec).",
+            checked = current.showEquatorialGrid,
+            onCheckedChange = { onChange(current.copy(showEquatorialGrid = it)) }
+        )
+        AppearanceSwitch(
+            title = "Horizontales Koordinatengitter",
+            detail = "Azimut und Höhe über dem Horizont.",
+            checked = current.showHorizontalGrid,
+            onCheckedChange = { onChange(current.copy(showHorizontalGrid = it)) }
+        )
+        AppearanceSwitch(
+            title = "Himmelsäquator",
+            detail = "Projektion des Erdäquators auf die Himmelssphäre (Dec 0°).",
+            checked = current.showCelestialEquator,
+            onCheckedChange = { onChange(current.copy(showCelestialEquator = it)) }
+        )
+        AppearanceSwitch(
+            title = "Ekliptik",
+            detail = "Scheinbare Bahn der Sonne und Planeten über das Jahr.",
+            checked = current.showEcliptic,
+            onCheckedChange = { onChange(current.copy(showEcliptic = it)) }
+        )
+        AppearanceSwitch(
+            title = "Galaktischer Äquator",
+            detail = "Zentrale Symmetrieebene der Milchstraßenscheibe.",
+            checked = current.showGalacticEquator,
+            onCheckedChange = { onChange(current.copy(showGalacticEquator = it)) }
         )
         AppearanceSwitch(
             title = "IAU-Sternbildgrenzen",
@@ -243,6 +315,18 @@ internal fun SkyAppearanceControls(
             detail = "Optionale schematische Figuren als Orientierungshilfe.",
             checked = showIllustrations,
             onCheckedChange = onIllustrationsChange
+        )
+        AppearanceSwitch(
+            title = "OLED Reinstschwarz (#000000)",
+            detail = "Schaltet alle UI-Flächen auf echtes Reinstschwarz um (#000000).",
+            checked = current.oledBlackMode,
+            onCheckedChange = { onChange(current.copy(oledBlackMode = it)) }
+        )
+        AppearanceSwitch(
+            title = "Handschuh-Modus (Lautstärketasten)",
+            detail = "Zoomt die Sternkarte über die Lautstärketasten (+/-) bei Kälte.",
+            checked = current.gloveModeZoom,
+            onCheckedChange = { onChange(current.copy(gloveModeZoom = it)) }
         )
     }
 }

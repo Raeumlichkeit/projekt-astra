@@ -22,7 +22,7 @@ internal class SkyProjection(
 ) {
     private val valid = width.isFinite() && height.isFinite() && width > 0f && height > 0f &&
         centerAzimuth.isFinite() && centerAltitude.isFinite() &&
-        horizontalFov.isFinite() && horizontalFov >= 1.0 && horizontalFov < 180.0
+        horizontalFov.isFinite() && horizontalFov >= 0.5 && horizontalFov < 180.0
     private val pitchSin = sin(Math.toRadians(centerAltitude))
     private val pitchCos = cos(Math.toRadians(centerAltitude))
     private val focalLength = width / (2.0 * tan(Math.toRadians(horizontalFov / 4)))

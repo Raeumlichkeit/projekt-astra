@@ -11,21 +11,38 @@ Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.
 
 | Bereich | Enthalten |
 | --- | --- |
-| Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont, 88 IAU-Sternbildgrenzen, Optik & FOV-Kreis/Telrad mit Drehung und Spiegelung |
-| Himmel | Offline-HYG-Katalog mit 5.041 Sternen, optional 1.016 OpenNGC-Deep-Sky-Objekte, Sonne, Mond und sieben Planeten |
-| Milchstraße | Offline gebündelte NASA/Gaia-Darstellung mit natürlichem oder verstärktem Stil und Helligkeitsregler |
-| Gelände | Lokales 360°-Profil aus GLO-90-Höhendaten mit Offline-Fallback und Geländeverdeckung |
-| Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme mit Retry-Option |
-| Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
-| Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Empfehlungen „Was lohnt sich heute Nacht?“ mit Filterchips (Auge, Fernglas, Teleskop), Beobachtungstagebuch mit Fotos, Seeing & Export/Import |
-| Optik & FOV | Frei einstellbarer Sichtfeldkreis (0,1°–30,0°), Telrad-Sucher (0,5°/2°/4°), Geräteprofile (10×50, 8×42, Dobson), 0°/90°/180°/270°-Drehung, Zenitspiegel-Spiegelung, aufrechte Beschriftungen, inverse Touch-Präzision |
-| AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay, AR-Zielhilfe mit Richtungspfeilen, Winkelabstand, Sensorqualität und Horizonterkennung; Kamera bleibt optional und speichert keine Bilder |
-| Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
-| Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
-| Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
-| Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+| Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont, 88 IAU-Sternbildgrenzen, äquatoriale/horizontale Gitter, Referenzlinien (Äquator, Ekliptik, Galaktisch), Optik & FOV-Kreis/Telrad mit Drehung und Spiegelung, Handschuh-Modus (Lautstärketasten) |
+| Sonnensystem & Mond | Galileische Jupitermonde (Io, Europa, Ganymed, Kallisto) mit Transit/Verfinsterungs-Ereignissen, Saturn Ringsystem & Titan, Mondterminator-Detailrelief & Kraterkatalog |
+| Satelliten & ISS | Rein lokale SGP4-Satellitenbahnvorhersage für ISS und helle Satelliten mit Pass-Zeiten und Pfaden auf Karte und AR (ohne Cloud/Tracking) |
+| Aufsuchhilfen | Interaktives Winkelabstand- und Positionsmesswerkzeug, geführter Star-Hopping-Assistent mit Telrad- und Okularfeldern |
+| Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Dew Monitor (Magnus-Tetens Taupunktwarnung), Beobachtungs-Challenges (Messier 110, Caldwell, Herschel 400), „Im Logbuch beobachtet“-Statusbadges |
+| Tagebuch | Beobachtungstagebuch mit Fotos, Pickering 1–10, Antoniadi I–V, NELM fst, JSON-Backup, OAL 2.1 XML Standard-Export & Rotlicht-Textzusammenfassung |
+| AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
+| Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
 
-## Neu in 1.1.9-pre.11 · Beta
+## Neu in 1.1.9-pre.12 · Beta
+
+- **Dynamische Sonnensystem-Körper & Mondterminator (P2.13):**
+  - **Galileische Jupitermonde:** Echtzeitberechnung der Bahnen von Io, Europa, Ganymed und Kallisto; Erkennung von Schattentransiten, Okkultationen und Verfinsterungen mit schematischem Diagramm und Detail-Badges.
+  - **Saturn Ringsystem & Titan:** Ringsystem-Neigungswinkel und Titan-Orbitposition.
+  - **Mondterminator & Kraterrelief:** Colongitude $C_0$, optische Libration, selenographischer Morgenterminator und interaktiver `MoonDetailSheet` mit hervorgehobenen Kratern am Terminator.
+  - **Lokale SGP4-Satellitenpass-Vorhersage:** Reine Offline-Berechnung von ISS- und Satellitenüberflügen aus gebündelten TLEs (`satellites_bright.tle`) ohne Hintergrund-GPS.
+- **Himmelsvermessung, Koordinatengitter & Star-Hopping (P2.14):**
+  - **Winkelabstandsmessung:** Exakte Berechnung des Abstands (Grad, Bogenminuten, Bogensekunden) und Positionswinkels zwischen beliebigen Sternen und Himmelskoordinaten.
+  - **Astronomische Koordinatengitter:** Äquatoriales (RA/Dec) und horizontales (Az/Alt) Raster sowie Referenzlinien für Himmelsäquator, Ekliptik und galaktischen Äquator mit Rotlicht-Unterstützung.
+  - **Star-Hopping-Assistent:** Schritt-für-Schritt-Routen von Orientierungssternen zu Deep-Sky-Objekten mit interaktivem HUD und Zentrier-Option.
+- **Beobachtungspraxis, Dew Monitor & OAL XML Export (P2.15):**
+  - **Beobachtungs-Challenges:** Messier 110, Caldwell 109 und Herschel 400 mit automatischem Fortschritt aus dem lokalen Logbuch.
+  - **„Im Logbuch beobachtet“-Badges:** Dezente Statusanzeigen auf der Sternkarte, in der Objektsuche und im Beobachtungsplan.
+  - **Dew Monitor (Taupunkt- & Beschlagswarnung):** 4-stufige Risikobewertung (Gering, Mäßig, Hoch, Akut) nach der Sonntag (1990) Magnus-Tetens-Formel.
+  - **OAL 2.1 XML & Rotlicht-Textexport:** Vollständiger Export nach dem OpenAstronomyLog 2.1 XML-Standard sowie formatierte Textzusammenfassungen.
+  - **Standard-Seeing-Skalen:** Pickering (1–10), Antoniadi (I–V) und freie Grenzgröße (NELM / fst).
+- **Kamera-AR-Nachtoptimierung, Hardware & Feld-Usability (P2.16 & P2.17):**
+  - **AR-Nachtbelichtung:** Gestufte Camera2/CameraX AE Belichtungskorrektur (+0 bis +3 EV) für dunkle Himmelsansichten.
+  - **Sensorfilterung & Pitch-Trimm:** Adaptive Tiefpass-Alpha-Dämpfung bei engem FOV, zirkulare 360°-Azimut-Glättung und ±15° manueller Höhen-Offset.
+  - **Handschuh-Modus (Volume-Key-Zoom):** Zoom per Lautstärketasten (+/-) auf dem Sternkarten-Tab bei frostigen Beobachtungsnächten.
+  - **OLED Reinstschwarz (#000000):** Vollständig tiefschwarzes UI-Farbschema zur maximalen Akkuschonung und Dunkeladaption.
+  - **Passives Homescreen-Widget:** `AstraAppWidgetProvider` mit Mondphase, Dunkelheitsfenster und gecachtem Wetter-Score ohne Hintergrund-GPS oder Hintergrunddienste.
 
 - **Winkeltreue stereografische Projektion (Entzerrung bei weitem FOV):**
   - **Natürliche Sternfeldansicht beim Herauszoomen:** Umstellung der manuellen Sternkarten-Perspektive (`SkyProjection.kt`) von gnomonischer Rektilinearprojektion auf winkeltreue (konforme) stereografische Projektion. Beseitigt extreme Dehnungen und Verzerrungen an Bildrändern und Ecken bei weitem Sichtfeld (bis 150° FOV). Sternbilder behalten ihre Form ohne Verzerrung.
@@ -195,12 +212,14 @@ Für eine Veröffentlichung im Play Store müssen zusätzlich ein außerhalb des
 
 ## Roadmap
 
-Die vollständige, priorisierte Liste steht in [AUFGABEN.md](AUFGABEN.md). Als nächste P1-Schritte sind geplant:
+Die vollständige, priorisierte Liste steht in [AUFGABEN.md](AUFGABEN.md). Die ursprünglichen Kernstufen P1 (Suche, Zeitsteuerung, Vollbild, visuelle Überarbeitung, Lichtkarte, Wetteraktualisierung, Startzeit), P2 (Beobachtungsplan, Tagebuch, Sichtfeld/Telrad, AR-Zielhilfe, Robustheit) und P3 (Akkutests) sind im aktuellen Beta-Zweig weitgehend umgesetzt.
 
-- **P1.6 Wetteraktualisierung:** alte erfolgreiche Wetterdaten während Pull-to-Refresh sichtbar lassen, Ladeanzeige darüberlegen und Fehler mit Datenalter und Wiederholen anzeigen.
-- **P1.7 Startgeschwindigkeit:** Kataloge und Suchindex gestuft beziehungsweise aus dem UI-Thread laden, Caches nutzen und den ersten Kartenrahmen priorisieren.
-
-Nachtplanung, Tagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe folgen unter P2. Akkutests bleiben ausdrücklich P3.
+Als nächste Ausbaustufen im Backlog sind geplant:
+- **P2.13 Dynamische Sonnensystem-Körper & Monddetails:** Galileische Jupitermonde, Saturn-Ringe und Terminator-Mondkarte.
+- **P2.14 Aufsuchhilfen & Himmelsvermessung:** Interaktives Winkelabstand-Messwerkzeug, Koordinatengitter und Star-Hopping-Assistent.
+- **P2.15 Beobachtungspraxis & erweiterte Planung:** Messier-/Caldwell-Challenges mit Fortschrittsbalken, Taupunkt-Warnung und OAL-Export.
+- **P2.16 Kamera- & AR-Nachtoptimierung:** Camera2-Nachtbelichtungsanpassung und Sensor-Dämpfung.
+- **P2.17 Winter- & Feld-Usability:** Physische Tastenbedienung (Lautstärketasten für Zoom) und akkuschonendes Homescreen-Widget.
 
 ## Daten und Datenschutz
 

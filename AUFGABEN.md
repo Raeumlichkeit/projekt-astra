@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.11.
+Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.12.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -149,6 +149,56 @@ Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.k
 - [x] Verständliche Fehler- und Wiederholen-Zustände für Wetter, Karten und Objektbilder prüfen.
 
 Umgesetzt in Version 1.1.9-pre.9 (`SkyMapInteractionTest.kt`, `device-test-cases.md`, `MainActivity.kt`, `PrivacySecurity.kt`). 19 automatisierte Regressionstests für Pinch-Zoom-Mathematik, Gestenbegrenzung (25° bis 150°), Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen. Benutzerfreundliche Fehler- und Wiederholungszustände für DSS2-Himmelsaufnahmen (`SkySurveyImage` via `WebViewClient.onReceivedError`), Geländeprofilierung (`TerrainRepository`) sowie Wetter. Umfassende Dokumentation der Geräte-Testfälle und Messmatrix in `play-store/device-test-cases.md` (Berechtigungsentzug, App-Lifecycle, Sensor-Fallbacks, Offline-Betrieb, Profilierungsrichtwerte für 60/120 FPS und Heap-Limits).
+
+### 13. Dynamische Sonnensystem-Körper und Monddetails
+
+- [x] Echtzeit-Positionen der vier Galileischen Jupitermonde (Io, Europa, Ganymed, Kallisto) mit Kennzeichnung von Schattentransiten, Bedeckungen und Verfinsterungen berechnen und auf der Karte sowie in den Objektdetails darstellen.
+- [x] Saturns Ringöffnungswinkel und den größten Mond Titan mit Orbitposition visualisieren.
+- [x] Phasengenaue Mond-Detailansicht mit Krater-, Rillen- und Meeresbeschriftungen entlang des aktuellen Terminators (Licht-Schatten-Grenze) bereitstellen; optimale Beobachtungsziele für Teleskope nach Beleuchtungszustand hervorheben.
+- [x] Sichtbare Überflüge der Internationalen Raumstation (ISS) und ausgewählter heller Satelliten rein lokal auf Basis gebündelter oder manuell aktualisierter TLE-Bahnelemente (SGP4-Propagator) berechnen.
+- [x] Satellitenpfade mit Zeitmarken auf der Sternkarte und im AR-Modus einblenden; keine permanente Hintergrundortung oder Cloud-Konto dafür voraussetzen.
+- [x] Tests für Mondterminator-Berechnung, Mondfinsternisse/Planetenbedeckungen und Bahnberechnungen ohne Netzwerkverbindung ergänzen.
+
+Umgesetzt in `de.projektastra.app.ephemeris` (`GalileanMoonsCalculator.kt`, `SaturnSystemCalculator.kt`, `LunarTerminatorCalculator.kt`, `Sgp4Propagator.kt`, `SatellitePassPredictor.kt`, `MoonDetailSheet.kt`). 100 % offline, keine Hintergrundortung.
+
+### 14. Aufsuchhilfen und Himmelsvermessung (Star-Hopping)
+
+- [x] Interaktives Winkelabstand- und Positionsmesswerkzeug: Nach Antippen zweier Sterne/Himmelsobjekte den exakten Winkelabstand (Grad, Bogenminuten, Bogensekunden) und Positionswinkel am Himmel anzeigen (z. B. für Doppelsterne und Okularabschätzungen).
+- [x] Schaltbare astronomische Koordinatengitter: Äquatoriales Gitter (Rektaszension / Deklination) und horizontales Gitter (Azimut / Höhe) mit dezenter Skalierung und voller Rotlicht-Unterstützung.
+- [x] Referenzlinien für Himmelsäquator, Ekliptik (Sonnen-/Planetenbahn) und galaktischen Äquator getrennt einblendbar machen.
+- [x] Interaktiver Star-Hopping-Assistent: Schritt-für-Schritt-Aufsuchpfade von markanten, mit bloßem Auge sichtbaren Leitsternen zu lichtschwachen Deep-Sky-Objekten mit Telrad- und Okulargesichtsfeldern für Dobson- und manuelle Montierungen anbieten.
+- [x] Abhakbare Zwischenstationen beim Star-Hopping lokal im flüchtigen Zustand halten; Gesten- und Drehungstransformationen für die Messlinien testen.
+
+Umgesetzt in `de.projektastra.app.coordinates` (`CelestialMeasurement.kt`, `SkyGridRenderer.kt`, `StarHopCatalog.kt`, `StarHopHud.kt`, `StarHopSheet.kt`). Vollständige Unterstützung für Rotlicht, Telrad- und Okular-Fadenkreuze sowie Messungen zwischen beliebigen Sternen und Himmelspositionen.
+
+### 15. Beobachtungspraxis und erweiterte Planung
+
+- [x] Standardisierte Beobachtungs-Challenges integrieren: Vollständiger Messier-Katalog (110 Objekte), Caldwell-Katalog und Herschel 400 mit visuellem Fortschrittsbalken („X von 110 beobachtet“).
+- [x] Status „Im Logbuch beobachtet“ direkt an Objekten in der Sternkarte, in der Objektsuche und im Beobachtungsplan dezent kennzeichnen.
+- [x] Taupunkt- und Beschlagswarnung (Dew Monitor): Aus lokaler Open-Meteo-Temperatur und relativer Luftfeuchtigkeit den Taupunkt berechnen und bei drohendem Taubeschlag auf Optik und Fangspiegel rechtzeitig warnen.
+- [x] Export des Beobachtungstagebuchs um standardisiertes OAL-Format (OpenAstronomyLog XML) sowie druck- und rotlichtoptimierte Text-/PDF-Zusammenfassungen für den Beobachtungsplatz erweitern.
+- [x] Seeing- und Transparenz-Bewertung im Tagebuch an Standard-Skalen (Pickering-Skala 1–10, Antoniadi-Skala, visuelle Grenzgröße fst/NELM) anbinden.
+- [x] Unit-Tests für Taupunktberechnungen, Katalogfilter und OAL-Serialisierung ergänzen.
+
+Umgesetzt in `de.projektastra.app.observation` (`ObservationChallenges.kt`, `DewMonitor.kt`, `OpenAstronomyLogExport.kt`, `ObservationLogbook.kt`). Sonntag (1990) Magnus-Tetens-Näherung für 4-stufige Beschlagswarnungen. Vollständige OAL 2.1 XML Validierung und Export in Zwischenablage/Share.
+
+### 16. Kamera und AR-Nachtoptimierung
+
+- [x] Nacht-Belichtungsanpassung im AR-Modus: Manuelle oder gestufte Belichtungskorrektur (Camera2 AE Exposure Compensation) zur Aufhellung extrem dunkler Kamerabilder bereitstellen, um Landschaftshorizonte und Umrisse bei Neumond besser zu erkennen.
+- [x] Einstellbare Tiefpassfilterung (Dämpfung) für Kompass- und Gyroskopsensoren im AR-Modus gegen Handzittern bei engen Sichtfeldern.
+- [x] Lokale Horizontkalibrierung: Temporärer manueller Höhen-Offset (Pitch-Trimm) für den Fall von magnetischen Störungen oder Neigungssensor-Ungenauigkeiten am Beobachtungsort.
+- [x] Kamera-Ressourcenverbrauch bei maximaler Belichtung und Sensorfilterung auf älteren Geräten profilieren.
+
+Umgesetzt in `de.projektastra.app.hardware` (`CameraExposureController.kt`, `SensorFilter.kt`). Dynamische Alpha-Dämpfung bei engem FOV, zirkulare 360°-Azimut-Glättung und ±15° Pitch-Trimmung.
+
+### 17. Winter- und Feld-Usability
+
+- [x] Handschuh-Modus / Physische Tastenbedienung: Optionale Steuerung des Sternkarten-Zooms (Hinein/Heraus) und Weiterschalten in Listen über die Lautstärketasten (Volume +/-) für frostige Nächte mit dicken Handschuhen.
+- [x] Akkuschonendes Homescreen-Widget (Android Glance / AppWidget): Anzeige von aktueller Mondphase, Beleuchtungsgrad, astronomischem Dunkelheitsfenster und heutigem Wetter-Score basierend auf dem letzten lokal gespeicherten Ort (strikt ohne Hintergrund-GPS).
+- [x] Dunkler OLED-Reinstschwarz-Modus ohne graue Zwischenflächen für maximale Dunkeladaption und minimale OLED-Entladung.
+- [x] Barrierefreiheit und Tasten-Navigation (D-Pad / Tastatur) für externe Bluetooth-Controller im Rotlichtbetrieb testen.
+
+Umgesetzt in `de.projektastra.app.hardware` (`GloveModeZoomController.kt`, `OledThemeManager.kt`), `de.projektastra.app.widget` (`AstraAppWidgetProvider.kt`, `AstraWidgetUpdater.kt`) und `MainActivity.kt`. `#000000` Reinstschwarz-Farbschema, abfangende Lautstärketasten-Bedienung und 100 % passives AppWidget ohne Hintergrund-GPS oder Hintergrunddienst.
 
 ## P3 – Niedrige Priorität
 
