@@ -98,6 +98,7 @@ import androidx.compose.material.icons.rounded.Straighten
 import androidx.compose.material3.AlertDialog
 import android.view.KeyEvent
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material3.LinearProgressIndicator
 import de.projektastra.app.observation.ChallengeType
 import de.projektastra.app.observation.ObservationChallengeRegistry
@@ -363,7 +364,12 @@ private fun AstraRoot() {
     val window = LocalActivity.current?.window
     val preferences = remember { context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE) }
     var redLightMode by remember { mutableStateOf(preferences.getBoolean("red_light_mode", false)) }
-    var oledBlackMode by remember { mutableStateOf(preferences.getBoolean("oled_black_mode", false)) }
+    var oledBlackMode by remember {
+        mutableStateOf(
+            preferences.getBoolean("oled_black_mode", false) ||
+            runCatching { SkyAppearancePreferences.load(context).oledBlackMode }.getOrDefault(false)
+        )
+    }
     var skyFullscreen by rememberSaveable { mutableStateOf(false) }
     val setRedLightMode: (Boolean) -> Unit = {
         redLightMode = it
@@ -372,6 +378,9 @@ private fun AstraRoot() {
     val setOledBlackMode: (Boolean) -> Unit = {
         oledBlackMode = it
         preferences.edit { putBoolean("oled_black_mode", it) }
+        runCatching {
+            SkyAppearancePreferences.save(context, SkyAppearancePreferences.load(context).copy(oledBlackMode = it))
+        }
     }
     SideEffect {
         window?.let { window ->
@@ -594,6 +603,8 @@ private fun AstraApp(
                     cameraPermissionGranted = cameraGranted,
                     arEnabled = arEnabled,
                     redLightMode = redLightMode,
+                    oledBlackMode = oledBlackMode,
+                    setOledBlackMode = setOledBlackMode,
                     fullscreen = skyFullscreen,
                     setFullscreen = setSkyFullscreen,
                     favoriteObjectIds = favoriteObjectIds,
@@ -870,6 +881,8 @@ internal fun SkyScreen(
     cameraPermissionGranted: Boolean,
     arEnabled: Boolean,
     redLightMode: Boolean,
+    oledBlackMode: Boolean = false,
+    setOledBlackMode: (Boolean) -> Unit = {},
     fullscreen: Boolean,
     setFullscreen: (Boolean) -> Unit,
     favoriteObjectIds: Set<String>,
@@ -926,7 +939,13 @@ internal fun SkyScreen(
     var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
     var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
     var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
-    var appearance by remember { mutableStateOf(SkyAppearancePreferences.load(context)) }
+    var appearance by remember { mutableStateOf(SkyAppearancePreferences.load(context).copy(oledBlackMode = oledBlackMode)) }
+    LaunchedEffect(oledBlackMode) {
+        if (appearance.oledBlackMode != oledBlackMode) {
+            appearance = appearance.copy(oledBlackMode = oledBlackMode)
+        }
+    }
+    val isOled = LocalOledMode.current || oledBlackMode || appearance.oledBlackMode
     DisposableEffect(appearance.gloveModeZoom, arEnabled) {
         if (appearance.gloveModeZoom && !arEnabled) {
             MainActivity.volumeKeyZoomHandler = { zoomIn ->
@@ -1064,17 +1083,18 @@ internal fun SkyScreen(
             if (arEnabled) cameraFov else manualFov.toDouble(), arEnabled, appearance)
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(if (isOled) Color.Black else Color.Transparent)) {
     val compactHeight = maxHeight < 420.dp
     // Bound the combined chrome, including notices, so short landscape screens retain sky space.
     val headerMaxHeight = maxHeight * 0.12f
     val orientationMaxHeight = (maxHeight * 0.18f).coerceAtMost(110.dp)
     val controlsMaxHeight = (maxHeight * 0.34f).coerceAtMost(270.dp)
     val targetMaxHeight = (maxHeight * 0.18f).coerceAtMost(148.dp)
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(if (isOled) Color.Black else Color.Transparent)) {
         if (!fullscreen && !compactHeight) {
         Row(
             Modifier.fillMaxWidth().heightIn(max = headerMaxHeight).verticalScroll(rememberScrollState())
+                .background(if (isOled) Color.Black else NightBlue)
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -1096,6 +1116,13 @@ internal fun SkyScreen(
                 IconButton(onClick = { showSearch = true }) {
                     Icon(Icons.Rounded.Search, "Objekte suchen", tint = AstraTextMuted)
                 }
+                IconButton(onClick = { setOledBlackMode(!isOled) }) {
+                    Icon(
+                        Icons.Rounded.Contrast,
+                        contentDescription = if (isOled) "OLED-Reinstschwarz ausschalten" else "OLED-Reinstschwarz einschalten",
+                        tint = if (isOled) StarGold else AstraTextMuted
+                    )
+                }
                 IconButton(onClick = toggleRedLightMode) {
                     Icon(
                         Icons.Rounded.DarkMode,
@@ -1107,7 +1134,7 @@ internal fun SkyScreen(
         }
         }
 
-        Row(Modifier.fillMaxWidth().background(NightBlue).padding(start = 12.dp),
+        Row(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue).padding(start = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).heightIn(max = orientationMaxHeight)
                 .verticalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
@@ -1139,7 +1166,7 @@ internal fun SkyScreen(
         }
         Column(Modifier.fillMaxWidth().heightIn(max = controlsMaxHeight)
             .verticalScroll(rememberScrollState()).testTag("sky-controls-panel")) {
-        Row(Modifier.fillMaxWidth().background(NightBlue).padding(horizontal = 12.dp, vertical = 2.dp),
+        Row(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue).padding(horizontal = 12.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Text((when {
                 arEnabled -> "AR · Jetzt"
@@ -1152,7 +1179,7 @@ internal fun SkyScreen(
             if (!skyTime.live) TextButton(onClick = nowTime) { Text("Jetzt") }
         }
         if (controlsExpanded) {
-            Column(Modifier.fillMaxWidth().background(NightBlue).padding(horizontal = 12.dp, vertical = 4.dp),
+            Column(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue).padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { showSearch = true }) {
@@ -1298,7 +1325,7 @@ internal fun SkyScreen(
         }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(if (LocalOledMode.current || appearance.oledBlackMode) Color.Black else Color(0xFF02050A))
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(if (isOled) Color.Black else Color(0xFF02050A))
             .testTag("sky-viewport")
             .onSizeChanged { viewportSize = it }) {
             if (arEnabled && cameraPermissionGranted) CameraPreview(exposureStep = cameraExposureStep) { cameraFov = it }
@@ -1647,7 +1674,7 @@ internal fun SkyScreen(
 
     if (showLayersPanel) {
         SkySheetTheme(redLightMode) {
-        ModalBottomSheet(onDismissRequest = { showLayersPanel = false }, containerColor = MaterialTheme.colorScheme.surface,
+        ModalBottomSheet(onDismissRequest = { showLayersPanel = false }, containerColor = if (isOled) Color.Black else MaterialTheme.colorScheme.surface,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             contentColor = MaterialTheme.colorScheme.onSurface, scrimColor = Color.Black.copy(alpha = 0.7f)) {
             SkySheetSystemBars(redLightMode)
@@ -1660,8 +1687,12 @@ internal fun SkyScreen(
                     }
                 }
                 SkyAppearanceControls(appearance, { updated ->
-                    appearance = updated.normalized()
-                    SkyAppearancePreferences.save(context, appearance)
+                    val normalized = updated.normalized()
+                    appearance = normalized
+                    SkyAppearancePreferences.save(context, normalized)
+                    if (normalized.oledBlackMode != oledBlackMode) {
+                        setOledBlackMode(normalized.oledBlackMode)
+                    }
                 }, showBoundaries, { showBoundaries = it }, showIllustrations, { showIllustrations = it })
                 if (textureReady == false) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1721,7 +1752,7 @@ internal fun SkyScreen(
     selected?.let { original ->
         val target = SkySearchTarget(original.celestial)
         val item = VisibleObject(resolveTarget(target), positionOf(target))
-        ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = NightBlue) {
+        ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = if (isOled) Color.Black else NightBlue) {
             TextButton(onClick = { openTarget(target) }) { Text("In Karte zentrieren") }
             ObjectDetails(
                 item = item,
@@ -1787,7 +1818,7 @@ internal fun SkyScreen(
         )
     }
     if (showCalibration) {
-        ModalBottomSheet(onDismissRequest = { showCalibration = false }, containerColor = NightBlue) {
+        ModalBottomSheet(onDismissRequest = { showCalibration = false }, containerColor = if (isOled) Color.Black else NightBlue) {
             CalibrationGuide(orientation) { showCalibration = false }
         }
     }
@@ -2036,6 +2067,7 @@ internal fun SkyCanvas(
     val currentOnMeasurementPointSelected by rememberUpdatedState(onMeasurementPointSelected)
     val currentCoordinateFrame by rememberUpdatedState(coordinateFrame)
     val currentOnSelect by rememberUpdatedState(onSelect)
+    val isOled = skyAppearance.oledBlackMode || LocalOledMode.current
     val objectsByHip = remember(objects) { objects.mapNotNull { item -> item.celestial.hipId?.let { it to item } }.toMap() }
     Canvas(
         modifier.fillMaxSize().clipToBounds()
@@ -2093,7 +2125,7 @@ internal fun SkyCanvas(
             .then(
                 if (!drawBackground) Modifier
                 else if (arMode) Modifier.background(Color.Black.copy(alpha = 0.28f))
-                else Modifier.background(if (skyAppearance.oledBlackMode || LocalOledMode.current) Color.Black else Color(0xFF03070D))
+                else Modifier.background(if (isOled) Color.Black else Color(0xFF03070D))
             )
     ) {
         if (!firstFrameReported && size.width > 0f && size.height > 0f) {
@@ -2490,8 +2522,8 @@ internal fun SkyCanvas(
 
         // Draw terrain & selection ring
         withOpticsTransform {
-            if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode)
-            else drawSphericalTerrainHorizon(terrainProfile, projection, viewAzimuth, viewAltitude)
+            if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode, oledMode = isOled)
+            else drawSphericalTerrainHorizon(terrainProfile, projection, viewAzimuth, viewAltitude, oledMode = isOled)
             selectedPoint?.let { point ->
                 drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
             }
@@ -2680,7 +2712,8 @@ private fun DrawScope.drawTerrainHorizon(
     viewAzimuth: Double,
     viewAltitude: Double,
     horizontalFov: Double,
-    arMode: Boolean
+    arMode: Boolean,
+    oledMode: Boolean = false
 ) {
     if (size.width <= 0f || size.height <= 0f) return
     val verticalFov = horizontalFov * size.height / size.width
@@ -2702,7 +2735,8 @@ private fun DrawScope.drawTerrainHorizon(
         lineTo(0f, size.height)
         close()
     }
-    drawPath(ground, Color(0xFF03070D).copy(alpha = if (arMode) 0.30f else 0.97f))
+    val groundBaseColor = if (oledMode) Color.Black else Color(0xFF03070D)
+    drawPath(ground, groundBaseColor.copy(alpha = if (arMode) 0.30f else 0.97f))
     points.zipWithNext().forEach { (start, end) ->
         drawLine(StarGold.copy(alpha = 0.72f), start, end, 2.2f)
     }
@@ -2712,7 +2746,8 @@ private fun DrawScope.drawSphericalTerrainHorizon(
     profile: TerrainProfile?,
     projection: SkyProjection,
     viewAzimuth: Double,
-    viewAltitude: Double
+    viewAltitude: Double,
+    oledMode: Boolean = false
 ) {
     if (size.width <= 0f || size.height <= 0f) return
 
@@ -2720,6 +2755,8 @@ private fun DrawScope.drawSphericalTerrainHorizon(
         val azimuth = step * 3.0
         HorizontalCoordinates(azimuth, profile?.altitudeAt(azimuth) ?: 0.0)
     }
+
+    val groundColor = if (oledMode) Color.Black else Color(0xFF03070D)
 
     // Sample visible horizon curve across the observer's field of view
     val points = (0..160).mapNotNull { step ->
@@ -2738,10 +2775,10 @@ private fun DrawScope.drawSphericalTerrainHorizon(
             lineTo(-20f, size.height + 20f)
             close()
         }
-        drawPath(ground, Color(0xFF03070D))
+        drawPath(ground, groundColor)
     } else if (viewAltitude < 0.0) {
         // Looking directly down at nadir: entire viewport is ground
-        drawRect(Color(0xFF03070D))
+        drawRect(groundColor)
     }
 
     drawPath(
@@ -3669,9 +3706,9 @@ private fun ObservationScore(
         else -> "Ungünstig"
     }
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF122A49)),
+        colors = CardDefaults.cardColors(containerColor = if (LocalOledMode.current) Color.Black else Color(0xFF122A49)),
         shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.dp, AstraBlue.copy(alpha = 0.28f))
+        border = BorderStroke(1.dp, if (LocalOledMode.current) Color(0xFF1E1E1E) else AstraBlue.copy(alpha = 0.28f))
     ) {
         Column {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
