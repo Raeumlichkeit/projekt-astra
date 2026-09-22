@@ -103,9 +103,10 @@ internal fun OpticsFovSheet(
     onSaveProfile: (OpticsProfile) -> Unit,
     onDeleteProfile: (String) -> Unit,
     onDismiss: () -> Unit,
-    redLightMode: Boolean = false
+    redLightMode: Boolean = false,
+    oledMode: Boolean = false
 ) {
-    val colors = remember(redLightMode) {
+    val colors = remember(redLightMode, oledMode) {
         if (redLightMode) {
             OpticsColors(
                 nightBlue = Color(0xFF1A0000),
@@ -116,6 +117,17 @@ internal fun OpticsFovSheet(
                 starGold = Color(0xFFFF8A80),
                 astraTextMuted = Color(0xFFCC6666),
                 astraOutline = Color(0xFF551111)
+            )
+        } else if (oledMode) {
+            OpticsColors(
+                nightBlue = Color.Black,
+                night = Color.Black,
+                astraSurface = Color.Black,
+                astraSurfaceHigh = Color.Black,
+                astraBlue = Color(0xFF6DA8FF),
+                starGold = Color(0xFFFFD98A),
+                astraTextMuted = Color(0xFFAAB8CE),
+                astraOutline = Color(0xFF1E1E1E)
             )
         } else {
             OpticsColors(

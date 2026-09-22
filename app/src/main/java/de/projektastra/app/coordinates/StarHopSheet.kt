@@ -72,6 +72,8 @@ private val RedAccent = Color(0xFFFF5252)
 private val DarkCard = Color(0xFF131A26)
 private val DarkCardBorder = Color(0x334A688F)
 
+private val LocalOledStarHop = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 /**
  * Bottom Sheet providing catalog browsing and active waypoint navigation for star-hopping.
  */
@@ -83,43 +85,46 @@ fun StarHopSheet(
     onCenterWaypoint: (EquatorialCoordinates, Double) -> Unit,
     onDismissRequest: () -> Unit,
     onAddLogEntry: ((String) -> Unit)? = null,
-    redLightMode: Boolean = false
+    redLightMode: Boolean = false,
+    oledMode: Boolean = false
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        containerColor = if (redLightMode) Color(0xFF140000) else Color(0xFF0C1322)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+    androidx.compose.runtime.CompositionLocalProvider(LocalOledStarHop provides oledMode) {
+        ModalBottomSheet(
+            onDismissRequest = onDismissRequest,
+            containerColor = if (redLightMode) Color(0xFF140000) else if (oledMode) Color.Black else Color(0xFF0C1322)
         ) {
-            val route = session.activeRoute
-            if (route == null) {
-                RouteBrowserView(
-                    onSelectRoute = { selected ->
-                        onSessionChange(
-                            StarHopSessionState(
-                                activeRoute = selected,
-                                activeStepIndex = 0,
-                                reticleMode = session.reticleMode
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                val route = session.activeRoute
+                if (route == null) {
+                    RouteBrowserView(
+                        onSelectRoute = { selected ->
+                            onSessionChange(
+                                StarHopSessionState(
+                                    activeRoute = selected,
+                                    activeStepIndex = 0,
+                                    reticleMode = session.reticleMode
+                                )
                             )
-                        )
-                    },
-                    redLightMode = redLightMode
-                )
-            } else {
-                ActiveRouteDetailView(
-                    route = route,
-                    session = session,
-                    onSessionChange = onSessionChange,
-                    onCenterWaypoint = onCenterWaypoint,
-                    onSwitchRoute = { onSessionChange(session.copy(activeRoute = null)) },
-                    onAddLogEntry = onAddLogEntry,
-                    redLightMode = redLightMode
-                )
+                        },
+                        redLightMode = redLightMode
+                    )
+                } else {
+                    ActiveRouteDetailView(
+                        route = route,
+                        session = session,
+                        onSessionChange = onSessionChange,
+                        onCenterWaypoint = onCenterWaypoint,
+                        onSwitchRoute = { onSessionChange(session.copy(activeRoute = null)) },
+                        onAddLogEntry = onAddLogEntry,
+                        redLightMode = redLightMode
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -225,12 +230,12 @@ private fun RouteCard(
             .fillMaxWidth()
             .clickable { onSelect() },
         colors = CardDefaults.cardColors(
-            containerColor = if (redLightMode) Color(0xFF220000) else DarkCard
+            containerColor = if (redLightMode) Color(0xFF220000) else if (LocalOledStarHop.current) Color.Black else DarkCard
         ),
         shape = RoundedCornerShape(14.dp),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(
-                if (redLightMode) Color(0xFF551111) else DarkCardBorder
+                if (redLightMode) Color(0xFF551111) else if (LocalOledStarHop.current) Color(0xFF1E1E1E) else DarkCardBorder
             )
         )
     ) {
@@ -248,7 +253,7 @@ private fun RouteCard(
                 )
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = if (redLightMode) Color(0xFF440000) else Color(0xFF1E293B)
+                    color = if (redLightMode) Color(0xFF440000) else if (LocalOledStarHop.current) Color(0xFF111111) else Color(0xFF1E293B)
                 ) {
                     Text(
                         route.difficulty.label,
@@ -496,13 +501,13 @@ private fun StepChecklistItem(
                 color = when {
                     isActive -> if (redLightMode) RedAccent else StarGold
                     isCompleted -> if (redLightMode) Color(0xFF661111) else Color(0xFF22C55E).copy(alpha = 0.5f)
-                    else -> if (redLightMode) Color(0xFF330000) else DarkCardBorder
+                    else -> if (redLightMode) Color(0xFF330000) else if (LocalOledStarHop.current) Color(0xFF1E1E1E) else DarkCardBorder
                 },
                 shape = RoundedCornerShape(10.dp)
             ),
         color = when {
-            isActive -> if (redLightMode) Color(0xFF330000) else Color(0xFF1E293B)
-            else -> if (redLightMode) Color(0xFF180000) else Color(0xFF0F172A)
+            isActive -> if (redLightMode) Color(0xFF330000) else if (LocalOledStarHop.current) Color(0xFF141414) else Color(0xFF1E293B)
+            else -> if (redLightMode) Color(0xFF180000) else if (LocalOledStarHop.current) Color.Black else Color(0xFF0F172A)
         }
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -652,10 +657,10 @@ fun StarHopHud(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
-        color = if (redLightMode) Color(0xEE220000) else Color(0xEE0C1322),
+        color = if (redLightMode) Color(0xEE220000) else if (LocalOledStarHop.current) Color.Black else Color(0xEE0C1322),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(
-                if (redLightMode) Color(0xFF661111) else DarkCardBorder
+                if (redLightMode) Color(0xFF661111) else if (LocalOledStarHop.current) Color(0xFF1E1E1E) else DarkCardBorder
             )
         ),
         shadowElevation = 8.dp

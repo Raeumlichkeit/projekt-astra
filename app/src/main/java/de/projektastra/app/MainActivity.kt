@@ -153,10 +153,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -263,15 +265,40 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.tan
 
-private val Night = Color(0xFF07101F)
-private val NightBlue = Color(0xFF0D1C34)
-private val AstraSurface = Color(0xFF10243F)
-private val AstraSurfaceHigh = Color(0xFF163252)
+private val BaseNight = Color(0xFF07101F)
+private val BaseNightBlue = Color(0xFF0D1C34)
+private val BaseAstraSurface = Color(0xFF10243F)
+private val BaseAstraSurfaceHigh = Color(0xFF163252)
+private val BaseAstraOutline = Color(0xFF294466)
+
+internal val LocalOledMode = staticCompositionLocalOf { false }
+
+private val Night: Color
+    @Composable get() = if (LocalOledMode.current) Color.Black else BaseNight
+
+private val NightBlue: Color
+    @Composable get() = if (LocalOledMode.current) Color.Black else BaseNightBlue
+
+private val AstraSurface: Color
+    @Composable get() = if (LocalOledMode.current) Color.Black else BaseAstraSurface
+
+private val AstraSurfaceHigh: Color
+    @Composable get() = if (LocalOledMode.current) Color.Black else BaseAstraSurfaceHigh
+
+private val AstraOutline: Color
+    @Composable get() = if (LocalOledMode.current) Color(0xFF1E1E1E) else BaseAstraOutline
+
 private val AstraBlue = Color(0xFF6DA8FF)
 private val StarGold = Color(0xFFFFD98A)
 private val AstraTextMuted = Color(0xFFAAB8CE)
-private val AstraOutline = Color(0xFF294466)
 private val AstraSuccess = Color(0xFF76E0A0)
+
+private val screenBackgroundBrush: Brush
+    @Composable get() = if (LocalOledMode.current) {
+        Brush.verticalGradient(listOf(Color.Black, Color.Black))
+    } else {
+        Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
+    }
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -380,28 +407,30 @@ private fun AstraRoot() {
 private fun AstraTheme(redLightMode: Boolean, oledMode: Boolean = false, content: @Composable () -> Unit) {
     val primary = if (redLightMode) Color(0xFFD35A4A) else AstraBlue
     val secondary = if (redLightMode) Color(0xFFFF725C) else StarGold
-    val bgColor = if (oledMode) Color.Black else Night
-    val surfaceColor = if (oledMode) Color.Black else NightBlue
-    val surfaceVarColor = if (oledMode) Color.Black else AstraSurface
-    val outlineColor = if (oledMode) Color(0xFF1E1E1E) else AstraOutline
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = primary,
-            secondary = secondary,
-            background = bgColor,
-            surface = surfaceColor,
-            surfaceVariant = surfaceVarColor,
-            outline = outlineColor,
-            onBackground = Color(0xFFEAF1FF),
-            onSurface = Color(0xFFEAF1FF)
-        ),
-        shapes = Shapes(
-            small = RoundedCornerShape(10.dp),
-            medium = RoundedCornerShape(18.dp),
-            large = RoundedCornerShape(26.dp)
-        ),
-        content = content
-    )
+    val bgColor = if (oledMode) Color.Black else BaseNight
+    val surfaceColor = if (oledMode) Color.Black else BaseNightBlue
+    val surfaceVarColor = if (oledMode) Color.Black else BaseAstraSurface
+    val outlineColor = if (oledMode) Color(0xFF1E1E1E) else BaseAstraOutline
+    CompositionLocalProvider(LocalOledMode provides oledMode) {
+        MaterialTheme(
+            colorScheme = darkColorScheme(
+                primary = primary,
+                secondary = secondary,
+                background = bgColor,
+                surface = surfaceColor,
+                surfaceVariant = surfaceVarColor,
+                outline = outlineColor,
+                onBackground = Color(0xFFEAF1FF),
+                onSurface = Color(0xFFEAF1FF)
+            ),
+            shapes = Shapes(
+                small = RoundedCornerShape(10.dp),
+                medium = RoundedCornerShape(18.dp),
+                large = RoundedCornerShape(26.dp)
+            ),
+            content = content
+        )
+    }
 }
 
 private enum class AstraTab { SKY, WEATHER, EVENTS, PLAN, ABOUT }
@@ -1269,7 +1298,7 @@ internal fun SkyScreen(
         }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color(0xFF02050A))
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(if (LocalOledMode.current || appearance.oledBlackMode) Color.Black else Color(0xFF02050A))
             .testTag("sky-viewport")
             .onSizeChanged { viewportSize = it }) {
             if (arEnabled && cameraPermissionGranted) CameraPreview(exposureStep = cameraExposureStep) { cameraFov = it }
@@ -1670,7 +1699,8 @@ internal fun SkyScreen(
                 }
             },
             onDismiss = { showOpticsSheet = false },
-            redLightMode = redLightMode
+            redLightMode = redLightMode,
+            oledMode = LocalOledMode.current || appearance.oledBlackMode
         )
     }
 
@@ -1729,7 +1759,8 @@ internal fun SkyScreen(
             onLogFeature = { celestial ->
                 logEntryTarget = celestial
                 showMoonDetailSheet = false
-            }
+            },
+            oledMode = LocalOledMode.current || appearance.oledBlackMode
         )
     }
     if (showStarHopSheet) {
@@ -1751,7 +1782,8 @@ internal fun SkyScreen(
                 logEntryTarget = targetObj
                 showStarHopSheet = false
             },
-            redLightMode = redLightMode
+            redLightMode = redLightMode,
+            oledMode = LocalOledMode.current || appearance.oledBlackMode
         )
     }
     if (showCalibration) {
@@ -2061,7 +2093,7 @@ internal fun SkyCanvas(
             .then(
                 if (!drawBackground) Modifier
                 else if (arMode) Modifier.background(Color.Black.copy(alpha = 0.28f))
-                else Modifier.background(Color(0xFF03070D))
+                else Modifier.background(if (skyAppearance.oledBlackMode || LocalOledMode.current) Color.Black else Color(0xFF03070D))
             )
     ) {
         if (!firstFrameReported && size.width > 0f && size.height > 0f) {
@@ -3057,7 +3089,8 @@ private fun AstraScreenHeader(
     ) {
         Row(
             Modifier.fillMaxWidth().background(
-                Brush.horizontalGradient(
+                if (LocalOledMode.current) Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                else Brush.horizontalGradient(
                     listOf(AstraBlue.copy(alpha = 0.13f), Color.Transparent, StarGold.copy(alpha = 0.06f))
                 )
             ).padding(20.dp),
@@ -3144,9 +3177,7 @@ internal fun WeatherScreen(
     PullToRefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = ::refresh,
-        modifier = Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
-        )
+        modifier = Modifier.fillMaxSize().background(screenBackgroundBrush)
     ) {
         Column(
             Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
@@ -3317,9 +3348,7 @@ private fun EventsScreen(
     }
     val events = remember(observer, meteorCalendar) { buildUpcomingEvents(observer, meteorCalendar.showers) }
     Column(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
-        ).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        Modifier.fillMaxSize().background(screenBackgroundBrush).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(Modifier.height(6.dp))
@@ -3812,9 +3841,7 @@ internal fun ObservationPlanScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
-        ).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        Modifier.fillMaxSize().background(screenBackgroundBrush).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(Modifier.height(6.dp))
@@ -5120,9 +5147,7 @@ private fun AboutScreen(
     var showPolicy by remember { mutableStateOf(false) }
     if (showPolicy) PrivacyPolicyDialog { showPolicy = false }
     Column(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Night, Color(0xFF09172A), Night))
-        ).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+        Modifier.fillMaxSize().background(screenBackgroundBrush).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(Modifier.height(6.dp))

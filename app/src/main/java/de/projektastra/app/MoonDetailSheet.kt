@@ -97,7 +97,8 @@ internal enum class LunarFeatureFilter(val label: String) {
 internal fun MoonDetailSheet(
     skyInstant: Instant,
     onDismissRequest: () -> Unit,
-    onLogFeature: ((CelestialObject) -> Unit)? = null
+    onLogFeature: ((CelestialObject) -> Unit)? = null,
+    oledMode: Boolean = false
 ) {
     val terminatorState = remember(skyInstant) {
         LunarTerminatorCalculator.calculateTerminator(skyInstant)
@@ -150,7 +151,7 @@ internal fun MoonDetailSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        containerColor = Color(0xFF070F1E),
+        containerColor = if (oledMode) Color.Black else Color(0xFF070F1E),
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ) {
         Column(
@@ -182,8 +183,8 @@ internal fun MoonDetailSheet(
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF131E33),
-                    border = BorderStroke(1.dp, Color(0xFF4FA3E3).copy(alpha = 0.3f))
+                    color = if (oledMode) Color.Black else Color(0xFF131E33),
+                    border = BorderStroke(1.dp, if (oledMode) Color(0xFF1E1E1E) else Color(0xFF4FA3E3).copy(alpha = 0.3f))
                 ) {
                     Text(
                         "L ${if (terminatorState.subEarthLon >= 0) "+" else ""}${terminatorState.subEarthLon.format(1)}° · B ${if (terminatorState.subEarthLat >= 0) "+" else ""}${terminatorState.subEarthLat.format(1)}°",
@@ -207,7 +208,7 @@ internal fun MoonDetailSheet(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF4FA3E3),
                             selectedLabelColor = Color.White,
-                            containerColor = Color(0xFF0F172A),
+                            containerColor = if (oledMode) Color.Black else Color(0xFF0F172A),
                             labelColor = Color(0xFFAAB8CE)
                         )
                     )
@@ -330,7 +331,7 @@ internal fun MoonDetailSheet(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFFFFD54F),
                             selectedLabelColor = Color(0xFF0F172A),
-                            containerColor = Color(0xFF131E33),
+                            containerColor = if (oledMode) Color.Black else Color(0xFF131E33),
                             labelColor = Color(0xFFAAB8CE)
                         )
                     )
@@ -342,8 +343,8 @@ internal fun MoonDetailSheet(
                 val feat = highlight.feature
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF0F172A),
-                    border = BorderStroke(1.dp, if (highlight.inOptimalRelief) Color(0xFFFFD54F).copy(alpha = 0.5f) else Color(0xFF1E293B)),
+                    color = if (oledMode) Color.Black else Color(0xFF0F172A),
+                    border = BorderStroke(1.dp, if (highlight.inOptimalRelief) Color(0xFFFFD54F).copy(alpha = 0.5f) else if (oledMode) Color(0xFF1E1E1E) else Color(0xFF1E293B)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -408,7 +409,8 @@ internal fun MoonDetailSheet(
                         if (feat.observationTip.isNotBlank()) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF1E293B).copy(alpha = 0.5f),
+                                color = if (oledMode) Color.Black else Color(0xFF1E293B).copy(alpha = 0.5f),
+                                border = if (oledMode) BorderStroke(1.dp, Color(0xFF1E1E1E)) else null,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
@@ -456,8 +458,8 @@ internal fun MoonDetailSheet(
                     val isSelected = item.feature.id == selectedHighlight?.feature?.id
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) Color(0xFF1E293B) else Color(0xFF0F172A),
-                        border = BorderStroke(1.dp, if (isSelected) Color(0xFF4FA3E3) else Color(0xFF1E293B).copy(alpha = 0.5f)),
+                        color = if (isSelected) (if (oledMode) Color(0xFF141414) else Color(0xFF1E293B)) else if (oledMode) Color.Black else Color(0xFF0F172A),
+                        border = BorderStroke(1.dp, if (isSelected) Color(0xFF4FA3E3) else if (oledMode) Color(0xFF1E1E1E) else Color(0xFF1E293B).copy(alpha = 0.5f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { selectedHighlight = item }
