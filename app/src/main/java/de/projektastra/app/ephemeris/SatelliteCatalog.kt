@@ -1,6 +1,7 @@
 package de.projektastra.app.ephemeris
 
 import android.content.Context
+import androidx.core.content.edit
 import java.time.Duration
 import java.time.Instant
 
@@ -30,12 +31,12 @@ internal object SatelliteCatalog {
     fun saveCustomTles(context: Context, tleText: String): Boolean {
         val parsed = runCatching { TleParser.parseMultiple(tleText.lines()) }.getOrNull()
         if (parsed.isNullOrEmpty()) return false
-        prefs(context).edit().putString(KEY_CUSTOM_TLES, tleText).apply()
+        prefs(context).edit { putString(KEY_CUSTOM_TLES, tleText) }
         return true
     }
 
     fun clearCustomTles(context: Context) {
-        prefs(context).edit().remove(KEY_CUSTOM_TLES).apply()
+        prefs(context).edit { remove(KEY_CUSTOM_TLES) }
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

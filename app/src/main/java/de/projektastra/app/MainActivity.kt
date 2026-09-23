@@ -163,6 +163,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -943,7 +944,7 @@ internal fun SkyScreen(
 ) {
     val observer = location ?: GeoPoint(52.52, 13.405, 34.0)
     val initialCameraFov = rememberCameraHorizontalFov()
-    var cameraFov by remember { mutableStateOf(initialCameraFov) }
+    var cameraFov by remember { mutableDoubleStateOf(initialCameraFov) }
     var cameraExposureStep by rememberSaveable { mutableIntStateOf(0) }
     var pitchTrimDegrees by rememberSaveable { mutableFloatStateOf(0f) }
     var arDampingEnabled by rememberSaveable { mutableStateOf(true) }

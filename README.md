@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.15` · Version Code `33` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.15 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.15).
+**Beta-Stand:** `1.1.9-pre.16` · Version Code `34` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.16 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.16).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -19,6 +19,10 @@ Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengefüh
 | Tagebuch | Beobachtungstagebuch mit Fotos, Pickering 1–10, Antoniadi I–V, NELM fst, JSON-Backup, OAL 2.1 XML Standard-Export & Rotlicht-Textzusammenfassung |
 | AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
 | Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
+
+## Neu in 1.1.9-pre.16 · Widget und Wartung
+
+Das Homescreen-Widget erhält besser lesbare Schrift, Stringressourcen und ein vereinfachtes Layout. Ohne gespeicherten Wetterwert zeigt es „—“ statt eines erfundenen Scores. Die gemeldeten Updates für AndroidX Core, WorkManager und den Android-Test-Runner sowie die Kotlin-Wartungshinweise sind gezielt bearbeitet. Testumfang und Prüfstatus: [Pre-Release-Hinweise](play-store/pre-release-1.1.9-pre.16.md).
 
 ## Neu in 1.1.9-pre.15 · Fehlerkorrekturen nach dem Review
 

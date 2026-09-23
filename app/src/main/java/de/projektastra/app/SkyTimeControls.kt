@@ -25,6 +25,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -73,7 +74,7 @@ internal fun SkyTimeSheet(
     var dateText by remember(zone) { mutableStateOf(initialTime.format(skyDateInputFormat)) }
     var timeText by remember(zone) { mutableStateOf(initialTime.format(skyTimeInputFormat)) }
     var inputError by remember { mutableStateOf<String?>(null) }
-    var speed by remember { mutableStateOf(abs(state.rate).takeIf { it in listOf(1, 60, 600, 3600) } ?: 60) }
+    var speed by remember { mutableIntStateOf(abs(state.rate).takeIf { it in listOf(1, 60, 600, 3600) } ?: 60) }
     val focusManager = LocalFocusManager.current
     val draft = remember(dateText, timeText) {
         runCatching {

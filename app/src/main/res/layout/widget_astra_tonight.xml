@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="8dp">
 
     <!-- Top Row: App Title & Location -->
     <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:baselineAligned="false"
         android:orientation="horizontal">
 
         <TextView
@@ -18,7 +20,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="PROJEKT ASTRA"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_title"
             android:textColor="#6DA8FF"
             android:textSize="11sp"
             android:textStyle="bold" />
@@ -27,41 +31,62 @@
             android:id="@+id/widget_location"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Berlin (52.5°N)"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_location_pending"
             android:textColor="#AAB8CE"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Center Section: Moon Phase & Weather Score -->
+    <TextView
+        android:id="@+id/widget_darkness_window"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="#10243F"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:text="@string/widget_darkness_pending"
+        android:textColor="#EAF1FF"
+        android:textSize="11sp" />
+
+    <!-- No weighted ancestor: only the two horizontal sections share their width. -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
+        android:layout_above="@id/widget_darkness_window"
+        android:layout_below="@id/widget_header"
+        android:baselineAligned="false"
         android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
+        android:orientation="horizontal">
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/widget_moon_phase"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Zunehmender Mond"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/widget_moon_pending"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_moon_illumination"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Beleuchtung: 50%"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/widget_illumination_pending"
                 android:textColor="#FFD98A"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -76,32 +101,21 @@
                 android:id="@+id/widget_weather_score"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Wetter: 85/100"
+                android:maxLines="1"
+                android:text="@string/widget_score_pending"
                 android:textColor="#76E0A0"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/widget_weather_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Astra Score"
+                android:maxLines="1"
+                android:text="@string/widget_weather_label"
                 android:textColor="#AAB8CE"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Bottom Row: Darkness Window -->
-    <TextView
-        android:id="@+id/widget_darkness_window"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#10243F"
-        android:paddingStart="8dp"
-        android:paddingTop="4dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="4dp"
-        android:text="Astronomische Nacht: 22:15 - 04:45"
-        android:textColor="#EAF1FF"
-        android:textSize="11sp" />
-
-</LinearLayout>
+</RelativeLayout>

@@ -1,4 +1,4 @@
-# Datensicherheit – Prüfentwurf 1.1.9-pre.15
+# Datensicherheit – Prüfentwurf 1.1.9-pre.16
 
 Nicht unverändert in Play Console übernehmen: Anbieterrollen und Drittland-/Rechtsgrundlagenprüfung sind noch offen. Verantwortlicher: Jeremy Grez; Support/Datenschutz: jeregrez@gmail.com. Keine ISO-Zertifizierung und keine unabhängige Sicherheitsprüfung behaupten.
 

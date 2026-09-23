@@ -5,7 +5,9 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
+import androidx.core.content.edit
 import de.projektastra.app.GeoPoint
 import de.projektastra.app.LocationStore
 import de.projektastra.app.MainActivity
@@ -13,6 +15,8 @@ import de.projektastra.app.R
 import de.projektastra.app.TonightWindowCalculator
 import de.projektastra.app.ephemeris.LunarTerminatorCalculator
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -24,10 +28,12 @@ data class WidgetState(
     val moonPhaseLabel: String,
     val moonIlluminationPercent: Int,
     val darknessWindow: String,
-    val weatherScore: Int,
+    val weatherScore: Int?,
     val lastKnownLocationLabel: String,
     val usesBackgroundGps: Boolean = false,
-    val usesRunningBackgroundService: Boolean = false
+    val usesRunningBackgroundService: Boolean = false,
+    /** Null means there is no astronomical darkness; the full explanation stays accessible. */
+    val darknessWindowCompact: String? = darknessWindow
 )
 
 /**
@@ -42,17 +48,15 @@ object AstraWidgetUpdater {
     fun saveWeatherScore(context: Context, score: Int) {
         runCatching {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putInt(KEY_CACHED_WEATHER_SCORE, score.coerceIn(0, 100))
-                .apply()
+                .edit { putInt(KEY_CACHED_WEATHER_SCORE, score.coerceIn(0, 100)) }
         }
     }
 
-    fun getCachedWeatherScore(context: Context): Int {
+    fun getCachedWeatherScore(context: Context): Int? {
         return runCatching {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getInt(KEY_CACHED_WEATHER_SCORE, 80)
-        }.getOrDefault(80)
+                .getInt(KEY_CACHED_WEATHER_SCORE, -1).takeIf { it in 0..100 }
+        }.getOrNull()
     }
 
     /**
@@ -61,7 +65,7 @@ object AstraWidgetUpdater {
     internal fun calculateState(
         savedLocation: GeoPoint?,
         time: Instant = Instant.now(),
-        weatherScore: Int = 80
+        weatherScore: Int? = null
     ): WidgetState {
         val termState = LunarTerminatorCalculator.calculateTerminator(time)
         val illumPct = (termState.phaseFraction * 100.0).roundToInt().coerceIn(0, 100)
@@ -86,27 +90,35 @@ object AstraWidgetUpdater {
         }
 
         val observer = savedLocation ?: GeoPoint(52.5200, 13.4050, 34.0)
-        val calculatedDarkness = runCatching {
-            val tonight = TonightWindowCalculator.calculate(observer, time)
-            if (tonight.hasAstronomicalDarkness) "Astronomische Nacht: ${tonight.darknessText}"
-            else tonight.darknessText
-        }.getOrDefault("Astronomische Dunkelheit: nicht verfügbar")
+        val tonight = runCatching { TonightWindowCalculator.calculate(observer, time) }.getOrNull()
+        val calculatedDarkness = when {
+            tonight == null -> "Astronomische Dunkelheit: nicht verfügbar"
+            tonight.hasAstronomicalDarkness -> "Astronomische Nacht: ${tonight.darknessText}"
+            else -> tonight.darknessText
+        }
+        val timeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.GERMAN).withZone(ZoneId.systemDefault())
+        val compactDarkness = when {
+            tonight == null -> "—"
+            !tonight.hasAstronomicalDarkness -> null
+            else -> "${timeFormat.format(tonight.darknessStart)}–${timeFormat.format(tonight.darknessEnd)}"
+        }
 
         return WidgetState(
             moonPhaseLabel = phaseName,
             moonIlluminationPercent = illumPct,
             darknessWindow = calculatedDarkness,
-            weatherScore = weatherScore.coerceIn(0, 100),
+            weatherScore = weatherScore?.coerceIn(0, 100),
             lastKnownLocationLabel = locationLabel,
             usesBackgroundGps = false,
-            usesRunningBackgroundService = false
+            usesRunningBackgroundService = false,
+            darknessWindowCompact = compactDarkness
         )
     }
 
     fun calculateState(
         context: Context,
         time: Instant = Instant.now(),
-        weatherScore: Int = getCachedWeatherScore(context)
+        weatherScore: Int? = getCachedWeatherScore(context)
     ): WidgetState {
         val savedLocation = runCatching { LocationStore.getSavedLocation(context) }.getOrNull()
         return calculateState(savedLocation, time, weatherScore)
@@ -114,12 +126,34 @@ object AstraWidgetUpdater {
 
     fun buildRemoteViews(context: Context, state: WidgetState): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_astra_tonight)
+        val illumination = context.getString(R.string.widget_illumination, state.moonIlluminationPercent)
+        val score = state.weatherScore?.let { context.getString(R.string.widget_score, it) }
+            ?: context.getString(R.string.widget_score_pending)
+        // Preserve system font size; redundant labels yield first at the minimum widget size.
+        // Complete information remains available to accessibility even when text is ellipsized.
+        val compact = context.resources.configuration.fontScale > 1.3f
+        val detailVisibility = if (compact) View.GONE else View.VISIBLE
+        views.setViewVisibility(R.id.widget_title, detailVisibility)
+        views.setViewVisibility(R.id.widget_moon_illumination, detailVisibility)
+        views.setViewVisibility(R.id.widget_weather_label, detailVisibility)
 
         views.setTextViewText(R.id.widget_location, state.lastKnownLocationLabel)
         views.setTextViewText(R.id.widget_moon_phase, state.moonPhaseLabel)
-        views.setTextViewText(R.id.widget_moon_illumination, "Beleuchtung: ${state.moonIlluminationPercent}%")
-        views.setTextViewText(R.id.widget_weather_score, "Wetter: ${state.weatherScore}/100")
-        views.setTextViewText(R.id.widget_darkness_window, state.darknessWindow)
+        views.setTextViewText(R.id.widget_moon_illumination, illumination)
+        views.setTextViewText(R.id.widget_weather_score, if (compact)
+            context.getString(R.string.widget_weather_compact,
+                state.weatherScore?.toString() ?: context.getString(R.string.widget_score_pending)) else score)
+        views.setTextViewText(R.id.widget_darkness_window, state.darknessWindowCompact
+            ?: context.getString(R.string.widget_no_astronomical_darkness))
+        views.setContentDescription(R.id.widget_darkness_window, state.darknessWindow)
+        views.setContentDescription(R.id.widget_moon_phase, "${state.moonPhaseLabel}, $illumination")
+        views.setContentDescription(R.id.widget_weather_score,
+            context.getString(R.string.widget_weather_accessibility, score))
+        views.setContentDescription(R.id.widget_root,
+            listOf(context.getString(R.string.app_name), state.lastKnownLocationLabel,
+                state.moonPhaseLabel, illumination,
+                context.getString(R.string.widget_weather_accessibility, score), state.darknessWindow)
+                .joinToString(". "))
 
         // PendingIntent to launch MainActivity on tap
         val intent = Intent(context, MainActivity::class.java).apply {

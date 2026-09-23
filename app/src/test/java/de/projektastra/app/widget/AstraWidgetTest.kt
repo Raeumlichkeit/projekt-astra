@@ -1,13 +1,37 @@
 package de.projektastra.app.widget
 
 import de.projektastra.app.GeoPoint
+import de.projektastra.app.TonightWindowCalculator
 import de.projektastra.app.ephemeris.LunarTerminatorCalculator
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
 class AstraWidgetTest {
+
+    @Test
+    fun missingWeatherScoreRemainsUnknown() {
+        val state = AstraWidgetUpdater.calculateState(savedLocation = null,
+            time = Instant.parse("2026-09-20T22:00:00Z"))
+        assertNull(state.weatherScore)
+    }
+
+    @Test
+    fun compactNightTimesComeFromTheCalculatedWindowIncludingPolarWinter() {
+        val time = Instant.parse("2026-12-21T21:00:00Z")
+        val formatter = DateTimeFormatter.ofPattern("HH:mm", Locale.GERMAN).withZone(ZoneId.systemDefault())
+        listOf(GeoPoint(52.52, 13.405, 34.0), GeoPoint(89.0, 15.0, 0.0)).forEach { location ->
+            val window = TonightWindowCalculator.calculate(location, time)
+            assertTrue(window.hasAstronomicalDarkness)
+            val state = AstraWidgetUpdater.calculateState(location, time)
+            assertEquals("${formatter.format(window.darknessStart)}–${formatter.format(window.darknessEnd)}",
+                state.darknessWindowCompact)
+        }
+    }
 
     @Test
     fun testWidgetPrivacyGuarantees() {
@@ -108,6 +132,7 @@ class AstraWidgetTest {
         assertTrue(state.darknessWindow.contains("Keine astronomische Dunkelheit"))
         assertFalse(state.darknessWindow.contains("Astronomische Nacht:"))
         assertFalse(state.darknessWindow.contains("22:15"))
+        assertNull("Polar summer must not fabricate a night interval", state.darknessWindowCompact)
     }
 
     @Test

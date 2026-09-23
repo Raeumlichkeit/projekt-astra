@@ -1,5 +1,17 @@
 <resources>
     <string name="app_name">Projekt Astra</string>
     <string name="widget_description">Projekt Astra Beobachtungsfenster, Mondphase und Wetter-Score</string>
+    <string name="widget_title">ASTRA</string>
+    <string name="widget_location_pending">Standort: —</string>
+    <string name="widget_darkness_pending">Nacht: —</string>
+    <string name="widget_no_astronomical_darkness">Nicht dunkel</string>
+    <string name="widget_moon_pending">Mondphase: —</string>
+    <string name="widget_illumination_pending">Beleuchtung: —</string>
+    <string name="widget_score_pending">—</string>
+    <string name="widget_weather_label">Wetter</string>
+    <string name="widget_illumination">Beleuchtung: %1$d%%</string>
+    <string name="widget_score">%1$d/100</string>
+    <string name="widget_weather_accessibility">Wetter-Score: %1$s</string>
+    <string name="widget_weather_compact">☁ %1$s</string>
 </resources>
 

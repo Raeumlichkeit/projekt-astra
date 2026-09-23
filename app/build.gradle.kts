@@ -38,8 +38,8 @@ android {
         applicationId = "de.projektastra.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 33
-        versionName = "1.1.9-pre.15"
+        versionCode = 34
+        versionName = "1.1.9-pre.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -119,9 +119,9 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.6.2")
     implementation("androidx.camera:camera-lifecycle:1.6.2")
     implementation("androidx.camera:camera-view:1.6.2")
-    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.core.locationbutton:locationbutton-compose:1.0.0-alpha01")
-    implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
         exclude(group = "org.bouncycastle")
     }
@@ -133,6 +133,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
     // Used by defaultConfig's instrumentation runner, previously pulled in by Compose test tooling.
-    androidTestImplementation("androidx.test:runner:1.5.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
