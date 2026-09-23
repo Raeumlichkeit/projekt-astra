@@ -77,4 +77,26 @@ class SkyAppearanceTest {
         assertTrue(appearance.showGrid)
         assertEquals(appearance, appearance.normalized().normalized())
     }
+
+    @Test fun testCoordinateGridAndReferenceLineDefaultsAndRestore() {
+        val defaultAppearance = SkyAppearance.restore()
+        assertFalse(defaultAppearance.showEquatorialGrid)
+        assertFalse(defaultAppearance.showHorizontalGrid)
+        assertFalse(defaultAppearance.showCelestialEquator)
+        assertFalse(defaultAppearance.showEcliptic)
+        assertFalse(defaultAppearance.showGalacticEquator)
+
+        val customAppearance = SkyAppearance.restore(
+            showEquatorialGrid = true,
+            showHorizontalGrid = true,
+            showCelestialEquator = true,
+            showEcliptic = true,
+            showGalacticEquator = true
+        )
+        assertTrue(customAppearance.showEquatorialGrid)
+        assertTrue(customAppearance.showHorizontalGrid)
+        assertTrue(customAppearance.showCelestialEquator)
+        assertTrue(customAppearance.showEcliptic)
+        assertTrue(customAppearance.showGalacticEquator)
+    }
 }

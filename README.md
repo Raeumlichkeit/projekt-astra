@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Status:** `1.1.8-pre.1` · Version Code `18` · Android 9 / API 28 bis Android 17 / API 37<br>
-Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: [v1.1.8-pre.1 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.8-pre.1).
+**Beta-Stand:** `1.1.9-pre.11` · Version Code `29` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Stand liegt auf `beta`; `main` bleibt bei `1.1.8-pre.1`. Zum Testen: [v1.1.9-pre.11 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.11).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -11,19 +11,122 @@ Der aktuelle Stand ist ein GitHub-Pre-Release zum Testen auf mehreren Geräten: 
 
 | Bereich | Enthalten |
 | --- | --- |
-| Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont und 88 IAU-Sternbildgrenzen |
-| Himmel | Offline-HYG-Katalog mit 5.041 Sternen, optional 1.016 OpenNGC-Deep-Sky-Objekte, Sonne, Mond und sieben Planeten |
-| Milchstraße | Offline gebündelte NASA/Gaia-Darstellung mit natürlichem oder verstärktem Stil und Helligkeitsregler |
-| Gelände | Lokales 360°-Profil aus GLO-90-Höhendaten mit Offline-Fallback und Geländeverdeckung |
-| Objektinfos | Koordinaten, Helligkeit, Eigenbewegung, zwölfstündige Bahn, Sichtbarkeit und passende DSS2-Aufnahme |
-| Suche | Offline-Namen, Alternativnamen, HIP-, Messier- und NGC-Nummern; Treffer direkt zentrieren oder nachführen |
-| AR | CameraX-Kamerabild mit lokal berechnetem Sensor-Overlay; Kamera bleibt optional und speichert keine Bilder |
-| Wetter | Stündliche Open-Meteo-Vorhersage, Astra-Score, Radar und Wolkenraster; bisherige Daten bleiben während der Aktualisierung sichtbar |
-| Kalender | Meteorschauer, Sonnen- und Mondfinsternisse, lokale Sichtbarkeit sowie Beobachtungsplan und Erinnerungen |
-| Licht | Optional eingebettete LightPollutionMap.app; eigene historische NASA-VIIRS-Karte mit Umkreis, Ortsvergleich und unvalidierter Bildlicht-/Bortle-Orientierung |
-| Nachtbetrieb | Globaler Rotlichtmodus, dunkles Compose-UI und lokale Favoriten/Beobachtungslisten |
+| Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont, 88 IAU-Sternbildgrenzen, äquatoriale/horizontale Gitter, Referenzlinien (Äquator, Ekliptik, Galaktisch), Optik & FOV-Kreis/Telrad mit Drehung und Spiegelung, Handschuh-Modus (Lautstärketasten) |
+| Sonnensystem & Mond | Galileische Jupitermonde (Io, Europa, Ganymed, Kallisto) mit Transit/Verfinsterungs-Ereignissen, Saturn Ringsystem & Titan, Mondterminator-Detailrelief & Kraterkatalog |
+| Satelliten & ISS | Rein lokale SGP4-Satellitenbahnvorhersage für ISS und helle Satelliten mit Pass-Zeiten und Pfaden auf Karte und AR (ohne Cloud/Tracking) |
+| Aufsuchhilfen | Interaktives Winkelabstand- und Positionsmesswerkzeug, geführter Star-Hopping-Assistent mit Telrad- und Okularfeldern |
+| Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Dew Monitor (Magnus-Tetens Taupunktwarnung), Beobachtungs-Challenges (Messier 110, Caldwell, Herschel 400), „Im Logbuch beobachtet“-Statusbadges |
+| Tagebuch | Beobachtungstagebuch mit Fotos, Pickering 1–10, Antoniadi I–V, NELM fst, JSON-Backup, OAL 2.1 XML Standard-Export & Rotlicht-Textzusammenfassung |
+| AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
+| Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
 
-## Neu in 1.1.8-pre.1
+## Neu in 1.1.9-pre.12 · Beta
+
+- **Dynamische Sonnensystem-Körper & Mondterminator (P2.13):**
+  - **Galileische Jupitermonde:** Echtzeitberechnung der Bahnen von Io, Europa, Ganymed und Kallisto; Erkennung von Schattentransiten, Okkultationen und Verfinsterungen mit schematischem Diagramm und Detail-Badges.
+  - **Saturn Ringsystem & Titan:** Ringsystem-Neigungswinkel und Titan-Orbitposition.
+  - **Mondterminator & Kraterrelief:** Colongitude $C_0$, optische Libration, selenographischer Morgenterminator und interaktiver `MoonDetailSheet` mit hervorgehobenen Kratern am Terminator.
+  - **Lokale SGP4-Satellitenpass-Vorhersage:** Reine Offline-Berechnung von ISS- und Satellitenüberflügen aus gebündelten TLEs (`satellites_bright.tle`) ohne Hintergrund-GPS.
+- **Himmelsvermessung, Koordinatengitter & Star-Hopping (P2.14):**
+  - **Winkelabstandsmessung:** Exakte Berechnung des Abstands (Grad, Bogenminuten, Bogensekunden) und Positionswinkels zwischen beliebigen Sternen und Himmelskoordinaten.
+  - **Astronomische Koordinatengitter:** Äquatoriales (RA/Dec) und horizontales (Az/Alt) Raster sowie Referenzlinien für Himmelsäquator, Ekliptik und galaktischen Äquator mit Rotlicht-Unterstützung.
+  - **Star-Hopping-Assistent:** Schritt-für-Schritt-Routen von Orientierungssternen zu Deep-Sky-Objekten mit interaktivem HUD und Zentrier-Option.
+- **Beobachtungspraxis, Dew Monitor & OAL XML Export (P2.15):**
+  - **Beobachtungs-Challenges:** Messier 110, Caldwell 109 und Herschel 400 mit automatischem Fortschritt aus dem lokalen Logbuch.
+  - **„Im Logbuch beobachtet“-Badges:** Dezente Statusanzeigen auf der Sternkarte, in der Objektsuche und im Beobachtungsplan.
+  - **Dew Monitor (Taupunkt- & Beschlagswarnung):** 4-stufige Risikobewertung (Gering, Mäßig, Hoch, Akut) nach der Sonntag (1990) Magnus-Tetens-Formel.
+  - **OAL 2.1 XML & Rotlicht-Textexport:** Vollständiger Export nach dem OpenAstronomyLog 2.1 XML-Standard sowie formatierte Textzusammenfassungen.
+  - **Standard-Seeing-Skalen:** Pickering (1–10), Antoniadi (I–V) und freie Grenzgröße (NELM / fst).
+- **Kamera-AR-Nachtoptimierung, Hardware & Feld-Usability (P2.16 & P2.17):**
+  - **AR-Nachtbelichtung:** Gestufte Camera2/CameraX AE Belichtungskorrektur (+0 bis +3 EV) für dunkle Himmelsansichten.
+  - **Sensorfilterung & Pitch-Trimm:** Adaptive Tiefpass-Alpha-Dämpfung bei engem FOV, zirkulare 360°-Azimut-Glättung und ±15° manueller Höhen-Offset.
+  - **Handschuh-Modus (Volume-Key-Zoom):** Zoom per Lautstärketasten (+/-) auf dem Sternkarten-Tab bei frostigen Beobachtungsnächten.
+  - **OLED Reinstschwarz (#000000):** Vollständig tiefschwarzes UI-Farbschema zur maximalen Akkuschonung und Dunkeladaption.
+  - **Passives Homescreen-Widget:** `AstraAppWidgetProvider` mit Mondphase, Dunkelheitsfenster und gecachtem Wetter-Score ohne Hintergrund-GPS oder Hintergrunddienste.
+
+- **Winkeltreue stereografische Projektion (Entzerrung bei weitem FOV):**
+  - **Natürliche Sternfeldansicht beim Herauszoomen:** Umstellung der manuellen Sternkarten-Perspektive (`SkyProjection.kt`) von gnomonischer Rektilinearprojektion auf winkeltreue (konforme) stereografische Projektion. Beseitigt extreme Dehnungen und Verzerrungen an Bildrändern und Ecken bei weitem Sichtfeld (bis 150° FOV). Sternbilder behalten ihre Form ohne Verzerrung.
+  - **Pixelgenaue Shader-Anpassung:** Der OpenGL-Fragment-Shader (`milky_way.frag`) der Milchstraße berechnet den Kamerastrahl nun ebenfalls per inverser stereografischer Projektion, sodass Milchstraßenstrukturen, Sterne und Sternbildlinien auf subpixel-genau übereinstimmen.
+  - **Rotlichtmodus für Optik & FOV:** Vollständige Einbindung des Rotlichtmodus in das Optik-Status-Badge, den Optik-Einstellungs-Sheet (`OpticsFovSheet.kt`) und die Darstellung des Sichtfeldkreises auf der Sternkarte.
+  - **Neue Unit-Tests:** 185 bestandene Unit-Tests (+2 neue mathematische Verifikationstests für stereografische Konformität und Entzerrung). Testhinweise: [1.1.9-pre.11](play-store/pre-release-1.1.9-pre.11.md).
+
+## Neu in 1.1.9-pre.10 · Beta
+
+- **Akku- & Energieoptimierung (P3):**
+  - **Hintergrund-Dormancy für Sensoren:** Umstellung der Sensoregistrierung in `rememberOrientation` auf `LifecycleStartEffect` (beim Ausschalten des Bildschirms oder Wechsel in den Hintergrund werden Orientierungssensoren sofort deregistriert, 0 % Standby-Last).
+  - **Energiemessmatrix & Laufzeitdokumentation:** Detaillierte Messungen in `play-store/battery-profiling.md` für OLED-Dunkelmodus (4,8 %/h, > 20 h Laufzeit), Rotlichtmodus (4,2 %/h, > 23 h Laufzeit) und AR-Kamera (14,5 %/h, ~6,8 h).
+  - **Automatisierte Dormancy-Tests:** Lifecycle-Vertragstests in `SkyStartupTest.kt` verifiziert. Testhinweise: [1.1.9-pre.10](play-store/pre-release-1.1.9-pre.10.md).
+
+## Neu in 1.1.9-pre.9 · Beta
+
+- **Robustheit & Darstellung (P2.12):**
+  - **Fehler- und Ladezustände für DSS2-Himmelsaufnahmen:** Ladeindikator beim Abruf sowie verständliche Fehlermeldung mit „Erneut versuchen“-Button bei Timeouts oder Serverfehlern.
+  - **Geländeprofil-Retry:** Direkter Wiederholungs-Button bei fehlgeschlagener oder offline gebliebener GLO-90-Geländeprofilierung.
+  - **Automatisierte Regressionstests:** 16 neue Tests in `SkyMapInteractionTest.kt` für Pinch-to-Zoom (25° bis 150°), Panning-Präzision, Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen.
+  - **Dokumentierte Geräte-Testfälle:** Vollständige Testmatrix in `play-store/device-test-cases.md` für Berechtigungsentzug, App-Unterbrechungen, Sensor-Fallbacks, Offline-Betrieb und Rendering-Profilierung (60/120 FPS Benchmark). Testhinweise: [1.1.9-pre.9](play-store/pre-release-1.1.9-pre.9.md).
+
+## Neu in 1.1.9-pre.8 · Beta
+
+- **AR-Zielhilfe (P2.11):**
+  - **Richtungspfeile & Winkelabstand:** Für jedes ausgewählte Himmelsobjekt wird der Winkelabstand zur aktuellen Blickrichtung berechnet und als Gradangabe angezeigt.
+  - **Zielkreuz-Markierung:** Pulsierendes Fadenkreuz wenn sich das Ziel im Sichtfeld befindet.
+  - **Kantenzeiger:** Kreisförmige Pfeile am Bildschirmrand mit Richtungsangabe und Gradabstand für Off-Screen-Objekte.
+  - **Status-Banner:** Oberer Informationsbalken mit Zielname, Objekttyp, Entfernung und Schließen-Button.
+  - **Hinter-dem-Gerät-Erkennung:** Ziele > 90° von der Blickrichtung werden als „Umdrehen" mit spezieller Farbgebung markiert.
+  - **Horizont- und Geländeerkennung:** Objekte unter dem lokalen Horizont oder Geländeprofil werden als orange Warnung angezeigt.
+  - **Sensorqualität:** Anzeige der Sensorgenauigkeit (Hoch/Mittel/Niedrig) mit Kalibrierungshinweis bei unzuverlässiger Ausrichtung. Testhinweise: [1.1.9-pre.8](play-store/pre-release-1.1.9-pre.8.md).
+
+## Neu in 1.1.9-pre.7 · Beta
+
+- **Fernglas- und Teleskop-Sichtfeld & Orientierung (P2.10):**
+  - **Sichtfeld-Kreis (FOV Overlay):** Frei skalierbarer Kreis (0,1° bis 30,0°) mit Winkelgrößenbeschriftung und Zentrierfadenkreuz.
+  - **Telrad-Sucher:** Spezieller 3-Ring-Telrad-Modus mit 0,5°, 2,0° und 4,0° Ringen und klassischem Teilstrichkreuz.
+  - **Geräteprofile:** Vorkonfigurierte Profile (10×50 Fernglas, 8×42 Fernglas, 8" Dobson mit 25 mm und 10 mm Plössl) sowie eigene Profile mit Brennweite, Öffnung, Okularbrennweite und scheinbarem Gesichtsfeld. Automatische Kennzeichnung von Vergrößerung ($V = F / f$), wahrem Gesichtsfeld ($TFOV \approx AFOV / V$) und Austrittspupille als Näherungswerte.
+  - **Drehung & Spiegelung:** Bildorientierung um 0°, 90°, 180° (Newton-Spiegeltelekop) oder 270° drehen sowie horizontal spiegeln (Zenitspiegel). Stern- und Objektnamen bleiben standardmäßig aufrecht lesbar (oder können optional mitrotieren).
+  - **Exakte Touch-Präzision & Wischgesten:** Inverse Koordinatentransformation sorgt dafür, dass getippte Sterne auch unter Spiegelung/Drehung absolut millimetergenau getroffen werden; Wischgesten bewegen die Karte stets natürlich unter dem Finger.
+  - **Status-Badge:** Schneller Überblick über aktive Modifikationen mit 1-Klick-Zurücksetzen („Standard“). AR bleibt strikt unbeeinflusst. Testhinweise: [1.1.9-pre.7](play-store/pre-release-1.1.9-pre.7.md).
+
+## Neu in 1.1.9-pre.6 · Beta
+
+- **Beobachtungstagebuch (P2.9):**
+  - **Beobachtungen protokollieren:** Eigene Beobachtungen erfassen mit Datum, Notizen, Seeing-Rating (1 bis 5 Sterne) und Ausrüstung (Teleskop/Fernglas/Okulare).
+  - **Direkt aus der Sternkarte:** In den Objektdetails kann direkt per Klick auf „Beobachten“ ein neuer Eintrag für das ausgewählte Objekt angelegt werden.
+  - **Optionale eigene Fotos:** Bilder werden in das isolierte App-Verzeichnis kopiert und können im Tagebuch als Thumbnail oder im Vollbild betrachtet werden.
+  - **100 % lokaler Datenschutz:** Standortdaten sind optional und standardmäßig deaktiviert (Opt-in). Keine Cloud-Synchronisierung, Ausschluss von automatischen Backups.
+  - **Löschen & Dateibereinigung:** Einzelne Einträge bearbeiten und löschen (inkl. Foto-Bereinigung) sowie vollständiges Löschen mit Sicherheitsabfrage.
+  - **JSON-Export & -Import:** Mit Datenbegrenzung (10 MB / 5.000 Einträge), Vorschau, Zusammenführen/Ersetzen und EXIF-Datenschutzhinweis. Testhinweise: [1.1.9-pre.6](play-store/pre-release-1.1.9-pre.6.md).
+
+## Neu in 1.1.9-pre.4 · Beta
+
+Im Reiter **Plan** („Beobachtungsplaner“) gibt es zwei neue, lokal berechnete Bereiche:
+- **Beobachtungsfenster heute Nacht („Heute Nacht im Überblick“):**
+  - Zeigt das exakte lokale Fenster der astronomischen Dunkelheit bzw. nautischen Dämmerung, Sonnenunter- und -aufgangszeiten.
+  - Mondstatus mit Beleuchtungsgrad in Prozent, Mondphase und Auf-/Untergangszeiten.
+  - Bedingungen: Bei aktiver Internetverbindung wird die stündliche Bewölkungsvorhersage ausgewertet („Optimale Bedingungen ab 22:00 Uhr bei klarem Himmel“); bei Offline-Betrieb wird transparent die rein astronomische Dunkelheit ausgewiesen.
+- **Empfehlungsengine („Was lohnt sich heute Nacht?“):**
+  - Berechnet für ausgewählte Himmelshighlights (Planeten, Doppelsterne, Nebel, Galaxien, Sternhaufen) den Verlauf über die Nacht.
+  - Schließt Objekte unter 16° Horizonthöhe strikt aus.
+  - Berücksichtigt den sphärischen Winkelabstand zum Mond, um blendfreie Beobachtungen zu gewährleisten.
+  - Filterchips für **Alle**, **Bloßes Auge**, **Fernglas** und **Teleskop**.
+  - Schnellaktionen direkt in der Karte: **In Karte öffnen** (zentriert das Objekt sofort im Sternkarten-Tab) und **Merken** (Favoriten-Stern).
+  - 100 % Privacy First: Berechnungen laufen vollständig lokal auf dem Gerät. Testhinweise: [1.1.9-pre.4](play-store/pre-release-1.1.9-pre.4.md).
+
+## Dauerhafter Standort seit 1.1.9-pre.3 · Beta
+
+Nach einmaliger Standortfreigabe merkt sich Astra den Beobachtungsort lokal auf dem Gerät (`LocationStore` in den privaten Einstellungen `astra_settings`). Bei jedem weiteren Start lädt die Sternkarte direkt diesen Ort und zeigt sofort deinen passenden Nachthimmel – ohne dass der Freigabeknopf erneut gedrückt werden muss.
+
+Volle Kontrolle und Opt-Out:
+- **Sternkarte:** Bei hinterlegtem Standort wird der große Standortbutton ausgeblendet und stattdessen in der Kartenbedienung die Aktion **Auf Demo zurücksetzen** angeboten. Ein Klick löscht die gespeicherten Koordinaten sofort und kehrt zur Berlin-Demo zurück.
+- **Info / Deine Daten:** Ein neuer Schalter **Standort für die Sternkarte merken** erlaubt das dauerhafte Deaktivieren; beim Ausschalten werden gespeicherte Koordinaten rückstandsfrei entfernt.
+- **100 % Datenschutz:** Kein Cloud-Backup (`allowBackup="false"`, `data_extraction_rules.xml`), Koordinaten verlassen das Gerät niemals. Testhinweise: [1.1.9-pre.3](play-store/pre-release-1.1.9-pre.3.md).
+
+## Basiskartenstart seit 1.1.9-pre.2 · Beta
+
+Die Sternkarte priorisiert das Zeichnen des ersten Basiskarten-Rahmens: Horizont, Planeten, Navigationssterne und Nachthimmelhintergrund erscheinen ohne Wartezeit auf den schwereren GPU- und Milchstraßentextur-Ladevorgang. Erst nach dem ersten sichtbaren Rahmen wird der OpenGL ES-Shader gestartet und die 3840-Pixel-Gaia-Milchstraße im Hintergrund dekodiert.
+
+Schlägt die GPU-Initialisierung oder das Texturdekodieren auf leistungsschwachen Geräten fehl, bleibt die Basiskarte mit dunklem Nachthimmelhintergrund vollständig nutzbar. Unter **Ebenen & Namen** steht die Aktion **Textur erneut laden** zur Verfügung. Bei geringem Gerätespeicher oder knappem freiem Heap skaliert der Textur-Loader die Bildgröße automatisch herunter, um GC-Pausen und Speicherüberläufe zu verhindern; bei Speicherdruck des Systems (`onTrimMemory`) werden flüchtige Gelände- und Lichtcaches geleert. Der gemeinsame Katalogcache aus 1.1.9-pre.1 bleibt aktiv. Testhinweise: [1.1.9-pre.2](play-store/pre-release-1.1.9-pre.2.md).
+
+## Wetteraktualisierung seit 1.1.8-pre.1
 
 Beim Herunterziehen bleiben Wetterwerte, Astra-Score, Stundenübersicht und Karten sichtbar, bis Ersatzdaten vorliegen. Eine kleine Statusanzeige kennzeichnet den Abruf. Bei einem Fehler bleiben die bisherigen Werte mit Datenstand und Wiederholen-Aktion erhalten.
 
@@ -91,9 +194,9 @@ adb install -r app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk
 adb shell am instrument -w de.projektastra.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.8-pre.1.md](play-store/pre-release-1.1.8-pre.1.md).
+Die Oberfläche läuft im Emulator. Für echte AR-Ausrichtung, Kameraausschnitt, Kompass und GPS sind Tests auf realen Geräten erforderlich. Die aktuellen Gerätetests stehen in [play-store/pre-release-1.1.9-pre.1.md](play-store/pre-release-1.1.9-pre.1.md).
 
-Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.8-pre.1.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
+Der dokumentierte Prüfstand steht in den [Pre-Release-Testhinweisen](play-store/pre-release-1.1.9-pre.1.md). WebView-Tests verwenden lokale Testkacheln für reproduzierbare Lade-, Fehler- und Vergleichsfälle; die Prüfung echter Anbieter und weiterer Geräte ergänzt diese Tests.
 
 ## Release und Pre-Releases
 
@@ -109,12 +212,14 @@ Für eine Veröffentlichung im Play Store müssen zusätzlich ein außerhalb des
 
 ## Roadmap
 
-Die vollständige, priorisierte Liste steht in [AUFGABEN.md](AUFGABEN.md). Als nächste P1-Schritte sind geplant:
+Die vollständige, priorisierte Liste steht in [AUFGABEN.md](AUFGABEN.md). Die ursprünglichen Kernstufen P1 (Suche, Zeitsteuerung, Vollbild, visuelle Überarbeitung, Lichtkarte, Wetteraktualisierung, Startzeit), P2 (Beobachtungsplan, Tagebuch, Sichtfeld/Telrad, AR-Zielhilfe, Robustheit) und P3 (Akkutests) sind im aktuellen Beta-Zweig weitgehend umgesetzt.
 
-- **P1.6 Wetteraktualisierung:** alte erfolgreiche Wetterdaten während Pull-to-Refresh sichtbar lassen, Ladeanzeige darüberlegen und Fehler mit Datenalter und Wiederholen anzeigen.
-- **P1.7 Startgeschwindigkeit:** Kataloge und Suchindex gestuft beziehungsweise aus dem UI-Thread laden, Caches nutzen und den ersten Kartenrahmen priorisieren.
-
-Nachtplanung, Tagebuch, Instrumenten-Sichtfeld und AR-Zielhilfe folgen unter P2. Akkutests bleiben ausdrücklich P3.
+Als nächste Ausbaustufen im Backlog sind geplant:
+- **P2.13 Dynamische Sonnensystem-Körper & Monddetails:** Galileische Jupitermonde, Saturn-Ringe und Terminator-Mondkarte.
+- **P2.14 Aufsuchhilfen & Himmelsvermessung:** Interaktives Winkelabstand-Messwerkzeug, Koordinatengitter und Star-Hopping-Assistent.
+- **P2.15 Beobachtungspraxis & erweiterte Planung:** Messier-/Caldwell-Challenges mit Fortschrittsbalken, Taupunkt-Warnung und OAL-Export.
+- **P2.16 Kamera- & AR-Nachtoptimierung:** Camera2-Nachtbelichtungsanpassung und Sensor-Dämpfung.
+- **P2.17 Winter- & Feld-Usability:** Physische Tastenbedienung (Lautstärketasten für Zoom) und akkuschonendes Homescreen-Widget.
 
 ## Daten und Datenschutz
 

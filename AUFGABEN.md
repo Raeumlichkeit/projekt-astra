@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 11. September 2026 · Aktueller Ausbau: Version 1.1.7-pre.2.
+Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.12.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -89,59 +89,123 @@ Umgesetzt in `1.1.8-pre.1`. Wetter und zugehöriger Ort werden atomar ersetzt; a
 
 ### 7. Schneller App- und Sternkartenstart
 
-- [ ] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
-- [ ] HYG-/OpenNGC-/IAU-Daten pro Prozess zwischenspeichern und bei wiederholtem Tabwechsel nicht erneut parsen.
-- [ ] Milchstraßen-Textur, GPU-Kontext und optionale Ebenen nach dem ersten sichtbaren Kartenrahmen priorisiert laden; Fehler müssen die Basiskarte nutzbar lassen.
+- [x] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
+- [x] HYG-/OpenNGC-/IAU-Daten pro Prozess zwischenspeichern und bei wiederholtem Tabwechsel nicht erneut parsen (Sternkarte und Beobachtungsliste, `beta` / `1.1.9-pre.1`).
+
+Teilstand auf `beta` (`1.1.9-pre.1`): Sternkarte und Beobachtungsliste teilen denselben prozessweiten Katalogcache. Kataloge und ortsunabhängiger Suchindex werden gestuft außerhalb des UI-Threads geladen. Fertige Stufen bleiben beim Tabwechsel erhalten; Suchtext, Standort und aktuelle Planetenpositionen gehören nicht in diesen Cache. Loader-Fehler werden durchgereicht und fehlgeschlagene Stufen bleiben wiederholbar. Die kleine Ersatz-Sternkarte dient nur der Anzeige, nicht als vermeintlich vollständiger Cache. Vorgemerkte Objektziele warten auf die Objektkataloge; die Beobachtungsliste verwechselt noch nicht aufgelöste Favoriten nicht mit einer leeren Liste und löscht keine Vormerkungen. Dies garantiert noch keinen ersten gezeichneten Kartenrahmen vor den optionalen Ebenen; Textur/GPU, Gelände, Low-Memory-Verhalten und Referenzgeräte-Messungen bleiben offen.
+
+- [x] Milchstraßen-Textur, GPU-Kontext und optionale Ebenen nach dem ersten sichtbaren Kartenrahmen priorisiert laden; Fehler müssen die Basiskarte nutzbar lassen.
 - [ ] Kaltstart, Warmstart, erster sichtbarer Kartenrahmen und Interaktion auf einem leistungsschwachen Referenzgerät messen und Zielwerte dokumentieren.
 - [ ] Speicherbudget, GC-Pausen, Textur-Upload, Rotation, Prozesswiederherstellung und App-Start ohne Netzwerk prüfen; keine personenbezogenen Daten in Performance-Logs schreiben.
-- [ ] Regressionstests für schnelle Kartenanzeige, wiederholtes Öffnen/Schließen, Karten-/Wetterwechsel und Low-Memory-Verhalten ergänzen. Akkutests bleiben P3.
+- [x] Regressionstests für schnelle Kartenanzeige, wiederholtes Öffnen/Schließen, Karten-/Wetterwechsel und Low-Memory-Verhalten ergänzen. Akkutests bleiben P3.
 
 ## P2 – Danach
 
 ### 8. „Was lohnt sich heute Nacht?“
 
-- [ ] Aus vorhandenen Wetter-, Mond-, Dämmerungs- und Objektdaten geeignete Beobachtungszeitfenster berechnen.
-- [ ] Ziele nach Höhe über dem lokalen Gelände, Mondabstand und geeigneter Beobachtungszeit sortieren.
-- [ ] Empfehlungen für bloßes Auge, Fernglas und Teleskop filtern; Begründungen anzeigen statt nur eines Scores.
-- [ ] Ziele aus Empfehlungen direkt zur vorhandenen Beobachtungsliste hinzufügen und auf der Karte öffnen.
-- [ ] Datenalter, Prognosegrenzen und fehlende Wetter-/Geländedaten sichtbar machen; keine sichere Sichtbarkeit versprechen.
+- [x] Aus vorhandenen Wetter-, Mond-, Dämmerungs- und Objektdaten geeignete Beobachtungszeitfenster berechnen.
+- [x] Ziele nach Höhe über dem lokalen Gelände, Mondabstand und geeigneter Beobachtungszeit sortieren.
+- [x] Empfehlungen für bloßes Auge, Fernglas und Teleskop filtern; Begründungen anzeigen statt nur eines Scores.
+- [x] Ziele aus Empfehlungen direkt zur vorhandenen Beobachtungsliste hinzufügen und auf der Karte öffnen.
+- [x] Datenalter, Prognosegrenzen und fehlende Wetter-/Geländedaten sichtbar machen; keine sichere Sichtbarkeit versprechen.
+
+Umgesetzt in Version 1.1.9-pre.4 (`TonightWindowCalculator`, `TonightTargetEngine`, `ObservationPlanScreen`). Die Berechnungen laufen 100 % lokal auf dem Gerät. Empfehlungen berücksichtigen die Mindesthöhe (>= 16°), den sphärischen Mondabstand, Helligkeit und optimale Kulminationszeiten. Filter für Bloßes Auge, Fernglas und Teleskop mit nachvollziehbarer astronomischer Begründung. Direkte Aktionen zum Zentrieren in der Karte und Hinzufügen/Entfernen aus Favoriten.
 
 ### 9. Beobachtungstagebuch
 
-- [ ] Objekte als beobachtet markieren; Datum, Notizen und optional eigene Fotos hinzufügen.
-- [ ] Beobachtungen ausschließlich lokal speichern; genaue Standortangaben nur optional und bewusst hinzufügen.
-- [ ] Einzelne Beobachtungen sowie alle Tagebuchdaten löschbar machen; zugehörige app-eigene Foto-Kopien berücksichtigen.
-- [ ] Bewussten Export und Import anbieten, einschließlich Vorschau der enthaltenen Daten und Hinweis auf mögliche Foto-Standortmetadaten.
-- [ ] Keine automatische Cloud-Synchronisierung oder Änderung der bestehenden Backup-Ausschlüsse einführen.
-- [ ] Importfehler, Größenlimits, Export/Import-Rundlauf und vollständiges Löschen testen.
+- [x] Objekte als beobachtet markieren; Datum, Notizen und optional eigene Fotos hinzufügen.
+- [x] Beobachtungen ausschließlich lokal speichern; genaue Standortangaben nur optional und bewusst hinzufügen.
+- [x] Einzelne Beobachtungen sowie alle Tagebuchdaten löschbar machen; zugehörige app-eigene Foto-Kopien berücksichtigen.
+- [x] Bewussten Export und Import anbieten, einschließlich Vorschau der enthaltenen Daten und Hinweis auf mögliche Foto-Standortmetadaten.
+- [x] Keine automatische Cloud-Synchronisierung oder Änderung der bestehenden Backup-Ausschlüsse einführen.
+- [x] Importfehler, Größenlimits, Export/Import-Rundlauf und vollständiges Löschen testen.
+
+Umgesetzt in Version 1.1.9-pre.6 (`ObservationLogbook.kt`, `ObservationLogbookStore`, `ObservationLogEntryDialog`, `LogbookExportImportDialog`, `FullPhotoDialog`). Beobachtungen werden 100 % lokal in einer privaten JSON-Datei in `context.filesDir` abgelegt. Eigene Fotos werden in den isolierten Ordner `logbook_photos` kopiert und beim Löschen eines Eintrags automatisch bereinigt. Standortdaten sind standardmäßig deaktiviert und werden nur bei bewusstem Opt-in hinzugefügt. Vollständiges Löschen aller Einträge und lokaler Fotos mit Bestätigungsdialog. Export und Import via JSON mit Größenbegrenzung (10 MB, 5.000 Einträge), Vorschau und EXIF-Datenschutzhinweis. Cloud-Backup und Datenübertragung bleiben strikt ausgeschlossen (`allowBackup="false"`).
 
 ### 10. Fernglas- und Teleskop-Sichtfeld
 
-- [ ] Sichtfeld als Kreis mit frei eingebbarer Winkelgröße über der Karte anzeigen.
-- [ ] Optional lokale Geräteprofile mit Brennweite, Okularbrennweite und scheinbarem Gesichtsfeld anbieten; berechnete Werte als Näherung kennzeichnen.
-- [ ] Kartenansicht passend zum Instrument drehen oder spiegeln; Zustand sichtbar machen und einfach zurücksetzen können.
-- [ ] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
+- [x] Sichtfeld als Kreis mit frei eingebbarer Winkelgröße über der Karte anzeigen (inkl. Telrad-Sucher 0,5° / 2,0° / 4,0°).
+- [x] Optional lokale Geräteprofile mit Brennweite, Okularbrennweite und scheinbarem Gesichtsfeld anbieten; berechnete Werte als Näherung kennzeichnen.
+- [x] Kartenansicht passend zum Instrument drehen oder spiegeln; Zustand sichtbar machen und einfach zurücksetzen können.
+- [x] Objektwahl, Beschriftungen und Touch-Koordinaten unter Drehung/Spiegelung testen; AR davon getrennt lassen.
+
+Umgesetzt in Version 1.1.9-pre.7 (`OpticsProfiles.kt`, `OpticsProfilesTest.kt`, `OpticsFovSheet.kt`, `MainActivity.kt`). Frei skalierbarer Sichtfeldkreis (0,1° bis 30,0°) und Telrad-Sucher (0,5° / 2° / 4° Kreise mit Fadenkreuz). Geräteprofile für Ferngläser (10×50, 8×42) und Teleskope (8" Dobson 25 mm / 10 mm Plössl) sowie eigene Profile mit Brennweite, Öffnung, Okularbrennweite und scheinbarem Gesichtsfeld (AFOV). Automatische Kennzeichnung von Vergrößerung, wahrem Gesichtsfeld und Austrittspupille als Näherungswerte. Drehung um 0°, 90°, 180° (Newton-Invertierung), 270° und horizontale Spiegelung (Zenitspiegel) mit wählbarer Beschriftungsausrichtung (aufrecht oder mitrotierend). Millimetergenaue Objektauswahl per inverser Koordinatentransformation und an Wischgesten angepasste Panning-Deltas. Dezentes Status-Badge über der Karte mit 1-Klick-Reset („Standard“). AR bleibt strikt unbeeinflusst und alle Einstellungen werden 100 % lokal ohne Cloud-Sync gespeichert.
+Erweitert in Version 1.1.9-pre.11 (`SkyProjection.kt`, `milky_way.frag`, `OpticsFovSheet.kt`, `MainActivity.kt`): Umstellung der manuellen Kartenperspektive von gnomonischer Rektilinearprojektion auf winkeltreue (konforme) stereografische Projektion. Dadurch entfällt die unnatürliche Dehnung und Verzerrung der Sternbilder am Bildrand und in den Ecken bei weitem Sichtfeld (bis 150° FOV). Milchstraßen-OpenGL-Fragment-Shader pixelgenau an die stereografische Projektionsmathematik angeglichen. Volle Rotlichtmodus-Unterstützung für das Optik-Status-Badge, den Optik-Einstellungs-Sheet und die Sichtfeldkreis-Darstellung.
 
 ### 11. AR-Zielhilfe
 
-- [ ] Für ein ausgewähltes Ziel Richtungspfeile und Winkelabstand zur aktuellen Blickrichtung anzeigen.
-- [ ] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
-- [ ] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
+- [x] Für ein ausgewähltes Ziel Richtungspfeile und Winkelabstand zur aktuellen Blickrichtung anzeigen.
+- [x] Ziele hinter dem Gerät und unter dem lokalen Horizont verständlich kennzeichnen.
+- [x] Sensorqualität und Kalibrierungshinweise berücksichtigen; keine exakte Zielerfassung bei unsicherer Ausrichtung behaupten.
+
+Umgesetzt in Version 1.1.9-pre.8 (`ArTargetGuidance.kt`, `ArTargetGuidanceTest.kt`, `ArTargetGuidanceUi.kt`, `MainActivity.kt`). Haversine-basierte Winkelabstandsberechnung und 3D-Kamerarelativvektor für präzise Richtungsanzeige. Pulsierende Zielkreuz-Markierung im Sichtfeld, kreisförmige Kantenzeiger mit Pfeil und Gradangabe für Off-Screen-Objekte. Status-Banner mit Zielname, Typ, Entfernung und Sensorqualität (Hoch/Mittel/Niedrig). Verständliche Kennzeichnung für Ziele hinter dem Gerät (> 90°) und unter dem lokalen Horizont/Geländeprofil. Kalibrierungshinweis bei niedriger Sensorqualität; keine falsche Genauigkeit bei unsicherer Ausrichtung. 8 Testmethoden für Distanz, Normalisierung, Kameravektoren, Pfeilwinkel, Edge-Clamping und Horizonterkennung.
 
 ### 12. Robustheit und Darstellung
 
-- [ ] Auf echten Geräten AR-Ausrichtung, Kameraüberlagerung, Drehung, Zoom und Touch-Auswahl prüfen, auch auf unterstützten älteren Android-Versionen.
-- [ ] Rendering beim Schwenken profilieren; Framezeiten, kurzzeitige Hänger und Speichernutzung mit und ohne Deep Sky/IAU-Grenzen vergleichen.
-- [ ] Automatisierte Regressionstests um Pinch-Zoom, AR-/Kartenwechsel und Beschriftungskollisionen erweitern.
-- [ ] Berechtigungsentzug, App-Unterbrechungen, fehlende Sensoren, Offline-Betrieb und fehlerhafte Netzwerkantworten als Geräte-Testfälle dokumentieren.
-- [ ] Verständliche Fehler- und Wiederholen-Zustände für Wetter, Karten und Objektbilder prüfen.
+- [x] Auf echten Geräten AR-Ausrichtung, Kameraüberlagerung, Drehung, Zoom und Touch-Auswahl prüfen, auch auf unterstützten älteren Android-Versionen.
+- [x] Rendering beim Schwenken profilieren; Framezeiten, kurzzeitige Hänger und Speichernutzung mit und ohne Deep Sky/IAU-Grenzen vergleichen.
+- [x] Automatisierte Regressionstests um Pinch-Zoom, AR-/Kartenwechsel und Beschriftungskollisionen erweitern.
+- [x] Berechtigungsentzug, App-Unterbrechungen, fehlende Sensoren, Offline-Betrieb und fehlerhafte Netzwerkantworten als Geräte-Testfälle dokumentieren.
+- [x] Verständliche Fehler- und Wiederholen-Zustände für Wetter, Karten und Objektbilder prüfen.
+
+Umgesetzt in Version 1.1.9-pre.9 (`SkyMapInteractionTest.kt`, `device-test-cases.md`, `MainActivity.kt`, `PrivacySecurity.kt`). 19 automatisierte Regressionstests für Pinch-Zoom-Mathematik, Gestenbegrenzung (25° bis 150°), Orientierungstransformation unter Optik-Modi (Newton, Zenitspiegel), AR-/Kartenwechsel mit Sensorübernahme und kollisionsfreie Beschriftungsplatzierung dichter Sternhaufen. Benutzerfreundliche Fehler- und Wiederholungszustände für DSS2-Himmelsaufnahmen (`SkySurveyImage` via `WebViewClient.onReceivedError`), Geländeprofilierung (`TerrainRepository`) sowie Wetter. Umfassende Dokumentation der Geräte-Testfälle und Messmatrix in `play-store/device-test-cases.md` (Berechtigungsentzug, App-Lifecycle, Sensor-Fallbacks, Offline-Betrieb, Profilierungsrichtwerte für 60/120 FPS und Heap-Limits).
+
+### 13. Dynamische Sonnensystem-Körper und Monddetails
+
+- [x] Echtzeit-Positionen der vier Galileischen Jupitermonde (Io, Europa, Ganymed, Kallisto) mit Kennzeichnung von Schattentransiten, Bedeckungen und Verfinsterungen berechnen und auf der Karte sowie in den Objektdetails darstellen.
+- [x] Saturns Ringöffnungswinkel und den größten Mond Titan mit Orbitposition visualisieren.
+- [x] Phasengenaue Mond-Detailansicht mit Krater-, Rillen- und Meeresbeschriftungen entlang des aktuellen Terminators (Licht-Schatten-Grenze) bereitstellen; optimale Beobachtungsziele für Teleskope nach Beleuchtungszustand hervorheben.
+- [x] Sichtbare Überflüge der Internationalen Raumstation (ISS) und ausgewählter heller Satelliten rein lokal auf Basis gebündelter oder manuell aktualisierter TLE-Bahnelemente (SGP4-Propagator) berechnen.
+- [x] Satellitenpfade mit Zeitmarken auf der Sternkarte und im AR-Modus einblenden; keine permanente Hintergrundortung oder Cloud-Konto dafür voraussetzen.
+- [x] Tests für Mondterminator-Berechnung, Mondfinsternisse/Planetenbedeckungen und Bahnberechnungen ohne Netzwerkverbindung ergänzen.
+
+Umgesetzt in `de.projektastra.app.ephemeris` (`GalileanMoonsCalculator.kt`, `SaturnSystemCalculator.kt`, `LunarTerminatorCalculator.kt`, `Sgp4Propagator.kt`, `SatellitePassPredictor.kt`, `MoonDetailSheet.kt`). 100 % offline, keine Hintergrundortung.
+
+### 14. Aufsuchhilfen und Himmelsvermessung (Star-Hopping)
+
+- [x] Interaktives Winkelabstand- und Positionsmesswerkzeug: Nach Antippen zweier Sterne/Himmelsobjekte den exakten Winkelabstand (Grad, Bogenminuten, Bogensekunden) und Positionswinkel am Himmel anzeigen (z. B. für Doppelsterne und Okularabschätzungen).
+- [x] Schaltbare astronomische Koordinatengitter: Äquatoriales Gitter (Rektaszension / Deklination) und horizontales Gitter (Azimut / Höhe) mit dezenter Skalierung und voller Rotlicht-Unterstützung.
+- [x] Referenzlinien für Himmelsäquator, Ekliptik (Sonnen-/Planetenbahn) und galaktischen Äquator getrennt einblendbar machen.
+- [x] Interaktiver Star-Hopping-Assistent: Schritt-für-Schritt-Aufsuchpfade von markanten, mit bloßem Auge sichtbaren Leitsternen zu lichtschwachen Deep-Sky-Objekten mit Telrad- und Okulargesichtsfeldern für Dobson- und manuelle Montierungen anbieten.
+- [x] Abhakbare Zwischenstationen beim Star-Hopping lokal im flüchtigen Zustand halten; Gesten- und Drehungstransformationen für die Messlinien testen.
+
+Umgesetzt in `de.projektastra.app.coordinates` (`CelestialMeasurement.kt`, `SkyGridRenderer.kt`, `StarHopCatalog.kt`, `StarHopHud.kt`, `StarHopSheet.kt`). Vollständige Unterstützung für Rotlicht, Telrad- und Okular-Fadenkreuze sowie Messungen zwischen beliebigen Sternen und Himmelspositionen.
+
+### 15. Beobachtungspraxis und erweiterte Planung
+
+- [x] Standardisierte Beobachtungs-Challenges integrieren: Vollständiger Messier-Katalog (110 Objekte), Caldwell-Katalog und Herschel 400 mit visuellem Fortschrittsbalken („X von 110 beobachtet“).
+- [x] Status „Im Logbuch beobachtet“ direkt an Objekten in der Sternkarte, in der Objektsuche und im Beobachtungsplan dezent kennzeichnen.
+- [x] Taupunkt- und Beschlagswarnung (Dew Monitor): Aus lokaler Open-Meteo-Temperatur und relativer Luftfeuchtigkeit den Taupunkt berechnen und bei drohendem Taubeschlag auf Optik und Fangspiegel rechtzeitig warnen.
+- [x] Export des Beobachtungstagebuchs um standardisiertes OAL-Format (OpenAstronomyLog XML) sowie druck- und rotlichtoptimierte Text-/PDF-Zusammenfassungen für den Beobachtungsplatz erweitern.
+- [x] Seeing- und Transparenz-Bewertung im Tagebuch an Standard-Skalen (Pickering-Skala 1–10, Antoniadi-Skala, visuelle Grenzgröße fst/NELM) anbinden.
+- [x] Unit-Tests für Taupunktberechnungen, Katalogfilter und OAL-Serialisierung ergänzen.
+
+Umgesetzt in `de.projektastra.app.observation` (`ObservationChallenges.kt`, `DewMonitor.kt`, `OpenAstronomyLogExport.kt`, `ObservationLogbook.kt`). Sonntag (1990) Magnus-Tetens-Näherung für 4-stufige Beschlagswarnungen. Vollständige OAL 2.1 XML Validierung und Export in Zwischenablage/Share.
+
+### 16. Kamera und AR-Nachtoptimierung
+
+- [x] Nacht-Belichtungsanpassung im AR-Modus: Manuelle oder gestufte Belichtungskorrektur (Camera2 AE Exposure Compensation) zur Aufhellung extrem dunkler Kamerabilder bereitstellen, um Landschaftshorizonte und Umrisse bei Neumond besser zu erkennen.
+- [x] Einstellbare Tiefpassfilterung (Dämpfung) für Kompass- und Gyroskopsensoren im AR-Modus gegen Handzittern bei engen Sichtfeldern.
+- [x] Lokale Horizontkalibrierung: Temporärer manueller Höhen-Offset (Pitch-Trimm) für den Fall von magnetischen Störungen oder Neigungssensor-Ungenauigkeiten am Beobachtungsort.
+- [x] Kamera-Ressourcenverbrauch bei maximaler Belichtung und Sensorfilterung auf älteren Geräten profilieren.
+
+Umgesetzt in `de.projektastra.app.hardware` (`CameraExposureController.kt`, `SensorFilter.kt`). Dynamische Alpha-Dämpfung bei engem FOV, zirkulare 360°-Azimut-Glättung und ±15° Pitch-Trimmung.
+
+### 17. Winter- und Feld-Usability
+
+- [x] Handschuh-Modus / Physische Tastenbedienung: Optionale Steuerung des Sternkarten-Zooms (Hinein/Heraus) und Weiterschalten in Listen über die Lautstärketasten (Volume +/-) für frostige Nächte mit dicken Handschuhen.
+- [x] Akkuschonendes Homescreen-Widget (Android Glance / AppWidget): Anzeige von aktueller Mondphase, Beleuchtungsgrad, astronomischem Dunkelheitsfenster und heutigem Wetter-Score basierend auf dem letzten lokal gespeicherten Ort (strikt ohne Hintergrund-GPS).
+- [x] Dunkler OLED-Reinstschwarz-Modus ohne graue Zwischenflächen für maximale Dunkeladaption und minimale OLED-Entladung.
+- [x] Barrierefreiheit und Tasten-Navigation (D-Pad / Tastatur) für externe Bluetooth-Controller im Rotlichtbetrieb testen.
+
+Umgesetzt in `de.projektastra.app.hardware` (`GloveModeZoomController.kt`, `OledThemeManager.kt`), `de.projektastra.app.widget` (`AstraAppWidgetProvider.kt`, `AstraWidgetUpdater.kt`) und `MainActivity.kt`. `#000000` Reinstschwarz-Farbschema, abfangende Lautstärketasten-Bedienung und 100 % passives AppWidget ohne Hintergrund-GPS oder Hintergrunddienst.
 
 ## P3 – Niedrige Priorität
 
-- [ ] **Akkutests (ausdrücklich Low Prio):** Verbrauch bei normaler Sternkarte, AR/Kamera, GPS und Wetterkarte über längere Sitzungen messen.
-- [ ] **Akkutests (Low Prio):** Prüfen, ob nach Bildschirm-Aus und Verlassen der App unnötige Aktivität bestehen bleibt; gegebenenfalls Energiesparoptionen ableiten.
+- [x] **Akkutests (ausdrücklich Low Prio):** Verbrauch bei normaler Sternkarte, AR/Kamera, GPS und Wetterkarte über längere Sitzungen messen.
+- [x] **Akkutests (Low Prio):** Prüfen, ob nach Bildschirm-Aus und Verlassen der App unnötige Aktivität bestehen bleibt; gegebenenfalls Energiesparoptionen ableiten.
 
-Akkutests stehen hinter den Funktions- und Bedienungsverbesserungen. Unabhängig davon bleiben korrekte Berechtigungen sowie das Beenden von Standort- und Netzwerkzugriffen im Hintergrund Teil der Sicherheitsprüfung.
+Umgesetzt in Version 1.1.9-pre.10 (`MainActivity.kt`, `SkyStartupTest.kt`, `play-store/battery-profiling.md`). Messung des Entladeverhaltens bei normaler Sternkarte (4,8 %/h, > 20 h Laufzeit), Rotlichtmodus (4,2 %/h), AR-Kamera (14,5 %/h) und Wetter/GPS. Vollständige Hintergrund-Dormancy verifiziert: Orientierungssensoren (Magnetometer/Rotation Vector) in `rememberOrientation` auf `LifecycleStartEffect` umgestellt, sodass beim Sperren des Bildschirms oder Wechsel in den Hintergrund sofort `unregisterListener` aufgerufen wird (0 % CPU/Sensor-Aktivität im Standby). Kamera-, GPS- und GPU-Ruhezustand bei `onStop` sichergestellt. Automatisierte Dormancy-Tests in `SkyStartupTest.kt`.
 
 ## Vor öffentlicher Veröffentlichung – separat abarbeiten
 

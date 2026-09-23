@@ -31,12 +31,14 @@ internal class SkySearchIndex(targets: List<SkySearchTarget>) {
         Entry(target, terms.map(::normalize).filter { it.isNotEmpty() }.distinct())
     }
 
-    fun search(query: String, limit: Int = 40): List<SkySearchTarget> {
+    fun search(query: String, limit: Int = 40, additionalTargets: List<SkySearchTarget> = emptyList()): List<SkySearchTarget> {
         val needle = normalize(query)
         if (needle.isEmpty() || limit <= 0) return emptyList()
         // A complete numeric identifier must not match M310 or HIP 912620.
         val catalogQuery = Regex("(?:hip|ngc|ic|m|mel)\\d+[a-z]?").matches(needle)
-        return entries.mapNotNull { entry ->
+        val candidates = if (additionalTargets.isEmpty()) entries else
+            (SkySearchIndex(additionalTargets).entries + entries).distinctBy { it.target.id }
+        return candidates.mapNotNull { entry ->
             val rank = when {
                 needle in entry.terms -> 0
                 catalogQuery -> return@mapNotNull null

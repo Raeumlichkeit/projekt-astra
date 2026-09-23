@@ -43,22 +43,24 @@ internal data class IauConstellationBoundary(
 )
 
 internal object IauBoundaryCatalog {
-    fun load(context: Context): List<IauConstellationBoundary> = runCatching {
+    fun load(context: Context): List<IauConstellationBoundary> =
         parse(context.assets.open("iau_constellation_boundaries_b1875.dat").bufferedReader().use { it.readText() })
-    }.getOrDefault(emptyList())
 
     internal fun parse(text: String): List<IauConstellationBoundary> {
         val boundaries = mutableListOf<IauConstellationBoundary>()
         var currentCode = ""
         var currentPoints = mutableListOf<EquatorialBoundaryPoint>()
         text.lineSequence().forEach { line ->
+            if (line.isBlank() || line.trimStart().startsWith("#")) return@forEach
             val columns = line.trim().split(Regex("\\s+"))
-            if (columns.size < 3) return@forEach
-            val ra = columns[0].toDoubleOrNull() ?: return@forEach
-            val dec = columns[1].toDoubleOrNull() ?: return@forEach
+            require(columns.size >= 3) { "Unvollständiger IAU-Datensatz" }
+            val ra = columns[0].toDouble()
+            val dec = columns[1].toDouble()
+            require(ra in 0.0..24.0 && dec in -90.0..90.0) { "Ungültige IAU-Koordinaten" }
             val rawCode = columns[2].uppercase(Locale.US)
             val code = if (rawCode.startsWith("SER")) "SER" else rawCode
             if (columns.size == 3) {
+                require(currentPoints.isEmpty() || currentPoints.size > 2) { "Unvollständige IAU-Grenze" }
                 if (currentPoints.size > 2) {
                     boundaries += IauConstellationBoundary(currentCode, currentPoints)
                 }
@@ -67,7 +69,8 @@ internal object IauBoundaryCatalog {
             }
             currentPoints += precessB1875ToJ2000(ra, dec)
         }
-        if (currentPoints.size > 2) boundaries += IauConstellationBoundary(currentCode, currentPoints)
+        require(currentPoints.size > 2 && currentCode.isNotEmpty()) { "Leere oder unvollständige IAU-Grenzen" }
+        boundaries += IauConstellationBoundary(currentCode, currentPoints)
         return boundaries
     }
 

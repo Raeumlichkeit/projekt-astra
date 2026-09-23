@@ -22,12 +22,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import de.projektastra.app.observation.ObservationCatalogMatcher
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,10 +41,15 @@ internal fun SkySearchSheet(
     positionOf: (SkySearchTarget) -> HorizontalCoordinates,
     timeLabel: String,
     dismiss: () -> Unit,
-    open: (SkySearchTarget) -> Unit
+    open: (SkySearchTarget) -> Unit,
+    loading: Boolean = false,
+    failed: Boolean = false,
+    retry: () -> Unit = {},
+    movingTargets: List<SkySearchTarget> = emptyList(),
+    loggedObjectIds: Set<String> = emptySet()
 ) {
     var query by remember { mutableStateOf("") }
-    val results = remember(index, query) { index.search(query, 41) }
+    val results = remember(index, query, movingTargets) { index.search(query, 41, movingTargets) }
     SkySheetTheme(redLight) {
         ModalBottomSheet(onDismissRequest = dismiss,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -67,8 +74,14 @@ internal fun SkySearchSheet(
                 Text("Die Höhenlage allein garantiert keine Sichtbarkeit bei Tageslicht, Wolken oder hellem Mond."
                     + if (terrain == null) " Geländeprofil nicht verfügbar." else "",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                if (failed) {
+                    Text("Offline-Katalog konnte nicht vollständig geladen werden.")
+                    TextButton(onClick = retry) { Text("Katalog erneut laden") }
+                } else if (loading) Text("Offline-Katalog und Suchindex werden geladen …")
                 if (query.isBlank()) Text("Suche in Sternen, Sonnensystem, Deep Sky und Sternbildern.")
-                else if (results.isEmpty()) Text("Keine Treffer im Offline-Katalog. Prüfe den Namen oder die Katalognummer.")
+                else if (results.isEmpty()) {
+                    if (!loading && !failed) Text("Keine Treffer im Offline-Katalog. Prüfe den Namen oder die Katalognummer.")
+                }
                 else {
                     Text(if (results.size > 40) "Mehr als 40 Treffer – bitte genauer suchen." else "${results.size} Treffer",
                         fontSize = 12.sp)
@@ -77,7 +90,12 @@ internal fun SkySearchSheet(
                             val position = positionOf(target)
                             Column(Modifier.fillMaxWidth().clickable { open(target) }
                                 .padding(vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(target.name, fontWeight = FontWeight.Bold)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(target.name, fontWeight = FontWeight.Bold)
+                                    if (target.objectData.catalogId.isNotBlank() && ObservationCatalogMatcher.isObserved(target.objectData.catalogId, loggedObjectIds)) {
+                                        Text("✓ Im Logbuch", color = Color(0xFF76E0A0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
                                 Text("${target.typeLabel} · ${if (target.regionName == null) target.objectData.catalogId else "Referenzpunkt: ${target.objectData.name}"}",
                                     color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                                 Text("${targetVisibility(position, terrain).label} · Höhe ${String.format(Locale.GERMAN, "%.1f", position.altitude)}°",

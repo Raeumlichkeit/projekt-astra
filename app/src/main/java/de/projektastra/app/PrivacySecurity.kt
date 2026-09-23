@@ -205,7 +205,13 @@ internal object PrivateWebViews {
         view.loadUrl(NetworkPolicy.LOCAL_ORIGIN + "/")
     }
     @SuppressLint("SetJavaScriptEnabled")
-    fun create(context: Context, javascript: Boolean, onDocumentReady: (() -> Unit)? = null): WebView = WebView(context).apply {
+    fun create(
+        context: Context,
+        javascript: Boolean,
+        onDocumentReady: (() -> Unit)? = null,
+        onError: (() -> Unit)? = null,
+        onFinished: (() -> Unit)? = null
+    ): WebView = WebView(context).apply {
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         CookieManager.getInstance().setAcceptCookie(false)
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
@@ -243,6 +249,9 @@ internal object PrivateWebViews {
                     if (request.url.host == "tile.openstreetmap.org") PublicTileCache.get(context, url)
                     else SecureNetwork.get(url)
                 }.getOrNull()
+                if (response == null && request.isForMainFrame) {
+                    view.post { onError?.invoke() }
+                }
                 return WebResourceResponse(
                     response?.mime ?: "text/plain", "UTF-8", if (response == null) 403 else 200,
                     if (response == null) "Blocked" else "OK",
@@ -251,9 +260,20 @@ internal object PrivateWebViews {
                     ByteArrayInputStream(response?.bytes ?: ByteArray(0))
                 )
             }
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                if (request.isForMainFrame) {
+                    view.post { onError?.invoke() }
+                }
+            }
+            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+                if (request.isForMainFrame && errorResponse.statusCode >= 400) {
+                    view.post { onError?.invoke() }
+                }
+            }
             override fun onPageFinished(view: WebView, url: String?) {
                 if (javascript) view.evaluateJavascript("window.astraMap && window.astraMap.invalidateSize(true)", null)
                 if (url == NetworkPolicy.LOCAL_ORIGIN + "/" && documents.containsKey(view)) onDocumentReady?.invoke()
+                view.post { onFinished?.invoke() }
             }
         }
     }
