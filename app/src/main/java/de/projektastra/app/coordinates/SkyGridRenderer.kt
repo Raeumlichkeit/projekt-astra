@@ -363,72 +363,37 @@ internal object SkyGridRenderer {
      * Resolves appropriate visual style for a given grid line type and mode.
      */
     fun getLineStyle(type: GridLineType, isPrimary: Boolean, redLightMode: Boolean): GridLineStyle {
-        if (redLightMode) {
-            return when (type) {
-                GridLineType.RA_HOUR, GridLineType.DEC_PARALLEL -> GridLineStyle(
-                    strokeColor = Color(0xFFFF5252),
-                    strokeWidth = if (isPrimary) 1.2f else 0.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
-                    alpha = if (isPrimary) 0.28f else 0.16f
-                )
-                GridLineType.AZIMUTH, GridLineType.ALTITUDE -> GridLineStyle(
-                    strokeColor = Color(0xFFD32F2F),
-                    strokeWidth = if (isPrimary) 1.2f else 0.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
-                    alpha = if (isPrimary) 0.25f else 0.14f
-                )
-                GridLineType.CELESTIAL_EQUATOR -> GridLineStyle(
-                    strokeColor = Color(0xFFFF5252),
-                    strokeWidth = 1.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 8f)),
-                    alpha = 0.85f
-                )
-                GridLineType.ECLIPTIC -> GridLineStyle(
-                    strokeColor = Color(0xFFFF7868),
-                    strokeWidth = 1.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 6f, 3f, 6f)),
-                    alpha = 0.90f
-                )
-                GridLineType.GALACTIC_EQUATOR -> GridLineStyle(
-                    strokeColor = Color(0xFFFF1744),
-                    strokeWidth = 1.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f)),
-                    alpha = 0.85f
-                )
-            }
-        } else {
-            return when (type) {
-                GridLineType.RA_HOUR, GridLineType.DEC_PARALLEL -> GridLineStyle(
-                    strokeColor = Color(0xFF4FC3F7),
-                    strokeWidth = if (isPrimary) 1.2f else 0.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
-                    alpha = if (isPrimary) 0.28f else 0.16f
-                )
-                GridLineType.AZIMUTH, GridLineType.ALTITUDE -> GridLineStyle(
-                    strokeColor = Color(0xFFFFD54F),
-                    strokeWidth = if (isPrimary) 1.2f else 0.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
-                    alpha = if (isPrimary) 0.25f else 0.14f
-                )
-                GridLineType.CELESTIAL_EQUATOR -> GridLineStyle(
-                    strokeColor = Color(0xFF29B6F6),
-                    strokeWidth = 1.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 8f)),
-                    alpha = 0.85f
-                )
-                GridLineType.ECLIPTIC -> GridLineStyle(
-                    strokeColor = Color(0xFFFFCA28),
-                    strokeWidth = 1.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 6f, 3f, 6f)),
-                    alpha = 0.90f
-                )
-                GridLineType.GALACTIC_EQUATOR -> GridLineStyle(
-                    strokeColor = Color(0xFFCE93D8),
-                    strokeWidth = 1.8f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f)),
-                    alpha = 0.85f
-                )
-            }
+        return when (type) {
+            GridLineType.RA_HOUR, GridLineType.DEC_PARALLEL -> GridLineStyle(
+                strokeColor = if (redLightMode) Color(0xFFFF5252) else Color(0xFF4FC3F7),
+                strokeWidth = if (isPrimary) 1.2f else 0.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
+                alpha = if (isPrimary) 0.28f else 0.16f
+            )
+            GridLineType.AZIMUTH, GridLineType.ALTITUDE -> GridLineStyle(
+                strokeColor = if (redLightMode) Color(0xFFD32F2F) else Color(0xFFFFD54F),
+                strokeWidth = if (isPrimary) 1.2f else 0.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+                alpha = if (isPrimary) 0.25f else 0.14f
+            )
+            GridLineType.CELESTIAL_EQUATOR -> GridLineStyle(
+                strokeColor = if (redLightMode) Color(0xFFFF5252) else Color(0xFF29B6F6),
+                strokeWidth = 1.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 8f)),
+                alpha = 0.85f
+            )
+            GridLineType.ECLIPTIC -> GridLineStyle(
+                strokeColor = if (redLightMode) Color(0xFFFF7868) else Color(0xFFFFCA28),
+                strokeWidth = 1.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 6f, 3f, 6f)),
+                alpha = 0.90f
+            )
+            GridLineType.GALACTIC_EQUATOR -> GridLineStyle(
+                strokeColor = if (redLightMode) Color(0xFFFF1744) else Color(0xFFCE93D8),
+                strokeWidth = 1.8f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f)),
+                alpha = 0.85f
+            )
         }
     }
 

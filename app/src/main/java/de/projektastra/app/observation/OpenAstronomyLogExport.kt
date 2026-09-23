@@ -29,17 +29,6 @@ object SeeingScaleValidator {
             else -> "V"      // Very bad seeing
         }
     }
-
-    fun getAntoniadiDescription(grade: String): String {
-        return when (grade.trim().uppercase()) {
-            "I" -> "I – Perfektes Seeing ohne jedes Zittern"
-            "II" -> "II – Gutes Seeing mit leichten Schwingungen"
-            "III" -> "III – Mäßiges Seeing mit größeren Luftunruhen"
-            "IV" -> "IV – Schlechtes Seeing mit ständigem Wabern"
-            "V" -> "V – Sehr schlechtes Seeing, kaum Scharfstellung möglich"
-            else -> grade
-        }
-    }
 }
 
 /**

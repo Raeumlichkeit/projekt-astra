@@ -1,5 +1,13 @@
 # Sicherheitsmaßnahmen – Version 1.1.1 / Code 10
 
+**Nachtrag 1.1.9-pre.15 / Code 33, 23. September 2026:** Erneute technische Korrekturen nach dem Beta-Merge; keine Zertifizierung und keine Aufhebung der rechtlichen/Play-Store-Freigabesperren.
+
+- Logbuch verwendet Android `AtomicFile`, liest gespeicherte Daten strikt und meldet beschädigte Journale, statt sie als leer zu überschreiben. JSON- und Fotoimporte sind größenbegrenzt; Foto-Dateinamen und kanonische Zielpfade werden geprüft. JSON-Importe dürfen keine vorhandenen lokalen Fotos referenzieren.
+- Entfernen eines vorhandenen Fotos im Editor löscht die Datei erst nach erfolgreichem Speichern. Abbrechen und fehlgeschlagenes Speichern erhalten den Originaleintrag; beim Bearbeiten bleiben alte Beobachtungskoordinaten erhalten.
+- Dauerhaftes Standort-Merken ist standardmäßig aus. Alte Koordinaten ohne ausdrückliches Opt-in werden entfernt. „Standort vergessen“ beendet auch die laufende Standortnutzung, deaktiviert das Merken und aktualisiert das Widget. Eine spätere bewusste GPS-Aktion kann die Sitzung erneut aktivieren.
+- Datenschutzerklärung und Datensicherheitsentwurf beschreiben die optionalen Logbuchkoordinaten/Fotos einschließlich möglicher EXIF-Daten sowie manuelle Klartext-Exporte und Widget-Anzeige. Anbieterprotokolle werden dadurch nicht gelöscht.
+- Automatisierte Nachweise und verbleibende Grenzen stehen in den [Pre-Release-Hinweisen](play-store/pre-release-1.1.9-pre.15.md). Die nachfolgenden alten Prüfzahlen sind historische Angaben, nicht die Ergebnisse dieses neuen Standes.
+
 **Nachtrag 1.1.7-pre.1 / Code 16, 11. September 2026:** Die historische Prüfung unten beschreibt weiterhin 1.1.1. Die neue externe Lichtkarte ist eine bewusst aktivierte Ausnahme vom damaligen ausschließlich lokalen WebView-Inhalt; sie erweitert nicht die normale `NetworkPolicy`.
 
 - Offizieller Embed-Endpunkt in einer getrennten WebView erst nach dem eigenen Anbieterhinweis und Betätigung von „Externe Karte laden“. Allgemeine Online-Freigabe und Vordergrund bleiben erforderlich; die zusätzliche Freigabe wird nicht dauerhaft gespeichert.

@@ -14,7 +14,7 @@ class AstraWidgetTest {
         val state = WidgetState(
             moonPhaseLabel = "Zunehmender Mond",
             moonIlluminationPercent = 45,
-            darknessWindow = "Astronomische Nacht: 22:15 - 04:45",
+            darknessWindow = "Astronomische Dunkelheit: nicht verfügbar",
             weatherScore = 80,
             lastKnownLocationLabel = "Berlin (52.5°N)",
             usesBackgroundGps = false,
@@ -45,7 +45,7 @@ class AstraWidgetTest {
         val highState = WidgetState(
             moonPhaseLabel = "Vollmond",
             moonIlluminationPercent = 100,
-            darknessWindow = "Astronomische Nacht: 22:15 - 04:45",
+            darknessWindow = "Astronomische Dunkelheit: nicht verfügbar",
             weatherScore = 150.coerceIn(0, 100),
             lastKnownLocationLabel = "Berlin",
             usesBackgroundGps = false,
@@ -56,7 +56,7 @@ class AstraWidgetTest {
         val lowState = WidgetState(
             moonPhaseLabel = "Neumond",
             moonIlluminationPercent = 0,
-            darknessWindow = "Astronomische Nacht: 22:15 - 04:45",
+            darknessWindow = "Astronomische Dunkelheit: nicht verfügbar",
             weatherScore = (-10).coerceIn(0, 100),
             lastKnownLocationLabel = "Berlin",
             usesBackgroundGps = false,
@@ -96,5 +96,27 @@ class AstraWidgetTest {
         assertEquals("Berlin (52.5°N)", state.lastKnownLocationLabel)
         assertEquals(70, state.weatherScore)
         assertTrue(state.darknessWindow.contains("Astronomische Nacht"))
+    }
+
+    @Test
+    fun polarSummerWidgetShowsNoAstronomicalNight() {
+        val state = AstraWidgetUpdater.calculateState(
+            savedLocation = GeoPoint(89.0, 15.0, 0.0),
+            time = Instant.parse("2026-06-21T21:00:00Z")
+        )
+
+        assertTrue(state.darknessWindow.contains("Keine astronomische Dunkelheit"))
+        assertFalse(state.darknessWindow.contains("Astronomische Nacht:"))
+        assertFalse(state.darknessWindow.contains("22:15"))
+    }
+
+    @Test
+    fun southernWesternCoordinatesHaveCorrectHemisphereLabels() {
+        val state = AstraWidgetUpdater.calculateState(
+            savedLocation = GeoPoint(-33.9, -70.7, 0.0),
+            time = Instant.parse("2026-09-20T22:00:00Z")
+        )
+
+        assertEquals("33,9°S, 70,7°W", state.lastKnownLocationLabel)
     }
 }

@@ -157,24 +157,7 @@ internal data class OpticsSettings(
      * selbst wenn sie um 180° gedreht oder gespiegelt ist.
      */
     fun transformPanDelta(pan: Offset): Offset {
-        var dx = pan.x
-        var dy = pan.y
-
-        if (rotationDegrees % 360f != 0f) {
-            val rad = Math.toRadians(-rotationDegrees.toDouble())
-            val cosR = cos(rad)
-            val sinR = sin(rad)
-            val rx = dx * cosR - dy * sinR
-            val ry = dx * sinR + dy * cosR
-            dx = rx.toFloat()
-            dy = ry.toFloat()
-        }
-
-        if (mirrored) {
-            dx = -dx
-        }
-
-        return Offset(dx, dy)
+        return inverseTransformScreenPoint(pan, Offset.Zero)
     }
 
     fun toJsonObject(): JSONObject = JSONObject().apply {

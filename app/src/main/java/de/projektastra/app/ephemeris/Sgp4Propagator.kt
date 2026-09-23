@@ -3,7 +3,6 @@ package de.projektastra.app.ephemeris
 import de.projektastra.app.GeoPoint
 import de.projektastra.app.HorizontalCoordinates
 import java.time.Instant
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
@@ -55,197 +54,17 @@ internal class Sgp4Propagator {
         // WGS-72 Earth Physical Constants
         const val RE_KM = 6378.135
         const val MU = 398600.8
-        const val XKE = 0.0743669161
-        const val VKM = 7.90536574
-        const val CK2 = 5.413080e-4   // 0.5 * J2
-        const val CK4 = 0.62098875e-6 // -3/8 * J4
-        const val A30 = 2.53881e-6    // -J3
-        const val S0 = 1.0 + 78.0 / RE_KM
-        const val Q0 = 1.0 + 120.0 / RE_KM
-        const val QOMS2T = 1.8802893e-9
-
         // WGS-84 Reference Ellipsoid for Topocentric Coordinates
         private const val WGS84_A_KM = 6378.137
         private const val WGS84_F = 1.0 / 298.257223563
         private const val WGS84_E2 = 2.0 * WGS84_F - WGS84_F * WGS84_F
     }
 
-    private data class Sgp4Init(
-        val a00: Double,
-        val n00: Double,
-        val e0: Double,
-        val i0: Double,
-        val omega0: Double,
-        val raan0: Double,
-        val m0: Double,
-        val bstar: Double,
-        val mDot: Double,
-        val omegaDot: Double,
-        val raanDot: Double,
-        val c1: Double,
-        val c4: Double,
-        val c5: Double,
-        val tsi: Double,
-        val eta: Double,
-        val beta02: Double,
-        val theta2: Double,
-        val sinI0: Double,
-        val cosI0: Double
-    )
-
-    private fun initModel(tle: TleData): Sgp4Init {
-        val i0 = Math.toRadians(tle.inclinationDegrees)
-        val raan0 = Math.toRadians(tle.raanDegrees)
-        val e0 = tle.eccentricity
-        val omega0 = Math.toRadians(tle.argumentOfPerigeeDegrees)
-        val m0 = Math.toRadians(tle.meanAnomalyDegrees)
-        val n0 = tle.meanMotionRadPerMin
-        val bstar = tle.bstarDrag
-
-        val a1 = Math.cbrt(XKE / n0).let { it * it }
-        val cosI0 = cos(i0)
-        val sinI0 = sin(i0)
-        val theta2 = cosI0 * cosI0
-        val x3thm1 = 3.0 * theta2 - 1.0
-        val beta02 = 1.0 - e0 * e0
-        val beta0 = sqrt(max(1e-12, beta02))
-        val beta03 = beta0 * beta02
-
-        val del1 = 1.5 * CK2 * x3thm1 / (a1 * a1 * beta03)
-        val a0 = a1 * (1.0 - del1 * (1.0 / 3.0 + del1 * (1.0 + 134.0 / 81.0 * del1)))
-        val del0 = 1.5 * CK2 * x3thm1 / (a0 * a0 * beta03)
-        val n00 = n0 / (1.0 + del0)
-        val a00 = a0 / (1.0 - del0)
-
-        val rPerigee = a00 * (1.0 - e0)
-        val hPerigee = (rPerigee - 1.0) * RE_KM
-        val (s, qoms2t) = if (hPerigee < 156.0) {
-            val sAdjust = if (hPerigee <= 98.0) 1.0 + 20.0 / RE_KM else 1.0 + (hPerigee - 78.0) / RE_KM
-            val qAdjust = Math.pow((Q0 - sAdjust), 4.0)
-            sAdjust to qAdjust
-        } else {
-            S0 to QOMS2T
-        }
-
-        val pinvsq = 1.0 / (a00 * a00 * beta02 * beta02)
-        val tsi = 1.0 / (a00 - s)
-        val eta = a00 * e0 * tsi
-        val eta2 = eta * eta
-        val eeta = e0 * eta
-        val psisq = abs(1.0 - eta2)
-        val coef = qoms2t * Math.pow(tsi, 4.0)
-        val coef1 = coef / Math.pow(psisq, 3.5)
-
-        val c2 = coef1 * n00 * (a00 * (1.0 + 1.5 * eta2 + eeta * (4.0 + eta2)) +
-            0.75 * CK2 * tsi / psisq * x3thm1 * (8.0 + 24.0 * eta2 + 3.0 * eta2 * eta2))
-        val c1 = bstar * c2
-
-        val c4 = 2.0 * n00 * coef1 * a00 * beta02 * (eta * (2.0 + 0.5 * eta2) +
-            e0 * (0.5 + 2.0 * eta2) - 2.0 * CK2 * tsi / (a00 * psisq) *
-            (3.0 * x3thm1 * (1.0 - 2.0 * eeta + eta2 * (1.5 - 0.5 * eeta)) +
-                0.75 * (1.0 - theta2) * (2.0 * eta2 - eeta * (1.0 + eta2)) * cos(2.0 * omega0)))
-
-        val c5 = 2.0 * coef1 * a00 * beta02 * (1.0 + 2.75 * (eta2 + eeta) + eeta * eta2)
-
-        // Secular rates
-        val temp1 = 1.5 * CK2 * pinvsq * n00
-        val temp2 = 0.5 * temp1 * CK2 * pinvsq
-        val temp3 = -0.46875 * CK4 * pinvsq * pinvsq * n00
-        val mDot = n00 + 0.5 * temp1 * beta0 * x3thm1 + 0.0625 * temp2 * beta0 *
-            (13.0 - 78.0 * theta2 + 137.0 * theta2 * theta2)
-        val omegaDot = -0.5 * temp1 * (1.0 - 5.0 * theta2) + 0.0625 * temp2 *
-            (7.0 - 114.0 * theta2 + 395.0 * theta2 * theta2) + temp3 * (3.0 - 36.0 * theta2 + 49.0 * theta2 * theta2)
-        val xhdot1 = -temp1 * cosI0
-        val raanDot = xhdot1 + (0.5 * temp2 * (4.0 - 19.0 * theta2) + 2.0 * temp3 * (3.0 - 7.0 * theta2)) * cosI0
-
-        return Sgp4Init(
-            a00 = a00,
-            n00 = n00,
-            e0 = e0,
-            i0 = i0,
-            omega0 = omega0,
-            raan0 = raan0,
-            m0 = m0,
-            bstar = bstar,
-            mDot = mDot,
-            omegaDot = omegaDot,
-            raanDot = raanDot,
-            c1 = c1,
-            c4 = c4,
-            c5 = c5,
-            tsi = tsi,
-            eta = eta,
-            beta02 = beta02,
-            theta2 = theta2,
-            sinI0 = sinI0,
-            cosI0 = cosI0
-        )
-    }
-
+    /** Near-Earth SGP4 only; deep-space TLEs throw and propagate() returns null. */
     fun propagateTeme(tle: TleData, time: Instant): Vector3D {
-        val model = initModel(tle)
-        val deltaMin = (time.toEpochMilli() - tle.epochInstant.toEpochMilli()) / 60000.0
-
-        val mdf = model.m0 + model.mDot * deltaMin
-        val omegadf = model.omega0 + model.omegaDot * deltaMin
-        val xnoddf = model.raan0 + model.raanDot * deltaMin
-        val tsq = deltaMin * deltaMin
-
-        val m = mdf + model.c1 * tsq
-        val omega = omegadf
-        val xnode = xnoddf - (1.5 * model.n00 * CK2 * model.cosI0 / (model.a00 * model.a00 * model.beta02)) * model.c1 * tsq
-
-        val a = model.a00 * Math.pow(1.0 - model.c1 * deltaMin, 2.0)
-        val e = (model.e0 - model.bstar * model.c4 * deltaMin - model.bstar * model.c5 * tsq).coerceIn(1e-6, 0.999)
-        val beta2 = 1.0 - e * e
-
-        // Solve Kepler's Equation M = E - e*sin(E)
-        var uM = (m % (2.0 * PI) + 2.0 * PI) % (2.0 * PI)
-        var epw = uM
-        for (iter in 0 until 12) {
-            val f = epw - e * sin(epw) - uM
-            val fDot = 1.0 - e * cos(epw)
-            val delta = f / fDot
-            epw -= delta
-            if (abs(delta) < 1e-11) break
-        }
-
-        val sinE = sin(epw)
-        val cosE = cos(epw)
-        val sinV = (sqrt(beta2) * sinE) / (1.0 - e * cosE)
-        val cosV = (cosE - e) / (1.0 - e * cosE)
-        val v = atan2(sinV, cosV)
-        val u = omega + v
-        val r = a * (1.0 - e * cosE)
-
-        // Short-period perturbations
-        val x2u = 2.0 * u
-        val sin2u = sin(x2u)
-        val cos2u = cos(x2u)
-        val rk = r * (1.0 - 1.5 * CK2 * sqrt(beta2) / (a * a * beta2 * beta2) * (3.0 * model.theta2 - 1.0)) +
-            0.5 * CK2 / (a * beta2 * beta2) * (1.0 - model.theta2) * cos2u
-        val uk = u - 0.25 * CK2 / (a * a * beta2 * beta2) * (7.0 * model.theta2 - 1.0) * sin2u
-        val xnodek = xnode + 1.5 * CK2 * model.cosI0 / (a * a * beta2 * beta2) * sin2u
-        val xinck = model.i0 + 1.5 * CK2 * model.cosI0 * model.sinI0 / (a * a * beta2 * beta2) * cos2u
-
-        // Unit orientation vectors in TEME
-        val sinUk = sin(uk)
-        val cosUk = cos(uk)
-        val sinNode = sin(xnodek)
-        val cosNode = cos(xnodek)
-        val sinInc = sin(xinck)
-        val cosInc = cos(xinck)
-
-        val mx = -sinNode * cosInc
-        val my = cosNode * cosInc
-        val mz = sinInc
-
-        val ux = mx * sinUk + cosNode * cosUk
-        val uy = my * sinUk + sinNode * cosUk
-        val uz = mz * sinUk
-
-        val posKm = rk * RE_KM
-        return Vector3D(ux * posKm, uy * posKm, uz * posKm)
+        val elapsedSeconds = (time.epochSecond - tle.epochInstant.epochSecond).toDouble() +
+            (time.nano - tle.epochInstant.nano) / 1e9
+        return NearEarthSgp4(tle).position(elapsedSeconds / 60.0)
     }
 
     fun gmst(time: Instant): Double {
@@ -352,7 +171,7 @@ internal class Sgp4Propagator {
         // Radial velocity via finite difference (dt = 0.5s)
         val dt = 0.5
         val nextTime = time.plusMillis((dt * 1000).toLong())
-        val nextSatTeme = propagateTeme(tle, nextTime)
+        val nextSatTeme = runCatching { propagateTeme(tle, nextTime) }.getOrNull() ?: return null
         val nextSatEcef = temeToEcef(nextSatTeme, gmst(nextTime))
         val (_, _, nextRange) = ecefToTopocentric(nextSatEcef, obsEcef, observer)
         val rangeRate = (nextRange - range) / dt

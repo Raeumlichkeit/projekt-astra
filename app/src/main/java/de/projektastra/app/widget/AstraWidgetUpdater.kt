@@ -14,6 +14,7 @@ import de.projektastra.app.TonightWindowCalculator
 import de.projektastra.app.ephemeris.LunarTerminatorCalculator
 import java.time.Instant
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -74,7 +75,12 @@ object AstraWidgetUpdater {
         }
 
         val locationLabel = if (savedLocation != null) {
-            String.format(Locale.GERMAN, "%.1f°N, %.1f°E", savedLocation.latitude, savedLocation.longitude)
+            String.format(
+                Locale.GERMAN,
+                "%.1f°%s, %.1f°%s",
+                abs(savedLocation.latitude), if (savedLocation.latitude < 0) "S" else "N",
+                abs(savedLocation.longitude), if (savedLocation.longitude < 0) "W" else "E"
+            )
         } else {
             "Berlin (52.5°N)"
         }
@@ -82,8 +88,9 @@ object AstraWidgetUpdater {
         val observer = savedLocation ?: GeoPoint(52.5200, 13.4050, 34.0)
         val calculatedDarkness = runCatching {
             val tonight = TonightWindowCalculator.calculate(observer, time)
-            "Astronomische Nacht: ${tonight.darknessText}"
-        }.getOrDefault("Astronomische Nacht: 22:15 - 04:45")
+            if (tonight.hasAstronomicalDarkness) "Astronomische Nacht: ${tonight.darknessText}"
+            else tonight.darknessText
+        }.getOrDefault("Astronomische Dunkelheit: nicht verfügbar")
 
         return WidgetState(
             moonPhaseLabel = phaseName,

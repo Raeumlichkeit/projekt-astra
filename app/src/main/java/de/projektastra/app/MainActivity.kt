@@ -249,6 +249,10 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlin.math.PI
@@ -457,6 +461,7 @@ private fun AstraApp(
     var tab by remember { mutableStateOf(AstraTab.SKY) }
     var location by remember { mutableStateOf(LocationStore.getSavedLocation(context)) }
     var rememberLocation by remember { mutableStateOf(LocationStore.isRememberEnabled(context)) }
+    var useSessionLocation by remember { mutableStateOf(true) }
     var permissionGranted by remember { mutableStateOf(false) }
     var cameraGranted by remember { mutableStateOf(false) }
     var arEnabled by remember { mutableStateOf(false) }
@@ -500,7 +505,11 @@ private fun AstraApp(
         LightPollutionRepository.clear()
     }
     var savedEvents by remember { mutableStateOf(ObservationStore.savedEvents(context)) }
-    var logbookEntries by remember { mutableStateOf(ObservationLogbookStore.loadEntries(context)) }
+    val initialLogbook = remember { runCatching { ObservationLogbookStore.loadEntries(context) } }
+    var logbookError by remember {
+        mutableStateOf(initialLogbook.exceptionOrNull()?.let { "Logbuch konnte nicht geladen werden: ${it.message}" })
+    }
+    var logbookEntries by remember { mutableStateOf(initialLogbook.getOrDefault(emptyList())) }
     var reminderHours by remember { mutableIntStateOf(ObservationStore.reminderHours(context)) }
     var notificationsGranted by remember {
         mutableStateOf(
@@ -533,11 +542,13 @@ private fun AstraApp(
             PackageManager.PERMISSION_GRANTED
     }
 
-    LocationEffect(permissionGranted, locationRefreshKey) { newLoc ->
-        location = newLoc
-        if (rememberLocation) {
-            LocationStore.saveLocation(context, newLoc)
-            AstraWidgetUpdater.updateAllWidgets(context)
+    LocationEffect(permissionGranted && useSessionLocation, locationRefreshKey) { newLoc ->
+        if (useSessionLocation) {
+            location = newLoc
+            if (rememberLocation) {
+                LocationStore.saveLocation(context, newLoc)
+                AstraWidgetUpdater.updateAllWidgets(context)
+            }
         }
     }
     LaunchedEffect(tab) { if (tab != AstraTab.SKY) setSkyFullscreen(false) }
@@ -630,11 +641,15 @@ private fun AstraApp(
                     },
                     onLocationPermissionResult = { granted ->
                         permissionGranted = granted
-                        if (granted) locationRefreshKey++
+                        if (granted) { useSessionLocation = true; locationRefreshKey++ }
                     },
                     onResetLocation = {
+                        useSessionLocation = false
+                        LocationStore.setRememberEnabled(context, false)
+                        rememberLocation = false
                         LocationStore.clearLocation(context)
                         location = null
+                        AstraWidgetUpdater.updateAllWidgets(context)
                     },
                     toggleAr = {
                         if (arEnabled) arEnabled = false
@@ -646,14 +661,20 @@ private fun AstraApp(
                         else cameraLauncher.launch(Manifest.permission.CAMERA)
                     },
                     onSaveLogEntry = { entry ->
-                        logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
+                        try {
+                            logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
+                            logbookError = null
+                        } catch (error: Exception) {
+                            logbookError = "Logbuch konnte nicht gespeichert werden: ${error.message}"
+                            throw error
+                        }
                     },
                     logbookEntries = logbookEntries
                 )
                     AstraTab.WEATHER -> WeatherScreen(
                         location = location,
                         simulatedSkyTime = skyClock.state.instant.takeUnless { skyClock.state.live },
-                        refreshLocation = { locationRefreshKey++ }
+                        refreshLocation = { useSessionLocation = true; locationRefreshKey++ }
                     )
                     AstraTab.EVENTS -> EventsScreen(
                         location = location,
@@ -730,22 +751,35 @@ private fun AstraApp(
                         },
                         privacy = privacy,
                         logbookEntries = logbookEntries,
+                        logbookError = logbookError,
                         onSaveLogEntry = { entry ->
-                            logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
+                            try {
+                                logbookEntries = ObservationLogbookStore.saveEntry(context, entry)
+                                logbookError = null
+                            } catch (error: Exception) {
+                                logbookError = "Logbuch konnte nicht gespeichert werden: ${error.message}"
+                                throw error
+                            }
                         },
                         onDeleteLogEntry = { entryId ->
-                            logbookEntries = ObservationLogbookStore.deleteEntry(context, entryId)
+                            runCatching { ObservationLogbookStore.deleteEntry(context, entryId) }
+                                .onSuccess { logbookEntries = it; logbookError = null }
+                                .onFailure { logbookError = "Eintrag konnte nicht gelöscht werden: ${it.message}" }
                         },
                         onDeleteAllLogEntries = {
-                            ObservationLogbookStore.deleteAllEntries(context)
-                            logbookEntries = emptyList()
+                            runCatching { ObservationLogbookStore.deleteAllEntries(context) }
+                                .onSuccess { logbookEntries = emptyList(); logbookError = null }
+                                .onFailure { logbookError = "Logbuch konnte nicht gelöscht werden: ${it.message}" }
                         },
                         onImportLogbook = { jsonText, merge ->
-                            val result = ObservationLogbookStore.importJson(context, jsonText, merge)
-                            if (result.success) {
-                                logbookEntries = ObservationLogbookStore.loadEntries(context)
+                            runCatching {
+                                val result = ObservationLogbookStore.importJson(context, jsonText, merge)
+                                if (result.success) logbookEntries = ObservationLogbookStore.loadEntries(context)
+                                result
+                            }.getOrElse { error ->
+                                logbookError = "Import fehlgeschlagen: ${error.message}"
+                                LogbookImportResult(false, 0, 0, logbookError!!)
                             }
-                            result
                         }
                     )
                     AstraTab.ABOUT -> AboutScreen(
@@ -758,7 +792,8 @@ private fun AstraApp(
                         onRememberLocationChange = { enabled ->
                             LocationStore.setRememberEnabled(context, enabled)
                             rememberLocation = enabled
-                            if (!enabled) location = null
+                            if (enabled) location?.let { LocationStore.saveLocation(context, it) }
+                            AstraWidgetUpdater.updateAllWidgets(context)
                         },
                         requestOnline = { showOnlineConsent = true },
                         setPrivacy = updatePrivacy
@@ -950,7 +985,7 @@ internal fun SkyScreen(
         if (appearance.gloveModeZoom && !arEnabled) {
             MainActivity.volumeKeyZoomHandler = { zoomIn ->
                 if (zoomIn) {
-                    manualFov = (manualFov / 1.25f).coerceAtLeast(25f)
+                    manualFov = (manualFov / 1.25f).coerceAtLeast(0.5f)
                 } else {
                     manualFov = (manualFov * 1.25f).coerceAtMost(150f)
                 }
@@ -979,9 +1014,16 @@ internal fun SkyScreen(
     val skyInstant = skyTime.instant
     val satelliteCatalog = remember(context) { SatelliteCatalog.loadActiveSatellites(context) }
     val passPredictor = remember { SatellitePassPredictor(Sgp4Propagator()) }
-    val satellitePasses = remember(satelliteCatalog, observer, skyInstant) {
-        satelliteCatalog.take(3).flatMap { tle ->
-            passPredictor.predictPasses(tle, observer, skyInstant, durationHours = 12)
+    val predictionMinute = Math.floorDiv(skyInstant.epochSecond, 60L)
+    var satellitePasses by remember(satelliteCatalog, observer, predictionMinute) {
+        mutableStateOf(emptyList<SatellitePass>())
+    }
+    LaunchedEffect(satelliteCatalog, observer, predictionMinute) {
+        satellitePasses = withContext(Dispatchers.Default) {
+            satelliteCatalog.take(3).flatMap { tle ->
+                currentCoroutineContext().ensureActive()
+                passPredictor.predictPasses(tle, observer, Instant.ofEpochSecond(predictionMinute * 60), durationHours = 12)
+            }
         }
     }
     LifecycleStartEffect(Unit) {
@@ -1078,9 +1120,9 @@ internal fun SkyScreen(
                 ?: coordinateFrame.horizontal(it.raHours, it.decDegrees))
         }
     }
-    val textureState = remember(coordinateFrame, viewAzimuth, viewAltitude, arEnabled, manualFov, cameraFov, appearance) {
+    val textureState = remember(coordinateFrame, viewAzimuth, viewAltitude, arEnabled, manualFov, cameraFov, appearance, opticsSettings) {
         SkyTextureState(coordinateFrame, viewAzimuth.toDouble(), viewAltitude.toDouble(),
-            if (arEnabled) cameraFov else manualFov.toDouble(), arEnabled, appearance)
+            if (arEnabled) cameraFov else manualFov.toDouble(), arEnabled, appearance, opticsSettings)
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(if (isOled) Color.Black else Color.Transparent)) {
@@ -1243,8 +1285,8 @@ internal fun SkyScreen(
                         }
                         IconButton(onClick = {
                             manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
-                            selection = selection.release(); manualFov = (manualFov / 1.25f).coerceAtLeast(25f)
-                        }, enabled = manualFov > 25f) { Icon(Icons.Rounded.Add, "Sternkarte vergrößern") }
+                            selection = selection.release(); manualFov = (manualFov / 1.25f).coerceAtLeast(0.5f)
+                        }, enabled = manualFov > 0.5f) { Icon(Icons.Rounded.Add, "Sternkarte vergrößern") }
                         IconButton(onClick = {
                             manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
                             selection = selection.release(); manualFov = (manualFov * 1.25f).coerceAtMost(150f)
@@ -2081,7 +2123,10 @@ internal fun SkyCanvas(
                         tap
                     }
                     val projection = SkyProjection(viewAzimuth, viewAltitude,
-                        canvasSize.width.toFloat(), canvasSize.height.toFloat(), horizontalFov, perspective = !arMode)
+                        canvasSize.width.toFloat(), canvasSize.height.toFloat(), horizontalFov,
+                        perspective = !arMode,
+                        clipPadding = if (!arMode && opticsSettings.isCustomized)
+                            hypot(canvasSize.width.toDouble(), canvasSize.height.toDouble()).toFloat() else 0f)
                     val closest = objects.mapNotNull { item ->
                         projection.point(item.position, padding = 32f)
                             ?.let { point -> item to hypot((point.x - effectiveTap.x).toDouble(), (point.y - effectiveTap.y).toDouble()) }
@@ -2118,7 +2163,7 @@ internal fun SkyCanvas(
                     val nextAltitude = (
                         latestAltitude + pan.y / canvasSize.height * verticalFov
                     ).coerceIn(-90.0, 90.0)
-                    val nextFov = (latestFov / zoom).coerceIn(25.0, 150.0)
+                    val nextFov = (latestFov / zoom).coerceIn(0.5, 150.0)
                     onViewChange(nextAzimuth, nextAltitude, nextFov)
                 }
             }
@@ -2134,10 +2179,12 @@ internal fun SkyCanvas(
                 onFirstFrameRendered()
             }
         }
-        val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov, perspective = !arMode)
+        val projection = SkyProjection(viewAzimuth, viewAltitude, size.width, size.height, horizontalFov,
+            perspective = !arMode,
+            clipPadding = if (!arMode && opticsSettings.isCustomized) hypot(size.width.toDouble(), size.height.toDouble()).toFloat() else 0f)
+        val opticsPadding = 32f
         val canvasCenter = Offset(size.width / 2f, size.height / 2f)
         val applyOptics = !arMode && opticsSettings.isCustomized
-        val keepLabelsUpright = applyOptics && !opticsSettings.rotateLabels
 
         val labels = mutableListOf<SkyLabelCandidate>()
         val labelPaints = mutableMapOf<String, android.graphics.Paint>()
@@ -2146,8 +2193,8 @@ internal fun SkyCanvas(
             textSize: Float, color: Int, alpha: Int = 225, rank: Double = 0.0,
             anchorGap: Float = 6.dp.toPx()
         ) {
-            if (!projection.contains(point)) return
-            val anchor = if (keepLabelsUpright) opticsSettings.transformScreenPoint(point, canvasCenter) else point
+            val anchor = if (applyOptics) opticsSettings.transformScreenPoint(point, canvasCenter) else point
+            if (!projection.contains(anchor)) return
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 this.textSize = textSize
                 this.color = color
@@ -2180,13 +2227,15 @@ internal fun SkyCanvas(
         // Collect labels
         milkyWay.asSequence().filterIndexed { index, _ -> index % 20 == 0 }
             .filter { targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE }
-            .mapNotNull { projection.point(it) }.firstOrNull()?.let { point ->
+            .mapNotNull { projection.point(it, padding = opticsPadding) }.firstOrNull()?.let { point ->
                 addLabel("milky-way", "MILCHSTRASSE", point, SkyLabelKind.MILKY_WAY,
                     10.sp.toPx(), android.graphics.Color.rgb(184, 210, 255), 180)
             }
 
         val projected = objects.mapNotNull { item ->
-            projection.point(item.position, padding = 32f)?.let { item to it }
+            projection.point(item.position, padding = opticsPadding)?.let { point ->
+                if (!applyOptics || projection.contains(opticsSettings.transformScreenPoint(point, canvasCenter), 32f)) item to point else null
+            }
         }
         val byHip = projected.mapNotNull { (item, point) -> item.celestial.hipId?.let { it to point } }.toMap()
 
@@ -2224,7 +2273,7 @@ internal fun SkyCanvas(
 
         val horizonPoints = (0..120).mapNotNull { step ->
             val azimuth = step * 3.0
-            projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0))
+            projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0), padding = opticsPadding)
         }
         val orientationColor = android.graphics.Color.rgb(255, 217, 138)
         horizonPoints.minByOrNull { it.x }?.let { point ->
@@ -2232,13 +2281,13 @@ internal fun SkyCanvas(
                 SkyLabelKind.ORIENTATION, 10.sp.toPx(), orientationColor, rank = 1.0)
         }
         listOf(0.0 to "N", 90.0 to "O", 180.0 to "S", 270.0 to "W").forEach { (azimuth, name) ->
-            projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0))?.let { point ->
+            projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0), padding = opticsPadding)?.let { point ->
                 addLabel("direction-$name", name, point, SkyLabelKind.ORIENTATION, 13.sp.toPx(), orientationColor)
             }
         }
         val selectedPoint = targetPosition?.takeIf {
             targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE
-        }?.let { projection.point(it) }
+        }?.let { projection.point(it, padding = opticsPadding) }
         if (selectedPoint != null && !targetLabel.isNullOrBlank()) {
             addLabel("selected-target", targetLabel, selectedPoint, SkyLabelKind.TARGET,
                 13.sp.toPx(), orientationColor, anchorGap = 22.dp.toPx())
@@ -2251,7 +2300,7 @@ internal fun SkyCanvas(
                 label.kind == SkyLabelKind.ORIENTATION ||
                     listOf(bounds.left, (bounds.left + bounds.right) / 2f, bounds.right).all { x ->
                         listOf(bounds.top, bounds.bottom).all { y ->
-                            val pt = if (keepLabelsUpright) opticsSettings.inverseTransformScreenPoint(Offset(x, y), canvasCenter) else Offset(x, y)
+                            val pt = if (applyOptics) opticsSettings.inverseTransformScreenPoint(Offset(x, y), canvasCenter) else Offset(x, y)
                             projection.coordinates(pt)?.let {
                                 targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE
                             } == true
@@ -2313,7 +2362,7 @@ internal fun SkyCanvas(
                 val start = objectsByHip[from]?.position
                 val end = objectsByHip[to]?.position
                 if (start != null && end != null) {
-                    projection.segments(start, end, padding = 1f).forEach { segment ->
+                    projection.segments(start, end, padding = opticsPadding).forEach { segment ->
                         drawLine(AstraBlue.copy(alpha = if (arMode) 0.65f else 0.23f), segment.start, segment.end, if (arMode) 2f else 1.1f)
                     }
                 }
@@ -2331,7 +2380,7 @@ internal fun SkyCanvas(
                     coordinateFrame.horizontal(step.fieldCenterCoords.raHours, step.fieldCenterCoords.decDegrees)
                 }
                 stepHorizs.zipWithNext().forEach { (from, to) ->
-                    projection.segments(from, to, padding = 1f).forEach { segment ->
+                    projection.segments(from, to, padding = opticsPadding).forEach { segment ->
                         drawLine(
                             color = if (redLightMode) Color(0xFFFF5252).copy(alpha = 0.75f) else Color(0xFF64B5F6).copy(alpha = 0.65f),
                             start = segment.start,
@@ -2342,7 +2391,7 @@ internal fun SkyCanvas(
                     }
                 }
                 stepHorizs.forEachIndexed { idx, horiz ->
-                    projection.point(horiz, padding = 24f)?.let { pt ->
+                    projection.point(horiz, padding = opticsPadding)?.let { pt ->
                         val isActive = idx == starHopSession.activeStepIndex
                         val isCompleted = activeRoute.steps[idx].isCompleted
                         val waypointColor = when {
@@ -2402,7 +2451,7 @@ internal fun SkyCanvas(
 
                 if (originPt != null) {
                     val origHoriz = coordinateFrame.horizontal(originPt.equatorial.raHours, originPt.equatorial.decDegrees)
-                    projection.point(origHoriz, padding = 24f)?.let { pt ->
+                    projection.point(origHoriz, padding = opticsPadding)?.let { pt ->
                         drawCircle(measureColor, 7.dp.toPx(), pt, style = Stroke(2.dp.toPx()))
                         drawCircle(measureColor, 2.5.dp.toPx(), pt)
                     }
@@ -2410,7 +2459,7 @@ internal fun SkyCanvas(
 
                 if (targetPt != null) {
                     val targHoriz = coordinateFrame.horizontal(targetPt.equatorial.raHours, targetPt.equatorial.decDegrees)
-                    projection.point(targHoriz, padding = 24f)?.let { pt ->
+                    projection.point(targHoriz, padding = opticsPadding)?.let { pt ->
                         drawCircle(measureColor, 7.dp.toPx(), pt, style = Stroke(2.dp.toPx()))
                         drawCircle(measureColor, 2.5.dp.toPx(), pt)
                     }
@@ -2420,7 +2469,7 @@ internal fun SkyCanvas(
                     val arc = CelestialMeasurement.interpolateGreatCircle(originPt.equatorial, targetPt.equatorial, numSegments = 24)
                     val arcHoriz = arc.map { coordinateFrame.horizontal(it.raHours, it.decDegrees) }
                     arcHoriz.zipWithNext().forEach { (from, to) ->
-                        projection.segments(from, to, padding = 1f).forEach { seg ->
+                        projection.segments(from, to, padding = opticsPadding).forEach { seg ->
                             drawLine(
                                 color = measureColor,
                                 start = seg.start,
@@ -2433,7 +2482,7 @@ internal fun SkyCanvas(
 
                     val midEq = CelestialMeasurement.interpolateMidpoint(originPt.equatorial, targetPt.equatorial)
                     val midHoriz = coordinateFrame.horizontal(midEq.raHours, midEq.decDegrees)
-                    projection.point(midHoriz, padding = 32f)?.let { midPt ->
+                    projection.point(midHoriz, padding = opticsPadding)?.let { midPt ->
                         val result = measurementState.result
                         if (result != null) {
                             val badgeText = "${result.formattedDistance} (${String.format(Locale.US, "%.1f°", result.positionAngleDegrees)})"
@@ -2510,7 +2559,10 @@ internal fun SkyCanvas(
         // Draw celestial labels
         val drawCelestialLabels = {
             placedLabels.filter { it.candidate.kind != SkyLabelKind.ORIENTATION }.forEach { label ->
-                drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
+                val point = if (applyOptics && opticsSettings.rotateLabels)
+                    opticsSettings.inverseTransformScreenPoint(Offset(label.x, label.baseline), canvasCenter)
+                else Offset(label.x, label.baseline)
+                drawContext.canvas.nativeCanvas.drawText(label.text, point.x, point.y,
                     labelPaints.getValue(label.candidate.id))
             }
         }
@@ -2523,7 +2575,8 @@ internal fun SkyCanvas(
         // Draw terrain & selection ring
         withOpticsTransform {
             if (arMode) drawTerrainHorizon(terrainProfile, viewAzimuth, viewAltitude, horizontalFov, arMode, oledMode = isOled)
-            else drawSphericalTerrainHorizon(terrainProfile, projection, viewAzimuth, viewAltitude, oledMode = isOled)
+            else drawSphericalTerrainHorizon(terrainProfile, projection, viewAzimuth, viewAltitude,
+                padding = opticsPadding, oledMode = isOled)
             selectedPoint?.let { point ->
                 drawCircle(StarGold, 18.dp.toPx(), point, style = Stroke(1.5.dp.toPx()))
             }
@@ -2532,7 +2585,10 @@ internal fun SkyCanvas(
         // Draw orientation labels
         val drawOrientationLabels = {
             placedLabels.filter { it.candidate.kind == SkyLabelKind.ORIENTATION }.forEach { label ->
-                drawContext.canvas.nativeCanvas.drawText(label.text, label.x, label.baseline,
+                val point = if (applyOptics && opticsSettings.rotateLabels)
+                    opticsSettings.inverseTransformScreenPoint(Offset(label.x, label.baseline), canvasCenter)
+                else Offset(label.x, label.baseline)
+                drawContext.canvas.nativeCanvas.drawText(label.text, point.x, point.y,
                     labelPaints.getValue(label.candidate.id))
             }
         }
@@ -2747,6 +2803,7 @@ private fun DrawScope.drawSphericalTerrainHorizon(
     projection: SkyProjection,
     viewAzimuth: Double,
     viewAltitude: Double,
+    padding: Float = 20f,
     oledMode: Boolean = false
 ) {
     if (size.width <= 0f || size.height <= 0f) return
@@ -2763,7 +2820,7 @@ private fun DrawScope.drawSphericalTerrainHorizon(
         val relAz = -120.0 + step * (240.0 / 160.0)
         val sampleAz = ((viewAzimuth + relAz) % 360.0 + 360.0) % 360.0
         val alt = profile?.altitudeAt(sampleAz) ?: 0.0
-        projection.point(HorizontalCoordinates(sampleAz, alt), padding = 20f)
+        projection.point(HorizontalCoordinates(sampleAz, alt), padding = padding)
     }
 
     if (points.isNotEmpty()) {
@@ -2776,8 +2833,11 @@ private fun DrawScope.drawSphericalTerrainHorizon(
             close()
         }
         drawPath(ground, groundColor)
-    } else if (viewAltitude < 0.0) {
-        // Looking directly down at nadir: entire viewport is ground
+    } else if (listOf(0f, size.width / 2f, size.width).all { x ->
+            listOf(0f, size.height / 2f, size.height).all { y ->
+                projection.coordinates(Offset(x, y))?.let { it.altitude <= (profile?.altitudeAt(it.azimuth) ?: 0.0) } == true
+            }
+        }) {
         drawRect(groundColor)
     }
 
@@ -3804,6 +3864,7 @@ internal fun ObservationPlanScreen(
     privacy: PrivacyOptions = PrivacyOptions(),
     catalogStore: SkyCatalogStore? = null,
     logbookEntries: List<ObservationLogEntry> = emptyList(),
+    logbookError: String? = null,
     onSaveLogEntry: (ObservationLogEntry) -> Unit = {},
     onDeleteLogEntry: (String) -> Unit = {},
     onDeleteAllLogEntries: () -> Unit = {},
@@ -3888,6 +3949,7 @@ internal fun ObservationPlanScreen(
             subtitle = "${favoriteIds.size} vorgemerkte Objekte · ${savedEvents.size} Ereignisse",
             icon = Icons.Rounded.Bookmarks
         )
+        logbookError?.let { Text(it, color = Color(0xFFFF8B8B), modifier = Modifier.testTag("logbook-error")) }
         if (catalogs.failed) {
             Text("Offline-Katalog unvollständig. Deine Vormerkungen bleiben erhalten.", color = StarGold)
             TextButton(onClick = { catalogRetry++ }) { Text("Katalog erneut laden") }
@@ -4546,9 +4608,18 @@ private fun ObservationLogEntryDialog(
     var notes by remember { mutableStateOf(initialEntry?.notes ?: "") }
     var equipment by remember { mutableStateOf(initialEntry?.equipment ?: "") }
     var seeing by remember { mutableIntStateOf(initialEntry?.seeingRating ?: 0) }
-    var attachLocation by remember { mutableStateOf(initialEntry?.latitude != null) }
+    var attachLocation by remember { mutableStateOf(initialEntry?.latitude != null || initialEntry?.longitude != null || initialEntry?.locationName != null) }
     var locationCustomName by remember { mutableStateOf(initialEntry?.locationName ?: "") }
     var photoFileName by remember { mutableStateOf(initialEntry?.photoFileName) }
+    val draftPhotos = remember { mutableSetOf<String>() }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var dialogActive by remember { mutableStateOf(true) }
+    DisposableEffect(Unit) {
+        onDispose {
+            dialogActive = false
+            draftPhotos.forEach { ObservationLogbookStore.deletePhotoFile(context, it) }
+        }
+    }
     var seeingPickeringText by remember { mutableStateOf(initialEntry?.seeingPickering?.toString() ?: "") }
     var seeingAntoniadi by remember { mutableStateOf(initialEntry?.seeingAntoniadi ?: "") }
     var nelmText by remember { mutableStateOf(initialEntry?.nelm?.let { "%.1f".format(Locale.US, it) } ?: "") }
@@ -4557,8 +4628,11 @@ private fun ObservationLogEntryDialog(
         uri?.let {
             val saved = ObservationLogbookStore.savePhotoFromUri(context, it)
             if (saved != null) {
-                photoFileName = saved
-            }
+                if (dialogActive) {
+                    draftPhotos.add(saved)
+                    photoFileName = saved
+                } else ObservationLogbookStore.deletePhotoFile(context, saved)
+            } else saveError = "Foto konnte nicht hinzugefügt werden."
         }
     }
 
@@ -4739,7 +4813,13 @@ private fun ObservationLogEntryDialog(
                         Text("Standort an Eintrag anhängen", fontSize = 13.sp, color = Color.White)
                     }
                     if (attachLocation) {
-                        if (currentLocation != null) {
+                        val entryLocation = initialEntry?.latitude?.let { latitude ->
+                            initialEntry.longitude?.let { longitude -> latitude to longitude }
+                        }
+                        if (entryLocation != null) {
+                            Text("Koordinaten dieses Eintrags: ${entryLocation.first.format(3)}°, ${entryLocation.second.format(3)}°",
+                                fontSize = 11.sp, color = AstraSuccess)
+                        } else if (currentLocation != null) {
                             Text(
                                 "Aktuelle Koordinaten: ${currentLocation.latitude.format(3)}°, ${currentLocation.longitude.format(3)}°",
                                 fontSize = 11.sp,
@@ -4798,7 +4878,6 @@ private fun ObservationLogEntryDialog(
                                     )
                                     Button(
                                         onClick = {
-                                            ObservationLogbookStore.deletePhotoFile(context, currentPhoto)
                                             photoFileName = null
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5A2020), contentColor = Color(0xFFFFB4B4))
@@ -4828,6 +4907,7 @@ private fun ObservationLogEntryDialog(
                     }
                 }
 
+                saveError?.let { Text(it, color = Color(0xFFFF8B8B), fontSize = 12.sp) }
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -4839,8 +4919,8 @@ private fun ObservationLogEntryDialog(
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = {
-                            val finalLat = if (attachLocation) currentLocation?.latitude ?: initialEntry?.latitude else null
-                            val finalLon = if (attachLocation) currentLocation?.longitude ?: initialEntry?.longitude else null
+                            val finalLat = if (attachLocation) initialEntry?.latitude ?: currentLocation?.latitude else null
+                            val finalLon = if (attachLocation) initialEntry?.longitude ?: currentLocation?.longitude else null
                             val finalLocName = if (attachLocation) locationCustomName.ifBlank { null } else null
                             val parsedPickering = seeingPickeringText.toIntOrNull()?.takeIf { SeeingScaleValidator.isValidPickering(it) }
                             val parsedAntoniadi = seeingAntoniadi.trim().uppercase().takeIf { SeeingScaleValidator.isValidAntoniadi(it) }
@@ -4862,7 +4942,12 @@ private fun ObservationLogEntryDialog(
                                 seeingAntoniadi = parsedAntoniadi,
                                 nelm = parsedNelm
                             )
-                            onSave(newEntry)
+                            try {
+                                onSave(newEntry)
+                                photoFileName?.let { draftPhotos.remove(it) }
+                            } catch (error: Exception) {
+                                saveError = "Speichern fehlgeschlagen: ${error.message}"
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AstraBlue, contentColor = Night)
                     ) {
@@ -4887,10 +4972,10 @@ private fun LogbookExportImportDialog(
     val zone = ZoneId.systemDefault()
     val dateFormat = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMAN).withZone(zone) }
 
-    val parsedPreview = remember(importText) {
-        if (importText.isBlank()) emptyList()
-        else runCatching { ObservationLogbookStore.parseEntriesJson(importText) }.getOrDefault(emptyList())
+    val previewResult = remember(importText) {
+        runCatching { if (importText.isBlank()) emptyList() else ObservationLogbookStore.parseEntriesJson(importText) }
     }
+    val parsedPreview = previewResult.getOrDefault(emptyList())
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -4927,10 +5012,12 @@ private fun LogbookExportImportDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = {
-                            val json = ObservationLogbookStore.exportJson(context)
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Astra Beobachtungstagebuch", json))
-                            Toast.makeText(context, "JSON in Zwischenablage kopiert", Toast.LENGTH_SHORT).show()
+                            runCatching {
+                                val json = ObservationLogbookStore.exportJson(context)
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Astra Beobachtungstagebuch", json))
+                                Toast.makeText(context, "JSON in Zwischenablage kopiert", Toast.LENGTH_SHORT).show()
+                            }.onFailure { importResultMsg = "Export fehlgeschlagen: ${it.message}" }
                         },
                         border = BorderStroke(1.dp, AstraOutline),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
@@ -4941,12 +5028,14 @@ private fun LogbookExportImportDialog(
                     }
                     Button(
                         onClick = {
-                            val json = ObservationLogbookStore.exportJson(context)
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                putExtra(Intent.EXTRA_TEXT, json)
-                                type = "text/plain"
-                            }
-                            context.startActivity(Intent.createChooser(sendIntent, "Astra Beobachtungstagebuch JSON"))
+                            runCatching {
+                                val json = ObservationLogbookStore.exportJson(context)
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    putExtra(Intent.EXTRA_TEXT, json)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, "Astra Beobachtungstagebuch JSON"))
+                            }.onFailure { importResultMsg = "Export fehlgeschlagen: ${it.message}" }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
                     ) {
@@ -5068,7 +5157,8 @@ private fun LogbookExportImportDialog(
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("Vorschau:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = StarGold)
                             if (parsedPreview.isEmpty()) {
-                                Text("Keine gültigen Einträge erkannt.", fontSize = 11.sp, color = Color(0xFFFF8B8B))
+                                Text(previewResult.exceptionOrNull()?.message ?: "Keine gültigen Einträge erkannt.",
+                                    fontSize = 11.sp, color = Color(0xFFFF8B8B))
                             } else {
                                 Text("Erkannte Einträge: ${parsedPreview.size}", fontSize = 12.sp, color = AstraSuccess)
                                 val minTime = parsedPreview.minOf { it.timestampEpochSeconds }
@@ -5268,6 +5358,7 @@ private fun AboutScreen(
                 Text("Nachtlicht: NASA GIBS / VIIRS", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Gelände: Open-Meteo / Copernicus GLO-90", color = AstraTextMuted, fontSize = 12.sp)
                 Text("Ephemeriden: Astronomy Engine 2.1.19 · MIT", color = AstraTextMuted, fontSize = 12.sp)
+                Text("Satelliten: satellite.js 6.0.0 · MIT · Near-Earth-SGP4-Port", color = AstraTextMuted, fontSize = 12.sp)
             }
         }
         Text(

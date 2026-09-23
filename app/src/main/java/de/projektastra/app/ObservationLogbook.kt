@@ -2,9 +2,11 @@ package de.projektastra.app
 
 import android.content.Context
 import android.net.Uri
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.time.Instant
 import java.util.UUID
 
@@ -45,6 +47,11 @@ internal data class ObservationLogEntry(
 
     companion object {
         fun fromJsonObject(json: JSONObject): ObservationLogEntry {
+            val timestamp = if (json.has("timestampEpochSeconds")) json.getLong("timestampEpochSeconds")
+                else Instant.now().epochSecond
+            require(timestamp in -62135596800L..253402300799L) { "Ungültiger Beobachtungszeitpunkt" }
+            val latitude = json.optDouble("latitude", Double.NaN).takeIf { it in -90.0..90.0 }
+            val longitude = json.optDouble("longitude", Double.NaN).takeIf { it in -180.0..180.0 }
             val typeName = json.optString("objectType", "STAR")
             val type = runCatching { CelestialType.valueOf(typeName) }.getOrDefault(CelestialType.STAR)
             val pickering = if (json.has("seeingPickering") && !json.isNull("seeingPickering")) {
@@ -62,14 +69,14 @@ internal data class ObservationLogEntry(
                 objectCatalogId = json.optString("objectCatalogId", ""),
                 objectName = json.optString("objectName", "Unbekanntes Objekt"),
                 objectType = type,
-                timestampEpochSeconds = json.optLong("timestampEpochSeconds", Instant.now().epochSecond),
+                timestampEpochSeconds = timestamp,
                 notes = json.optString("notes", ""),
                 equipment = json.optString("equipment", ""),
                 seeingRating = json.optInt("seeingRating", 0).coerceIn(0, 5),
                 locationName = if (json.has("locationName") && !json.isNull("locationName")) json.getString("locationName") else null,
-                latitude = if (json.has("latitude") && !json.isNull("latitude")) json.getDouble("latitude") else null,
-                longitude = if (json.has("longitude") && !json.isNull("longitude")) json.getDouble("longitude") else null,
-                photoFileName = if (json.has("photoFileName") && !json.isNull("photoFileName")) json.getString("photoFileName") else null,
+                latitude = latitude.takeIf { longitude != null },
+                longitude = longitude.takeIf { latitude != null },
+                photoFileName = json.optString("photoFileName").takeIf(ObservationLogbookStore::isSafePhotoFileName),
                 seeingPickering = pickering,
                 seeingAntoniadi = antoniadi,
                 nelm = nelm
@@ -94,61 +101,71 @@ internal object ObservationLogbookStore {
     private fun getStorageFile(context: Context): File = File(context.filesDir, FILE_NAME)
     fun getPhotosDir(context: Context): File = File(context.filesDir, PHOTOS_DIR).apply { if (!exists()) mkdirs() }
 
+    @Synchronized
     fun loadEntries(context: Context): List<ObservationLogEntry> {
         val file = getStorageFile(context)
-        if (!file.exists()) return emptyList()
-        return runCatching {
-            val content = file.readText(Charsets.UTF_8)
-            parseEntriesJson(content)
-        }.getOrDefault(emptyList())
+        if (!file.exists() && !File(file.path + ".bak").exists()) return emptyList()
+        return AtomicFile(file).openRead().use { input ->
+            if (input.channel.size() > MAX_JSON_BYTES) throw IOException("Logbuch überschreitet 10 MB")
+            parseEntriesJson(input.readBytes().toString(Charsets.UTF_8), strict = true)
+        }
     }
 
-    fun parseEntriesJson(jsonText: String): List<ObservationLogEntry> {
-        if (jsonText.isBlank()) return emptyList()
+    fun parseEntriesJson(jsonText: String, strict: Boolean = false): List<ObservationLogEntry> {
+        require(jsonText.toByteArray(Charsets.UTF_8).size <= MAX_JSON_BYTES) { "Die Datei überschreitet 10 MB." }
+        if (jsonText.isBlank()) {
+            require(!strict) { "Das gespeicherte Logbuch ist leer oder beschädigt." }
+            return emptyList()
+        }
         val array = if (jsonText.trimStart().startsWith("[")) {
             JSONArray(jsonText)
         } else {
             val root = JSONObject(jsonText)
-            root.optJSONArray("entries") ?: JSONArray()
+            root.getJSONArray("entries")
         }
         val result = mutableListOf<ObservationLogEntry>()
         val count = minOf(array.length(), MAX_ENTRIES)
+        require(!strict || array.length() <= MAX_ENTRIES) { "Zu viele gespeicherte Einträge" }
         for (i in 0 until count) {
-            runCatching {
+            val parsed = runCatching {
                 val obj = array.getJSONObject(i)
-                result.add(ObservationLogEntry.fromJsonObject(obj))
+                ObservationLogEntry.fromJsonObject(obj)
             }
+            if (strict) result.add(parsed.getOrThrow()) else parsed.getOrNull()?.let(result::add)
         }
         return result
     }
 
     @Synchronized
     fun saveEntry(context: Context, entry: ObservationLogEntry): List<ObservationLogEntry> {
-        val current = loadEntries(context).filterNot { it.id == entry.id }.toMutableList()
+        require(entry.photoFileName == null || isSafePhotoFileName(entry.photoFileName)) { "Ungültiger Foto-Dateiname" }
+        ObservationLogEntry.fromJsonObject(entry.toJsonObject()) // Validate before touching storage.
+        val previous = loadEntries(context)
+        val current = previous.filterNot { it.id == entry.id }.toMutableList()
         current.add(0, entry)
         val trimmed = current.sortedByDescending { it.timestampEpochSeconds }.take(MAX_ENTRIES)
         writeEntries(context, trimmed)
+        deleteUnreferencedPhotos(context, previous, trimmed)
         return trimmed
     }
 
     @Synchronized
     fun deleteEntry(context: Context, entryId: String): List<ObservationLogEntry> {
         val current = loadEntries(context)
-        val toDelete = current.firstOrNull { it.id == entryId }
-        toDelete?.photoFileName?.let { fileName ->
-            deletePhotoFile(context, fileName)
-        }
         val next = current.filterNot { it.id == entryId }
         writeEntries(context, next)
+        deleteUnreferencedPhotos(context, current, next)
         return next
     }
 
     @Synchronized
     fun deleteAllEntries(context: Context) {
-        val file = getStorageFile(context)
-        if (file.exists()) file.delete()
+        // Commit the empty journal first; never remove photos before the journal write succeeds.
+        writeEntries(context, emptyList())
         val photosDir = getPhotosDir(context)
-        photosDir.listFiles()?.forEach { it.delete() }
+        photosDir.listFiles()?.filter { isSafePhotoFileName(it.name) }?.forEach {
+            deletePhotoFile(context, it.name)
+        }
     }
 
     private fun writeEntries(context: Context, entries: List<ObservationLogEntry>) {
@@ -159,37 +176,62 @@ internal object ObservationLogbookStore {
             put("exportedAt", Instant.now().toString())
             put("entries", array)
         }
-        val file = getStorageFile(context)
-        file.writeText(root.toString(2), Charsets.UTF_8)
+        val bytes = root.toString(2).toByteArray(Charsets.UTF_8)
+        require(bytes.size <= MAX_JSON_BYTES) { "Das Logbuch überschreitet 10 MB. Bitte zuerst Einträge exportieren." }
+        val file = AtomicFile(getStorageFile(context))
+        val output = file.startWrite()
+        try {
+            output.write(bytes)
+            file.finishWrite(output)
+        } catch (error: Throwable) {
+            file.failWrite(output)
+            throw error
+        }
     }
 
     fun savePhotoFromUri(context: Context, sourceUri: Uri): String? {
+        val fileName = "${UUID.randomUUID()}.jpg"
+        val targetFile = runCatching { getPhotoFile(context, fileName) }.getOrNull() ?: return null
         return runCatching {
             context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                val fileName = "${UUID.randomUUID()}.jpg"
-                val targetFile = File(getPhotosDir(context), fileName)
                 targetFile.outputStream().use { output ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 20 * 1024 * 1024) { "Foto überschreitet 20 MB" }
+                        output.write(buffer, 0, count)
+                    }
                 }
                 fileName
             }
-        }.getOrNull()
+        }.onFailure { targetFile.delete() }.getOrNull()
     }
 
-    fun savePhotoBytes(context: Context, bytes: ByteArray): String {
-        val fileName = "${UUID.randomUUID()}.jpg"
-        val targetFile = File(getPhotosDir(context), fileName)
-        targetFile.writeBytes(bytes)
-        return fileName
-    }
+    private val photoFileNamePattern = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    fun isSafePhotoFileName(fileName: String): Boolean = photoFileNamePattern.matches(fileName)
 
     fun getPhotoFile(context: Context, fileName: String): File {
-        return File(getPhotosDir(context), fileName)
+        require(isSafePhotoFileName(fileName)) { "Ungültiger Foto-Dateiname" }
+        val directory = getPhotosDir(context).canonicalFile
+        return File(directory, fileName).also {
+            require(it.canonicalFile.parentFile == directory && !it.isDirectory) { "Foto liegt außerhalb des Logbuchs" }
+        }
     }
 
     fun deletePhotoFile(context: Context, fileName: String) {
-        val targetFile = File(getPhotosDir(context), fileName)
+        val targetFile = getPhotoFile(context, fileName)
         if (targetFile.exists()) targetFile.delete()
+    }
+
+    private fun deleteUnreferencedPhotos(context: Context, previous: List<ObservationLogEntry>, next: List<ObservationLogEntry>) {
+        val retained = next.mapNotNull { it.photoFileName }.toSet()
+        previous.mapNotNull { it.photoFileName }.distinct().filterNot { it in retained }.forEach {
+            // The journal is already committed; a failed cleanup must not turn success into a retry.
+            runCatching { deletePhotoFile(context, it) }
+        }
     }
 
     fun exportJson(context: Context): String {
@@ -206,18 +248,8 @@ internal object ObservationLogbookStore {
         return root.toString(2)
     }
 
-    fun exportOalXml(context: Context): String {
-        val entries = loadEntries(context)
-        return de.projektastra.app.observation.OpenAstronomyLogExport.exportToXml(entries)
-    }
-
     fun exportOalXml(entries: List<ObservationLogEntry>): String {
         return de.projektastra.app.observation.OpenAstronomyLogExport.exportToXml(entries)
-    }
-
-    fun exportFormattedText(context: Context): String {
-        val entries = loadEntries(context)
-        return de.projektastra.app.observation.OpenAstronomyLogExport.exportFormattedTextSummary(entries)
     }
 
     fun exportFormattedText(entries: List<ObservationLogEntry>): String {
@@ -226,19 +258,22 @@ internal object ObservationLogbookStore {
 
     @Synchronized
     fun importJson(context: Context, jsonText: String, merge: Boolean = true): LogbookImportResult {
-        if (jsonText.length > MAX_JSON_BYTES) {
+        if (jsonText.toByteArray(Charsets.UTF_8).size > MAX_JSON_BYTES) {
             return LogbookImportResult(false, 0, 0, "Die Datei überschreitet das Limit von 10 MB.")
         }
         return runCatching {
-            val parsed = parseEntriesJson(jsonText)
+            // JSON exports contain no image bytes and cannot claim ownership of local photos.
+            val parsed = parseEntriesJson(jsonText).map { it.copy(photoFileName = null) }
             if (parsed.isEmpty()) {
                 return LogbookImportResult(false, 0, 0, "Keine gültigen Beobachtungseinträge in den Daten gefunden.")
             }
-            val existing = if (merge) loadEntries(context) else emptyList()
+            val previous = if (merge) loadEntries(context) else runCatching { loadEntries(context) }.getOrDefault(emptyList())
+            val existing = if (merge) previous else emptyList()
             val map = existing.associateBy { it.id }.toMutableMap()
             parsed.forEach { map[it.id] = it }
             val combined = map.values.sortedByDescending { it.timestampEpochSeconds }.take(MAX_ENTRIES)
             writeEntries(context, combined)
+            deleteUnreferencedPhotos(context, previous, combined)
             LogbookImportResult(true, parsed.size, combined.size, "${parsed.size} Einträge erfolgreich ${if (merge) "zusammengeführt" else "importiert"}.")
         }.getOrElse { e ->
             LogbookImportResult(false, 0, 0, "Fehler beim Einlesen der JSON-Daten: ${e.message}")

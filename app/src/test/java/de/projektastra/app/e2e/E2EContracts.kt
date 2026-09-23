@@ -729,67 +729,6 @@ object OpenAstronomyLogExporter {
 }
 
 // ============================================================================
-// Feature 12: Seeing Scales (Pickering, Antoniadi, NELM)
-// ============================================================================
-
-object SeeingScaleValidator {
-    val ANTONIADI_VALID_GRADES = setOf("I", "II", "III", "IV", "V")
-
-    fun isValidPickering(rating: Int): Boolean = rating in 1..10
-
-    fun isValidAntoniadi(grade: String): Boolean = ANTONIADI_VALID_GRADES.contains(grade.trim().uppercase())
-
-    fun isValidNelm(mag: Double): Boolean = mag in 0.0..8.5
-
-    fun mapPickeringToAntoniadi(pickering: Int): String {
-        require(isValidPickering(pickering)) { "Pickering must be 1..10" }
-        return when (pickering) {
-            10, 9 -> "I"     // Perfect seeing without a quiver
-            8, 7 -> "II"     // Slight quivering with moments of calm
-            6, 5 -> "III"    // Moderate seeing with larger tremors
-            4, 3 -> "IV"     // Poor seeing with constant billows
-            else -> "V"      // Very bad seeing
-        }
-    }
-}
-
-// ============================================================================
-// Feature 13: Stepped Night Exposure Compensation
-// ============================================================================
-
-data class CameraExposureState(
-    val currentStepIndex: Int,          // 0 = 0 EV, 1 = +1 EV, 2 = +2 EV, 3 = Max EV
-    val evValue: Float,
-    val isCompensationActive: Boolean
-)
-
-class CameraExposureController(val maxEvSteps: Int = 4, val evStepSize: Float = 0.5f) {
-    var currentStep: Int = 0
-        private set
-
-    fun stepUp(): CameraExposureState {
-        currentStep = (currentStep + 1).coerceAtMost(maxEvSteps)
-        return getState()
-    }
-
-    fun stepDown(): CameraExposureState {
-        currentStep = (currentStep - 1).coerceAtLeast(0)
-        return getState()
-    }
-
-    fun reset(): CameraExposureState {
-        currentStep = 0
-        return getState()
-    }
-
-    fun getState(): CameraExposureState = CameraExposureState(
-        currentStepIndex = currentStep,
-        evValue = currentStep * evStepSize,
-        isCompensationActive = currentStep > 0
-    )
-}
-
-// ============================================================================
 // Feature 14: AR Sensor Low-Pass Jitter Filter & Pitch Trim
 // ============================================================================
 
@@ -838,65 +777,6 @@ class ArSensorFilter(
     fun reset() {
         smoothedAzimuth = null
         smoothedPitch = null
-    }
-}
-
-// ============================================================================
-// Feature 15: Physical Volume Key Glove Mode Zoom
-// ============================================================================
-
-class GloveModeZoomController(
-    var currentFovDegrees: Double = 60.0,
-    val minFovDegrees: Double = 0.5,
-    val maxFovDegrees: Double = 110.0,
-    val zoomFactorPerStep: Double = 1.25
-) {
-    var gloveModeEnabled: Boolean = true
-
-    fun onVolumeUp(): Double { // Volume UP = Zoom IN (Decrease FOV)
-        if (!gloveModeEnabled) return currentFovDegrees
-        currentFovDegrees = (currentFovDegrees / zoomFactorPerStep).coerceAtLeast(minFovDegrees)
-        return currentFovDegrees
-    }
-
-    fun onVolumeDown(): Double { // Volume DOWN = Zoom OUT (Increase FOV)
-        if (!gloveModeEnabled) return currentFovDegrees
-        currentFovDegrees = (currentFovDegrees * zoomFactorPerStep).coerceAtMost(maxFovDegrees)
-        return currentFovDegrees
-    }
-}
-
-// ============================================================================
-// Feature 16: Pure OLED True Black Mode (#000000)
-// ============================================================================
-
-data class OledThemeColors(
-    val backgroundColorHex: String,
-    val surfaceColorHex: String,
-    val cardBackgroundHex: String,
-    val isPureBlack: Boolean
-)
-
-object OledThemeManager {
-    const val PURE_BLACK_HEX = "#000000"
-    const val DEFAULT_DARK_SURFACE_HEX = "#121212"
-
-    fun getThemeColors(oledModeEnabled: Boolean): OledThemeColors {
-        return if (oledModeEnabled) {
-            OledThemeColors(
-                backgroundColorHex = PURE_BLACK_HEX,
-                surfaceColorHex = PURE_BLACK_HEX,
-                cardBackgroundHex = PURE_BLACK_HEX,
-                isPureBlack = true
-            )
-        } else {
-            OledThemeColors(
-                backgroundColorHex = DEFAULT_DARK_SURFACE_HEX,
-                surfaceColorHex = "#1E1E1E",
-                cardBackgroundHex = "#2C2C2C",
-                isPureBlack = false
-            )
-        }
     }
 }
 

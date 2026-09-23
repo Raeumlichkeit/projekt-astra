@@ -107,6 +107,26 @@ class SkyTextureRenderingTest {
         }
     }
 
+    @Test fun opticsRotationAndMirrorKeepTextureAlignedAtPortraitEdges() {
+        val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
+        launch(initial, width = 201, height = 301)
+        capture().useBitmap { original ->
+            update(initial.copy(optics = OpticsSettings(mirrored = true, rotationDegrees = 90f)))
+            capture().useBitmap { transformed ->
+                val centerX = transformed.width / 2
+                val centerY = transformed.height / 2
+                listOf(35, 75).forEach { distance ->
+                    val source = original.getPixel(centerX + distance, centerY)
+                    val target = transformed.getPixel(centerX, centerY - distance)
+                    assertTrue("Rotated mirrored texture red", abs(Color.red(source) - Color.red(target)) <= 5)
+                    assertTrue("Rotated mirrored texture green", abs(Color.green(source) - Color.green(target)) <= 5)
+                    assertTrue("Rotated mirrored texture blue", abs(Color.blue(source) - Color.blue(target)) <= 5)
+                    assertEquals("Texture must cover the rotated edge", 255, Color.alpha(target))
+                }
+            }
+        }
+    }
+
     @Test fun pausedRendererDoesNotDrawAndResumesWithTheLatestState() {
         val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
         launch(initial)
@@ -147,13 +167,13 @@ class SkyTextureRenderingTest {
         return SkyTextureState(frame, horizontal.azimuth, horizontal.altitude, 60.0, false, SkyAppearance(mode))
     }
 
-    private fun launch(initial: SkyTextureState) {
+    private fun launch(initial: SkyTextureState, width: Int = 301, height: Int = 201) {
         scenario = ActivityScenario.launch(ComponentActivity::class.java).also { scene ->
             scene.onActivity { activity ->
                 view = SkyTextureView(activity)
                 // Odd physical dimensions put the centre fragment exactly on the requested direction.
                 val container = FrameLayout(activity)
-                container.addView(view, FrameLayout.LayoutParams(301, 201))
+                container.addView(view, FrameLayout.LayoutParams(width, height))
                 activity.setContentView(container)
                 view.update(initial)
                 view.setRenderingActive(true)

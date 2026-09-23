@@ -187,18 +187,11 @@ internal object ArTargetGuidanceCalculator {
         val arrowAngle = arrowAngle(rel.right, rel.up)
         val edgePos = edgePosition(rel.right, rel.up, width, height)
 
-        val focalLength = (width / (2.0 * kotlin.math.tan(Math.toRadians(horizontalFov / 2.0)))).toFloat()
-        var screenPos: Offset? = null
-        var inView = false
-
-        if (rel.depth > 0.001) {
-            val sx = (width / 2f + focalLength * (rel.right / rel.depth).toFloat())
-            val sy = (height / 2f - focalLength * (rel.up / rel.depth).toFloat())
-            if (sx in 0f..width && sy in 0f..height) {
-                screenPos = Offset(sx, sy)
-                inView = true
-            }
-        }
+        val screenPos = if (rel.depth > 0.001) {
+            SkyProjection(currentAzimuth, currentAltitude, width, height, horizontalFov,
+                perspective = false).point(targetPosition)
+        } else null
+        val inView = screenPos != null
 
         val quality = ArSensorQuality.fromSensorAccuracy(sensorAccuracy, sensorAvailable)
 

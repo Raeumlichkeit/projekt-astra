@@ -143,6 +143,18 @@ class ArTargetGuidanceTest {
     }
 
     @Test
+    fun arGuidanceUsesTheSameProjectionAsRenderedStars() {
+        val target = HorizontalCoordinates(198.0, 42.0)
+        val expected = SkyProjection(180.0, 30.0, 1080f, 1920f, 60.0, perspective = false).point(target)!!
+        val guidance = ArTargetGuidanceCalculator.calculateGuidance(
+            "Target", "Stern", target, 180.0, 30.0, 60.0, 1080f, 1920f,
+            null, android.hardware.SensorManager.SENSOR_STATUS_ACCURACY_HIGH, true)
+        val actual = guidance.screenPosition!!
+        assertEquals(expected.x, actual.x, 0.001f)
+        assertEquals(expected.y, actual.y, 0.001f)
+    }
+
+    @Test
     fun calculateGuidance_behindTarget() {
         val guidance = ArTargetGuidanceCalculator.calculateGuidance(
             targetName = "Polarstern",

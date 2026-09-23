@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.time.Instant
 import kotlin.math.PI
@@ -494,15 +495,15 @@ class EphemerisChallengerTest {
             if (r > maxR) maxR = r
         }
 
-        // Circular orbit in SGP4: radius varies only due to J2 short-period oblateness perturbations (~1.59 km)
+        // python-sgp4 2.24 (WGS-72/Vallado), same TLE sampled at 0..480 min: 10.584664881 km.
+        // A zero mean eccentricity still has J2 short-period radial variation in SGP4.
         val deltaR = maxR - minR
-        assertTrue("Circular orbit radius variation must match J2 perturbation bounds (1.0..2.5 km): was $deltaR km",
-            deltaR in 1.0..2.5)
+        assertEquals("Circular orbit SGP4 radial variation", 10.584664881257595, deltaR, 0.05)
     }
 
     @Test
     fun `challengeHighEccentricityMolniyaOrbit`() {
-        // High eccentricity Molniya orbit (e = 0.72)
+        // This 12-hour Molniya orbit needs SDP4 lunar/solar and resonance terms.
         val molniyaTle = TleParser.parseTle(
             "1 88888U 26002A   26263.50000000  .00000100  00000-0  10000-4 0  9992",
             "2 88888  63.4000  40.0000 7200000 270.0000  20.0000  2.00600000000015",
@@ -511,24 +512,13 @@ class EphemerisChallengerTest {
 
         assertEquals(0.72, molniyaTle.eccentricity, 1e-4)
 
-        // Propagate over full 12-hour orbit in 5-minute steps
-        val t0 = molniyaTle.epochInstant
-        var minAlt = Double.MAX_VALUE
-        var maxAlt = Double.MIN_VALUE
-
-        for (m in 0..144) {
-            val t = t0.plusSeconds(m * 300L)
-            val pos = propagator.propagateTeme(molniyaTle, t)
-
-            assertFalse("Molniya pos must not be NaN", pos.x.isNaN())
-            val alt = pos.magnitude - Sgp4Propagator.RE_KM
-            if (alt < minAlt) minAlt = alt
-            if (alt > maxAlt) maxAlt = alt
+        assertTrue(molniyaTle.isDeepSpace)
+        try {
+            propagator.propagateTeme(molniyaTle, molniyaTle.epochInstant)
+            fail("Deep-space orbit must be rejected explicitly")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("Deep-space"))
         }
-
-        // Molniya perigee altitude ~500..1500 km, apogee altitude ~38000..42000 km
-        assertTrue("Molniya perigee must be within [400..2000 km]: was $minAlt", minAlt in 400.0..2000.0)
-        assertTrue("Molniya apogee must be within [38000..42000 km]: was $maxAlt", maxAlt in 38000.0..42000.0)
     }
 
     @Test

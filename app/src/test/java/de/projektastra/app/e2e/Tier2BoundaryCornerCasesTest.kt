@@ -1,5 +1,9 @@
 package de.projektastra.app.e2e
 
+import de.projektastra.app.hardware.CameraExposureController
+import de.projektastra.app.hardware.GloveModeZoomController
+import de.projektastra.app.hardware.OledThemeManager
+import de.projektastra.app.observation.SeeingScaleValidator
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant

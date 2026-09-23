@@ -7,6 +7,7 @@ uniform mat3 horizontalToJ2000;
 uniform float arMode;
 uniform float enhanced;
 uniform float strength;
+uniform vec3 optics;
 const float PI = 3.141592653589793;
 
 // Bilinear wrap at RA=12h without requiring power-of-two texture dimensions on GLES2.
@@ -21,6 +22,11 @@ vec3 sampleSky(vec2 uv) {
 
 void main() {
     vec2 pixel = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
+    vec2 centered = pixel - resolution * 0.5;
+    pixel = resolution * 0.5 + vec2(
+        optics.x * centered.x + optics.y * centered.y,
+        -optics.y * centered.x + optics.x * centered.y);
+    if (optics.z > 0.5) pixel.x = resolution.x - pixel.x;
     float az = view.x;
     float alt = view.y;
     vec3 direction;

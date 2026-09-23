@@ -2,6 +2,7 @@ package de.projektastra.app
 
 import io.github.cosinekitty.astronomy.Body
 import io.github.cosinekitty.astronomy.illumination
+import io.github.cosinekitty.astronomy.moonPhase
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -29,7 +30,8 @@ internal data class TonightWindow(
     val moonPhasePercent: Int,
     val moonSummary: String,
     val bestWindowSummary: String,
-    val weatherNotice: String
+    val weatherNotice: String,
+    val hasAstronomicalDarkness: Boolean = true
 )
 
 internal data class TonightTarget(
@@ -59,44 +61,35 @@ internal object TonightWindowCalculator {
         val nightDate = if (localNow.hour < 6) localNow.toLocalDate().minusDays(1) else localNow.toLocalDate()
         val nightDateText = dateFormatter.format(nightDate.atTime(20, 0).atZone(zone))
 
-        // Sample Sun altitude from 15:00 on nightDate to 09:00 on the following day (108 steps of 10 min)
+        // ponytail: Ten-minute samples limit event times to about ten-minute precision; use event search if minute precision is needed.
         val sampleStart = nightDate.atTime(15, 0).atZone(zone).toInstant()
         val sampleEnd = nightDate.plusDays(1).atTime(9, 0).atZone(zone).toInstant()
         val stepSeconds = 600L
 
         var sunsetInstant: Instant? = null
-        var duskNauticalInstant: Instant? = null
-        var duskAstroInstant: Instant? = null
-        var dawnAstroInstant: Instant? = null
-        var dawnNauticalInstant: Instant? = null
         var sunriseInstant: Instant? = null
 
         var currentInstant = sampleStart
         var prevSunAlt = SolarSystemCatalog.horizontal(Body.Sun, observer, currentInstant).altitude
+        var minSunAlt = prevSunAlt
+        var maxSunAlt = prevSunAlt
+        var darkStart: Instant? = if (prevSunAlt <= -18.0) sampleStart else null
+        val darkIntervals = mutableListOf<Pair<Instant, Instant>>()
 
-        while (!currentInstant.isAfter(sampleEnd)) {
-            val nextInstant = currentInstant.plusSeconds(stepSeconds)
+        while (currentInstant.isBefore(sampleEnd)) {
+            val nextInstant = currentInstant.plusSeconds(stepSeconds).coerceAtMost(sampleEnd)
             val nextSunAlt = SolarSystemCatalog.horizontal(Body.Sun, observer, nextInstant).altitude
+            minSunAlt = minOf(minSunAlt, nextSunAlt)
+            maxSunAlt = maxOf(maxSunAlt, nextSunAlt)
 
             // Sunset: Sun sinks below 0°
             if (prevSunAlt > 0.0 && nextSunAlt <= 0.0 && sunsetInstant == null) {
                 sunsetInstant = nextInstant
             }
-            // Nautical dusk: Sun sinks below -12°
-            if (prevSunAlt > -12.0 && nextSunAlt <= -12.0 && duskNauticalInstant == null) {
-                duskNauticalInstant = nextInstant
-            }
-            // Astronomical dusk: Sun sinks below -18°
-            if (prevSunAlt > -18.0 && nextSunAlt <= -18.0 && duskAstroInstant == null) {
-                duskAstroInstant = nextInstant
-            }
-            // Astronomical dawn: Sun rises above -18°
+            if (prevSunAlt > -18.0 && nextSunAlt <= -18.0) darkStart = nextInstant
             if (prevSunAlt <= -18.0 && nextSunAlt > -18.0) {
-                dawnAstroInstant = nextInstant
-            }
-            // Nautical dawn: Sun rises above -12°
-            if (prevSunAlt <= -12.0 && nextSunAlt > -12.0) {
-                dawnNauticalInstant = nextInstant
+                darkStart?.let { if (currentInstant.isAfter(it)) darkIntervals.add(it to currentInstant) }
+                darkStart = null
             }
             // Sunrise: Sun rises above 0°
             if (prevSunAlt <= 0.0 && nextSunAlt > 0.0 && sunriseInstant == null) {
@@ -106,29 +99,40 @@ internal object TonightWindowCalculator {
             prevSunAlt = nextSunAlt
             currentInstant = nextInstant
         }
+        darkStart?.let { darkIntervals.add(it to sampleEnd) }
 
-        val fallbackStart = nightDate.atTime(21, 30).atZone(zone).toInstant()
-        val fallbackEnd = nightDate.plusDays(1).atTime(5, 0).atZone(zone).toInstant()
-
-        val darknessStart = duskAstroInstant ?: duskNauticalInstant ?: sunsetInstant ?: fallbackStart
-        val darknessEnd = dawnAstroInstant ?: dawnNauticalInstant ?: sunriseInstant ?: fallbackEnd
-
-        val sunsetText = sunsetInstant?.let { timeFormatter.format(it) } ?: "ca. 19:30"
-        val sunriseText = sunriseInstant?.let { timeFormatter.format(it) } ?: "ca. 06:30"
-        val darknessText = "${timeFormatter.format(darknessStart)} – ${timeFormatter.format(darknessEnd)} Uhr"
+        val darkInterval = darkIntervals.maxByOrNull { (start, end) -> end.epochSecond - start.epochSecond }
+        val hasAstronomicalDarkness = darkInterval != null
+        // Keep the existing non-null time contract; an empty interval is never evaluated for targets.
+        val referenceInstant = nightDate.plusDays(1).atStartOfDay(zone).toInstant()
+        val darknessStart = darkInterval?.first ?: referenceInstant
+        val darknessEnd = darkInterval?.second ?: referenceInstant
+        val missingEvent = when {
+            minSunAlt > 0.0 -> "entfällt (Polartag)"
+            maxSunAlt < 0.0 -> "entfällt (Polarnacht)"
+            else -> "kein Ereignis im Nachtfenster"
+        }
+        val sunsetText = sunsetInstant?.let { timeFormatter.format(it) } ?: missingEvent
+        val sunriseText = sunriseInstant?.let { timeFormatter.format(it) } ?: missingEvent
+        val darknessText = if (hasAstronomicalDarkness) {
+            "${timeFormatter.format(darknessStart)} – ${timeFormatter.format(darknessEnd)} Uhr" +
+                if (darknessStart == sampleStart && darknessEnd == sampleEnd) " (durchgehend im Nachtfenster)" else ""
+        } else {
+            "Keine astronomische Dunkelheit heute Nacht"
+        }
 
         // Moon calculations
-        val midpoint = Instant.ofEpochMilli((darknessStart.toEpochMilli() + darknessEnd.toEpochMilli()) / 2)
-        val moonIllum = runCatching { illumination(Body.Moon, midpoint.toAstroTime()) }.getOrNull()
-        val moonFraction = moonIllum?.phaseFraction ?: 0.5
+        val midpoint = darknessStart.plusMillis((darknessEnd.toEpochMilli() - darknessStart.toEpochMilli()) / 2)
+        val moonFraction = illumination(Body.Moon, midpoint.toAstroTime()).phaseFraction
+        val waxing = moonPhase(midpoint.toAstroTime()) < 180.0
         val moonPercent = (moonFraction * 100.0).roundToInt()
 
         val phaseName = when {
             moonFraction < 0.04 -> "Neumond"
-            moonFraction < 0.35 -> "Zunehmende Sichel"
-            moonFraction < 0.65 -> "Halbmond"
-            moonFraction < 0.96 -> "Dreiviertelmond"
-            else -> "Vollmond"
+            moonFraction >= 0.96 -> "Vollmond"
+            moonFraction < 0.35 -> if (waxing) "Zunehmende Sichel" else "Abnehmende Sichel"
+            moonFraction < 0.65 -> if (waxing) "Erstes Viertel" else "Letztes Viertel"
+            else -> if (waxing) "Zunehmender Mond" else "Abnehmender Mond"
         }
 
         val moonAltStart = SolarSystemCatalog.horizontal(Body.Moon, observer, darknessStart).altitude
@@ -136,6 +140,7 @@ internal object TonightWindowCalculator {
         val moonAltEnd = SolarSystemCatalog.horizontal(Body.Moon, observer, darknessEnd).altitude
 
         val moonSummary = when {
+            !hasAstronomicalDarkness -> "$phaseName ($moonPercent %) · Keine astronomische Nacht"
             moonPercent <= 5 -> "Neumond · Kein störendes Mondlicht"
             moonAltStart <= 0 && moonAltMid <= 0 && moonAltEnd <= 0 ->
                 "$phaseName ($moonPercent %) · Unter dem Horizont (dunkler Himmel)"
@@ -151,10 +156,13 @@ internal object TonightWindowCalculator {
         val weatherNotice: String
         val bestWindowSummary: String
 
-        if (weather != null && weather.forecast.isNotEmpty()) {
+        if (!hasAstronomicalDarkness) {
+            weatherNotice = if (weather == null) "Wetter offline" else "Wetterprognose ersetzt keine astronomische Dunkelheit"
+            bestWindowSummary = "Keine astronomische Dunkelheit für Deep-Sky-Beobachtung"
+        } else if (weather != null && weather.forecast.isNotEmpty()) {
             val nightForecasts = weather.forecast.filter {
                 val epoch = it.instant.epochSecond
-                epoch >= darknessStart.epochSecond - 3600 && epoch <= darknessEnd.epochSecond + 3600
+                epoch >= darknessStart.epochSecond && epoch <= darknessEnd.epochSecond
             }
             if (nightForecasts.isNotEmpty()) {
                 val avgClouds = nightForecasts.map { it.cloudCover }.average().roundToInt()
@@ -178,7 +186,7 @@ internal object TonightWindowCalculator {
                 bestWindowSummary = "Astronomische Dunkelheit: $darknessText"
             }
         } else {
-            weatherNotice = "Wetter offline · Reine astronomische Dunkelheit ohne Bewölkungsprognose"
+            weatherNotice = "Wetter offline · Astronomische Dunkelheit ohne Bewölkungsprognose"
             bestWindowSummary = "Astronomische Dunkelheit: $darknessText"
         }
 
@@ -193,7 +201,8 @@ internal object TonightWindowCalculator {
             moonPhasePercent = moonPercent,
             moonSummary = moonSummary,
             bestWindowSummary = bestWindowSummary,
-            weatherNotice = weatherNotice
+            weatherNotice = weatherNotice,
+            hasAstronomicalDarkness = hasAstronomicalDarkness
         )
     }
 }
@@ -407,6 +416,7 @@ internal object TonightTargetEngine {
         equipmentFilter: ObservationEquipment = ObservationEquipment.ALL,
         zone: ZoneId = ZoneId.systemDefault()
     ): List<TonightTarget> {
+        if (!window.hasAstronomicalDarkness) return emptyList()
         val timeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.GERMAN).withZone(zone)
         val sampleStart = window.darknessStart
         val sampleEnd = window.darknessEnd

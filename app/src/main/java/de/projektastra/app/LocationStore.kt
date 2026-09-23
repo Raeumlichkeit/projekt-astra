@@ -35,18 +35,18 @@ internal object LocationStore {
         val lat = latStr?.toDoubleOrNull() ?: return null
         val lon = lonStr?.toDoubleOrNull() ?: return null
         val alt = altStr?.toDoubleOrNull() ?: 0.0
-        if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
+        if (lat !in -90.0..90.0 || lon !in -180.0..180.0 || !alt.isFinite()) return null
         return GeoPoint(lat, lon, alt)
     }
 
     /**
      * Returns whether saving the observation location is enabled by user preference.
-     * Defaults to true (opt-out model: once granted, it is remembered unless explicitly toggled off).
+     * Defaults to false: permission to use GPS is not consent to persist coordinates.
      */
     fun isRememberEnabled(context: Context): Boolean {
         val prefs = runCatching { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }.getOrNull()
-            ?: return true
-        return prefs.getBoolean(KEY_REMEMBER, true)
+            ?: return false
+        return prefs.getBoolean(KEY_REMEMBER, false)
     }
 
     /**
@@ -73,7 +73,12 @@ internal object LocationStore {
     fun getSavedLocation(context: Context): GeoPoint? {
         val prefs = runCatching { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }.getOrNull()
             ?: return null
-        val remember = prefs.getBoolean(KEY_REMEMBER, true)
+        val remember = prefs.getBoolean(KEY_REMEMBER, false)
+        if (!remember) {
+            // Older builds stored coordinates even without an explicit preference.
+            clearLocation(context)
+            return null
+        }
         val hasSaved = prefs.getBoolean(KEY_HAS_SAVED, false)
         val lat = prefs.getString(KEY_LATITUDE, null)
         val lon = prefs.getString(KEY_LONGITUDE, null)
@@ -87,7 +92,9 @@ internal object LocationStore {
     fun saveLocation(context: Context, point: GeoPoint) {
         val prefs = runCatching { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }.getOrNull()
             ?: return
-        if (!prefs.getBoolean(KEY_REMEMBER, true)) return
+        if (!prefs.getBoolean(KEY_REMEMBER, false)) return
+        require(point.latitude in -90.0..90.0 && point.longitude in -180.0..180.0 &&
+            point.altitudeMeters.isFinite()) { "Ungültiger Standort" }
         prefs.edit {
             putBoolean(KEY_HAS_SAVED, true)
             putString(KEY_LATITUDE, point.latitude.toString())

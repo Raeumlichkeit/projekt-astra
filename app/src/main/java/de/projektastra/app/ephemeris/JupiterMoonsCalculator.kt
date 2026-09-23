@@ -2,6 +2,7 @@ package de.projektastra.app.ephemeris
 
 import io.github.cosinekitty.astronomy.Aberration
 import io.github.cosinekitty.astronomy.Body
+import io.github.cosinekitty.astronomy.C_AUDAY
 import io.github.cosinekitty.astronomy.Time
 import io.github.cosinekitty.astronomy.Vector
 import io.github.cosinekitty.astronomy.geoVector
@@ -59,25 +60,32 @@ internal object JupiterMoonsCalculator {
 
     fun calculate(time: Instant): JupiterSystemState {
         val astroTime = Time.fromMillisecondsSince1970(time.toEpochMilli())
-        val moonsInfo = jupiterMoons(astroTime)
-
-        // 1. Line-of-sight from Earth to Jupiter
+        // geoVector is already backdated for Jupiter's light travel time.
+        // jupiterMoons is geometric; its documented caller must backdate explicitly.
+        // https://github.com/cosinekitty/astronomy/blob/v2.1.19/source/kotlin/src/main/kotlin/io/github/cosinekitty/astronomy/astronomy.kt
         val rJup = geoVector(Body.Jupiter, astroTime, Aberration.Corrected)
         val delta = rJup.length()
-        val eLos = rJup.div(delta) // Unit vector Earth -> Jupiter
+        val emissionMillis = time.toEpochMilli() - (delta / C_AUDAY * 86_400_000.0).toLong()
+        val emissionTime = Time.fromMillisecondsSince1970(emissionMillis)
+        val moonsInfo = jupiterMoons(emissionTime)
+
+        // 1. Line-of-sight from Earth to Jupiter
+        // Align Vector.t with the other emission-time vectors; its spatial
+        // components still describe the observed Earth -> Jupiter direction.
+        val eLos = Vector(rJup.x / delta, rJup.y / delta, rJup.z / delta, emissionTime)
 
         // 2. Vector Sun -> Jupiter (shadow cone axis)
-        val rSunJup = helioVector(Body.Jupiter, astroTime)
+        val rSunJup = helioVector(Body.Jupiter, emissionTime)
         val rHelio = rSunJup.length()
         val sAxis = rSunJup.div(rHelio) // Unit vector Sun -> Jupiter
 
         // 3. Jupiter orientation on sky plane
-        val axisInfo = rotationAxis(Body.Jupiter, astroTime)
+        val axisInfo = rotationAxis(Body.Jupiter, emissionTime)
         val north = axisInfo.north
         val northDotLos = north.dot(eLos)
         val northProj = north.minus(scale(eLos, northDotLos))
         val northProjLen = northProj.length()
-        val uY = if (northProjLen > 1e-6) northProj.div(northProjLen) else Vector(0.0, 1.0, 0.0, astroTime)
+        val uY = if (northProjLen > 1e-6) northProj.div(northProjLen) else Vector(0.0, 1.0, 0.0, emissionTime)
         val uX = cross(uY, eLos)
 
         val rjArcsec = (RJ_EQ_AU / delta) * ARCSEC_PER_RAD

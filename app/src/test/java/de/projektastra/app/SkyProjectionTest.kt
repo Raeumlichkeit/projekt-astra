@@ -13,6 +13,16 @@ class SkyProjectionTest {
         assertEquals(y, actual.y, 0.001f)
     }
 
+    @Test fun opticsMarginKeepsGeometryUntilAfterRotation() {
+        val rotatedViewport = SkyProjection(0.0, 0.0, 200f, 300f, 40.0,
+            perspective = true, clipPadding = 200f)
+        val outside = rotatedViewport.coordinates(Offset(250f, 150f))!!
+        val point = rotatedViewport.point(outside)!!
+        assertEquals(250f, point.x, 0.01f)
+        assertFalse(rotatedViewport.contains(point)) // The final screen rectangle remains unchanged.
+        assertTrue(rotatedViewport.segments(sky(0.0), outside).isNotEmpty())
+    }
+
     @Test fun visiblePortionSurvivesAtEveryEdge() {
         val cases = listOf(
             sky(-30.0) to Offset(0f, 100f),

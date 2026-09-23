@@ -6,12 +6,56 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.File
 import java.time.Instant
 import java.util.UUID
 
 class ObservationLogbookTest {
+
+    @Test
+    fun importedPhotoNamesCannotEscapeThePrivatePhotoDirectory() {
+        listOf("../astra_settings.xml", "../../shared_prefs/astra_observations.xml", "/data/local/file",
+            "..\\private.jpg", "C:\\private.jpg", ".", "..", "photo/child.jpg", "photo\u0000.jpg").forEach { name ->
+            assertFalse(name, ObservationLogbookStore.isSafePhotoFileName(name))
+            val json = JSONObject().put("photoFileName", name)
+            assertNull(ObservationLogEntry.fromJsonObject(json).photoFileName)
+        }
+        assertTrue(ObservationLogbookStore.isSafePhotoFileName("andromeda_capture.jpg"))
+    }
+
+    @Test
+    fun impossibleImportedTimesAreRejectedBeforePreviewFormatting() {
+        val json = JSONObject().put("timestampEpochSeconds", Long.MAX_VALUE)
+        assertThrows(IllegalArgumentException::class.java) { ObservationLogEntry.fromJsonObject(json) }
+        assertTrue(ObservationLogbookStore.parseEntriesJson("[$json]").isEmpty())
+        assertThrows(IllegalArgumentException::class.java) {
+            ObservationLogbookStore.parseEntriesJson("[$json]", strict = true)
+        }
+    }
+
+    @Test
+    fun corruptStorageCannotBeMistakenForAnEmptyLogbook() {
+        listOf("", " ", "{}", "{\"entries\": [\"broken\"]}").forEach { json ->
+            assertThrows(Exception::class.java) { ObservationLogbookStore.parseEntriesJson(json, strict = true) }
+        }
+        assertTrue(ObservationLogbookStore.parseEntriesJson("{\"entries\": []}", strict = true).isEmpty())
+    }
+
+    @Test
+    fun importSizeLimitCountsUtf8BytesNotCharacters() {
+        val text = "ä".repeat(ObservationLogbookStore.MAX_JSON_BYTES / 2 + 1)
+        assertTrue(text.length < ObservationLogbookStore.MAX_JSON_BYTES)
+        assertThrows(IllegalArgumentException::class.java) { ObservationLogbookStore.parseEntriesJson(text) }
+    }
+
+    @Test
+    fun invalidImportedLocationDoesNotBecomeAPartialCoordinatePair() {
+        val entry = ObservationLogEntry.fromJsonObject(JSONObject().put("latitude", 200).put("longitude", 13.4))
+        assertNull(entry.latitude)
+        assertNull(entry.longitude)
+    }
 
     @Test
     fun observationLogEntry_serializationRoundTripPreservesAllFields() {

@@ -31,7 +31,8 @@ internal data class SkyTextureState(
     val altitude: Double,
     val fov: Double,
     val arMode: Boolean,
-    val appearance: SkyAppearance
+    val appearance: SkyAppearance,
+    val optics: OpticsSettings = OpticsSettings()
 )
 
 @Composable
@@ -295,6 +296,9 @@ private class SkyTextureWorker(
             Math.toRadians(state.altitude).toFloat(), Math.toRadians(state.fov).toFloat())
         GLES20.glUniformMatrix3fv(uniform("horizontalToJ2000"), 1, false, state.frame.horizontalToJ2000, 0)
         GLES20.glUniform1f(uniform("arMode"), if (state.arMode) 1f else 0f)
+        val rotation = Math.toRadians(if (state.arMode) 0.0 else state.optics.rotationDegrees.toDouble())
+        GLES20.glUniform3f(uniform("optics"), kotlin.math.cos(rotation).toFloat(),
+            kotlin.math.sin(rotation).toFloat(), if (!state.arMode && state.optics.mirrored) 1f else 0f)
         GLES20.glUniform1f(uniform("enhanced"), if (appearance.mode == MilkyWayMode.PHOTO && !state.arMode) 1f else 0f)
         val strength = if (appearance.mode == MilkyWayMode.OFF || (state.arMode && !appearance.showInAr)) 0f else appearance.intensity
         GLES20.glUniform1f(uniform("strength"), strength)

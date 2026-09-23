@@ -1,12 +1,24 @@
 # Aufgaben und Prioritäten
 
-Stand: 20. September 2026 · Aktueller Ausbau: Version 1.1.9-pre.12.
+Stand: 23. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.15.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
 **Release-Regel:** Jede größere funktionale, technische oder sicherheitsrelevante Änderung wird zuerst als eigener GitHub-Pre-Release mit Test-APK beziehungsweise Bundle veröffentlicht. Der verbindliche Ablauf steht in [RELEASE_PROCESS.md](RELEASE_PROCESS.md). Nach den Tests auf mehreren Geräten und der Korrektur der Rückmeldungen folgt erst der reguläre Release. Kleine Dokumentations- oder rein interne Teständerungen dürfen gesammelt werden.
 
 ## P1 – Als Nächstes
+
+### Review-Korrekturen nach dem Beta-Merge
+
+- [x] Logbuch atomisch speichern, beschädigte Bestandsdaten vor Überschreiben schützen und Importpfade/Dateigrößen/Zeitpunkte validieren.
+- [x] Fotoentfernung erst beim Speichern übernehmen; historische Beobachtungskoordinaten beim Bearbeiten erhalten.
+- [x] Standort-Merken als echtes Opt-in und „Vergessen“ inklusive Sitzung/Widget konsistent behandeln; Datenschutzbeschreibung ergänzen.
+- [x] AR-Zielprojektion, Optik-/Texturorientierung, enge Sichtfelder und Gelände-Verdeckung korrigieren.
+- [x] SGP4 gegen unabhängige Referenzen prüfen, Jupiter-Lichtlaufzeit berücksichtigen und fehlende astronomische Dunkelheit ausdrücklich anzeigen.
+- [x] Unbenutzte Helfer und doppelte Testmodelle reduzieren; echte Android-Regressionsprüfungen ergänzen.
+- [ ] Korrekturstand auf weiteren realen Geräten prüfen: Kamera/Sensoren, alte Android-Versionen, schwache GPUs, Standort-Vergessen und Logbuch-Import/Abbrechen. Akkutests bleiben P3.
+
+Prüfergebnisse und Einschränkungen: [1.1.9-pre.15](play-store/pre-release-1.1.9-pre.15.md).
 
 ### 1. Objektsuche und Nachführen
 

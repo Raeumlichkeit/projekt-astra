@@ -15,15 +15,18 @@ val keystoreProperties = Properties().apply {
 
 abstract class PreparePrivacyAssets : DefaultTask() {
     @get:InputFile abstract val policy: RegularFileProperty
+    @get:InputFile abstract val satelliteLicense: RegularFileProperty
     @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
     @TaskAction fun generate() {
         val dir = outputDirectory.get().asFile.apply { mkdirs() }
         policy.get().asFile.copyTo(dir.resolve("privacy-policy.html"), overwrite = true)
+        satelliteLicense.get().asFile.copyTo(dir.resolve("satellite-js-MIT.txt"), overwrite = true)
     }
 }
 
 val privacyAssets = tasks.register<PreparePrivacyAssets>("preparePrivacyAssets") {
     policy.set(rootProject.layout.projectDirectory.file("play-store/privacy-policy.html"))
+    satelliteLicense.set(rootProject.layout.projectDirectory.file("LICENSES/satellite-js-MIT.txt"))
     outputDirectory.set(layout.buildDirectory.dir("generated/privacyAssets"))
 }
 
@@ -35,8 +38,8 @@ android {
         applicationId = "de.projektastra.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 32
-        versionName = "1.1.9-pre.14"
+        versionCode = 33
+        versionName = "1.1.9-pre.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -112,9 +115,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.camera:camera-camera2:1.6.2")
     implementation("androidx.camera:camera-lifecycle:1.6.2")
     implementation("androidx.camera:camera-view:1.6.2")
@@ -131,6 +132,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Used by defaultConfig's instrumentation runner, previously pulled in by Compose test tooling.
+    androidTestImplementation("androidx.test:runner:1.5.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }

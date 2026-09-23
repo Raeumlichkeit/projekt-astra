@@ -1,5 +1,7 @@
 package de.projektastra.app.ephemeris
 
+import io.github.cosinekitty.astronomy.Time
+import io.github.cosinekitty.astronomy.jupiterMoons
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -7,6 +9,28 @@ import org.junit.Test
 import java.time.Instant
 
 class JupiterMoonsCalculatorTest {
+
+    @Test
+    fun `observed moon positions use Jupiter light travel time`() {
+        // Astronomy Engine 2.1.19 jupiterMoons gives geometric EQJ vectors.
+        // Its API explicitly requires caller light-time correction for Earth views:
+        // https://github.com/cosinekitty/astronomy/blob/v2.1.19/source/kotlin/src/main/kotlin/io/github/cosinekitty/astronomy/astronomy.kt
+        // Fixed upstream Io x coordinates below are at retarded emission times.
+        val cases = listOf(
+            Triple("2026-09-20T12:00:00Z", -5.109122334091501e-4, -57.66038310616786),
+            Triple("2026-12-01T00:00:00Z", -9.562262710807543e-4, 112.18739645415337)
+        )
+        cases.forEach { (iso, referenceIoXAu, expectedXArcsec) ->
+            val observed = Instant.parse(iso)
+            val state = JupiterMoonsCalculator.calculate(observed)
+            val lightMinutes = state.distanceAu / io.github.cosinekitty.astronomy.C_AUDAY * 1440.0
+            assertTrue("Jupiter light time: $lightMinutes min", lightMinutes in 33.0..54.0)
+            val emission = Time.fromMillisecondsSince1970(
+                observed.toEpochMilli() - (lightMinutes * 60_000.0).toLong())
+            assertEquals(referenceIoXAu, jupiterMoons(emission).io.position().x, 1e-12)
+            assertEquals(expectedXArcsec, state.io.xArcsec, 0.02)
+        }
+    }
 
     @Test
     fun `computed moon offsets remain within physical bounds`() {
@@ -30,7 +54,7 @@ class JupiterMoonsCalculatorTest {
 
     @Test
     fun `detects Io eclipse at verified timestamp`() {
-        val instant = Instant.parse("2026-09-20T13:45:00Z")
+        val instant = Instant.parse("2026-09-20T14:30:00Z")
         val jupiter = JupiterMoonsCalculator.calculate(instant)
 
         assertEquals(JupiterMoonEvent.ECLIPSE, jupiter.io.event)
@@ -49,14 +73,14 @@ class JupiterMoonsCalculatorTest {
 
     @Test
     fun `MoonState preserves isInEclipse boolean flag during shadow cone passage`() {
-        val instant = Instant.parse("2026-09-20T13:45:00Z")
+        val instant = Instant.parse("2026-09-20T14:30:00Z")
         val jupiter = JupiterMoonsCalculator.calculate(instant)
         assertTrue(jupiter.io.isInEclipse)
     }
 
     @Test
     fun `detects Europa shadow transit ingress before moon transit`() {
-        val instant = Instant.parse("2026-09-21T01:30:00Z")
+        val instant = Instant.parse("2026-09-21T02:15:00Z")
         val jupiter = JupiterMoonsCalculator.calculate(instant)
 
         assertEquals(JupiterMoonEvent.SHADOW_TRANSIT, jupiter.europa.event)

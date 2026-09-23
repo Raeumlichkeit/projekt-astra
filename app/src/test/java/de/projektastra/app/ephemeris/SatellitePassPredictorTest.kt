@@ -20,6 +20,7 @@ class SatellitePassPredictorTest {
     fun `predicts passes and verifies geometric properties`() {
         val observer = GeoPoint(52.52, 13.405, 34.0) // Berlin
         val startTime = issTle.epochInstant
+        val propagator = Sgp4Propagator()
         // Predict over 72 hours (plenty of passes for an orbit with period ~92m and inc 51.6°)
         val passes = predictor.predictPasses(issTle, observer, startTime, durationHours = 72, minElevationDegrees = 10.0)
 
@@ -34,8 +35,12 @@ class SatellitePassPredictorTest {
                 pass.maxElevationTime <= pass.setTime)
             assertTrue("Peak elevation above threshold: ${pass.maxElevation}",
                 pass.maxElevation >= 10.0)
-            assertTrue("Duration between 1 and 20 minutes: ${pass.durationSeconds}",
-                pass.durationSeconds in 60..1200)
+            assertTrue("Pass duration must be positive and at most 20 minutes: ${pass.durationSeconds}",
+                pass.durationSeconds in 1L..1200L)
+            val riseAltitude = propagator.propagate(issTle, pass.riseTime, observer)!!.coordinates.altitude
+            val setAltitude = propagator.propagate(issTle, pass.setTime, observer)!!.coordinates.altitude
+            assertEquals("Rise crosses the 10-degree threshold", 10.0, riseAltitude, 0.2)
+            assertEquals("Set crosses the 10-degree threshold", 10.0, setAltitude, 0.2)
             assertTrue("Max magnitude within visual bounds: ${pass.maxMagnitude}",
                 pass.maxMagnitude in -4.0..4.0)
 

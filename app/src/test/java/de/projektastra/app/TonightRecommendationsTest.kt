@@ -41,13 +41,87 @@ class TonightRecommendationsTest {
         )
 
         assertNotNull(window.nightDateText)
+        assertTrue(window.hasAstronomicalDarkness)
+        assertTrue(window.darknessEnd.isAfter(window.darknessStart))
+        assertTrue(SolarSystemCatalog.horizontal(Body.Sun, berlin, window.darknessStart).altitude <= -18.0)
+        assertTrue(SolarSystemCatalog.horizontal(Body.Sun, berlin, window.darknessEnd).altitude <= -18.0)
         assertTrue(window.nightDateText.isNotEmpty())
         assertTrue("SunsetText should have HH:mm format", window.sunsetText.contains(":"))
         assertTrue("SunrisesText should have HH:mm format", window.sunrisesText.contains(":"))
         assertTrue("DarknessText should contain time range", window.darknessText.contains("–") || window.darknessText.contains("Dunkelheit"))
         assertTrue("MoonPhasePercent between 0 and 100", window.moonPhasePercent in 0..100)
         assertTrue("MoonPhaseName should not be empty", window.moonPhaseName.isNotEmpty())
-        assertTrue("Offline notice when weather is null", window.weatherNotice.contains("Offline") || window.weatherNotice.contains("astronomisch"))
+        assertTrue("Offline notice when weather is null", window.weatherNotice.contains("offline", ignoreCase = true))
+    }
+
+    @Test
+    fun berlinMidsummer_hasNoAstronomicalWindowEvenWithClearWeather() {
+        val instant = Instant.parse("2026-06-21T20:00:00Z")
+        val weather = WeatherSnapshot(
+            temperature = 18.0,
+            cloudCover = 0,
+            windSpeed = 1.0,
+            visibility = 20000.0,
+            updatedAt = "21.06. 22:00 CEST",
+            forecast = listOf(HourlyForecast("23:00", 1, 0, 0, 1.0, 20000.0, instant.plusSeconds(3600))),
+            observedAt = instant,
+            fetchedAt = instant
+        )
+        val window = TonightWindowCalculator.calculate(berlin, instant, weather, zone)
+
+        assertFalse(window.hasAstronomicalDarkness)
+        assertEquals(window.darknessStart, window.darknessEnd)
+        assertTrue(window.darknessText.contains("Keine astronomische Dunkelheit"))
+        assertFalse(window.bestWindowSummary.contains("Optimale"))
+        assertTrue(TonightTargetEngine.evaluate(berlin, window, instant).isEmpty())
+    }
+
+    @Test
+    fun polarSummer_hasNoWindowOrFalseRecommendations() {
+        val observer = GeoPoint(89.0, 15.0, 0.0)
+        val instant = Instant.parse("2026-06-21T21:00:00Z")
+        val window = TonightWindowCalculator.calculate(observer, instant, zone = ZoneId.of("Arctic/Longyearbyen"))
+
+        assertFalse(window.hasAstronomicalDarkness)
+        assertTrue(window.sunsetText.contains("Polartag"))
+        assertTrue(window.sunrisesText.contains("Polartag"))
+        assertTrue(TonightTargetEngine.evaluate(observer, window, instant).isEmpty())
+    }
+
+    @Test
+    fun polarWinter_hasFullAstronomicalWindowAndNoInventedSunEvents() {
+        val observer = GeoPoint(89.0, 15.0, 0.0)
+        val instant = Instant.parse("2026-12-21T21:00:00Z")
+        val arcticZone = ZoneId.of("Arctic/Longyearbyen")
+        val window = TonightWindowCalculator.calculate(observer, instant, zone = arcticZone)
+
+        assertTrue(window.hasAstronomicalDarkness)
+        assertEquals(18 * 3600L, window.darknessEnd.epochSecond - window.darknessStart.epochSecond)
+        assertTrue(SolarSystemCatalog.horizontal(Body.Sun, observer, window.darknessStart).altitude <= -18.0)
+        assertTrue(SolarSystemCatalog.horizontal(Body.Sun, observer, window.darknessEnd).altitude <= -18.0)
+        assertTrue(window.darknessText.contains("durchgehend"))
+        assertTrue(window.sunsetText.contains("Polarnacht"))
+        assertTrue(window.sunrisesText.contains("Polarnacht"))
+    }
+
+    @Test
+    fun moonPhaseDistinguishesWaxingAndWaning() {
+        val waxing = TonightWindowCalculator.calculate(berlin, Instant.parse("2026-01-25T20:00:00Z"), zone = zone)
+        val waning = TonightWindowCalculator.calculate(berlin, Instant.parse("2026-02-09T20:00:00Z"), zone = zone)
+
+        assertTrue(waxing.moonPhaseName.startsWith("Zunehm") || waxing.moonPhaseName == "Erstes Viertel")
+        assertTrue(waning.moonPhaseName.startsWith("Abnehm") || waning.moonPhaseName == "Letztes Viertel")
+    }
+
+    @Test
+    fun localSixAmBoundarySelectsCorrectNightAcrossDstChange() {
+        val before = TonightWindowCalculator.calculate(berlin, Instant.parse("2026-10-25T04:30:00Z"), zone = zone)
+        val after = TonightWindowCalculator.calculate(berlin, Instant.parse("2026-10-25T05:30:00Z"), zone = zone)
+
+        assertTrue(before.nightDateText.contains("24. Oktober"))
+        assertTrue(after.nightDateText.contains("25. Oktober"))
+        assertTrue(before.hasAstronomicalDarkness)
+        assertTrue(after.hasAstronomicalDarkness)
     }
 
     @Test

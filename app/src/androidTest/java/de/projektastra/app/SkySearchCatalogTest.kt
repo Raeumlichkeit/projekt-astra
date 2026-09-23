@@ -2,7 +2,10 @@ package de.projektastra.app
 
 import android.content.ContextWrapper
 import android.content.res.AssetManager
+import android.graphics.Rect
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -91,18 +94,57 @@ class SkySearchCatalogTest {
                     SystemClock.sleep(100)
                 }
             }
+            fun scrollToPolaris() {
+                fun favoriteVisible(): Boolean {
+                    val visible = nodes(instrumentation.uiAutomation.rootInActiveWindow).filter { it.isVisibleToUser }
+                    return visible.any { it.text?.toString() == "Polaris" } &&
+                        visible.any { it.text?.toString()?.contains("HIP 11767") == true }
+                }
+                fun swipeUp(node: AccessibilityNodeInfo) {
+                    val bounds = Rect().also(node::getBoundsInScreen)
+                    check(bounds.height() > 100) { "Plan scroll region is too small: $bounds" }
+                    val x = bounds.centerX().toFloat()
+                    val start = bounds.top + bounds.height() * 0.75f
+                    val end = bounds.top + bounds.height() * 0.25f
+                    val downTime = SystemClock.uptimeMillis()
+                    fun inject(action: Int, y: Float) {
+                        val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+                        event.source = InputDevice.SOURCE_TOUCHSCREEN
+                        try { check(instrumentation.uiAutomation.injectInputEvent(event, true)) { "Plan swipe failed: ${texts()}" } }
+                        finally { event.recycle() }
+                    }
+                    inject(MotionEvent.ACTION_DOWN, start)
+                    for (step in 1..8) {
+                        SystemClock.sleep(16)
+                        inject(MotionEvent.ACTION_MOVE, start + (end - start) * step / 8)
+                    }
+                    inject(MotionEvent.ACTION_UP, end)
+                }
+                repeat(30) {
+                    if (favoriteVisible()) return
+                    val scrollable = nodes(instrumentation.uiAutomation.rootInActiveWindow)
+                        .filter { it.isVisibleToUser && it.isScrollable }
+                        .maxByOrNull { node -> Rect().also(node::getBoundsInScreen).height() }
+                    checkNotNull(scrollable) { "Plan cannot scroll to Polaris: ${texts()}" }
+                    swipeUp(scrollable)
+                    SystemClock.sleep(100)
+                }
+                check(favoriteVisible()) { "Polaris favorite was not found in the plan: ${texts()}" }
+            }
             await { store.snapshot.value.failed && texts().contains("Katalog erneut laden") }
             assertTrue(texts().contains("1 vorgemerkte Objekte"))
             assertFalse(texts().contains("Tippe ein Objekt in der Sternkarte"))
             var retry = nodes(instrumentation.uiAutomation.rootInActiveWindow).first { it.text?.toString() == "Katalog erneut laden" }
             while (!retry.isClickable) retry = checkNotNull(retry.parent)
             assertTrue(retry.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            await { store.snapshot.value.complete && texts().contains("Polaris") }
+            await { store.snapshot.value.complete && !texts().contains("Katalog erneut laden") }
+            scrollToPolaris()
             val complete = store.snapshot.value
             scenario.onActivity { showingPlan.value = false }
             await { texts().contains("Andere Ansicht") }
             scenario.onActivity { showingPlan.value = true }
-            await { texts().contains("Polaris") }
+            await { texts().contains("1 vorgemerkte Objekte") }
+            scrollToPolaris()
             assertSame(complete, store.snapshot.value)
             assertEquals(2, attempts.get())
             assertEquals(0, removals.get())

@@ -97,6 +97,17 @@ Source: https://github.com/TomRoush/PdfBox-Android · License: Apache-2.0.
   galactic-coordinate rotation, and local solar/lunar eclipse calculations.
 - Full license text: `LICENSES/Astronomy-Engine-MIT.txt`
 
+## satellite.js 6.0.0 — near-Earth SGP4 port
+
+- Source: https://github.com/shashwatak/satellite-js/tree/6.0.0/src/propagation
+- License: MIT, Copyright (C) 2013 Shashwat Kandadai, UCSC Jack Baskin School of Engineering.
+- `NearEarthSgp4.kt` adapts `initl.ts`, `sgp4init.ts` and `sgp4.ts` to Kotlin for
+  near-Earth orbits only. Deep-space periods (225 minutes or more) are rejected;
+  this is not an SDP4 implementation. No network requests or JavaScript runtime are added.
+- Full license: `LICENSES/satellite-js-MIT.txt`, also bundled as an Android asset.
+- Reference checks: Vallado verification vectors (`00005`, `06251`) and the
+  independent Python `sgp4` 2.24 WGS-72 implementation for a circular-orbit fixture.
+
 ## Night-light map and numerical estimate
 
 - Black Marble Nighttime Lights (annual 2016, VIIRS, Suomi NPP) imagery: NASA Global Imagery

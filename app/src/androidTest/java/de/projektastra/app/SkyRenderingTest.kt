@@ -42,12 +42,12 @@ class SkyRenderingTest {
 
     @After fun closeActivity() { scenario?.close() }
 
-    private fun render(content: @Composable (Modifier) -> Unit) {
+    private fun render(widthDp: Int = 300, heightDp: Int = 200, content: @Composable (Modifier) -> Unit) {
         val ready = CountDownLatch(1)
         scenario = ActivityScenario.launch(ComponentActivity::class.java).also { scene ->
             scene.onActivity { activity ->
                 activity.setContent {
-                    Box(Modifier.requiredSize(300.dp, 200.dp)) {
+                    Box(Modifier.requiredSize(widthDp.dp, heightDp.dp)) {
                         content(Modifier.onGloballyPositioned { layout ->
                             val position = layout.positionInWindow()
                             bounds = Rect(position.x.roundToInt(), position.y.roundToInt(),
@@ -188,6 +188,35 @@ class SkyRenderingTest {
         val pixels = capture()
         assertTrue("Object names must not appear over the ground", (0 until pixels.height).all { y ->
             (0 until pixels.width).all { x -> Color.red(pixels.getPixel(x, y)) < 30 }
+        })
+    }
+
+    @Test fun rotatedPortraitSkyKeepsStarFromOutsideTheOriginalViewport() {
+        render(200, 300) { modifier ->
+            SkyCanvas(emptyList(), 0.0, 50.0, 40.0, false, emptyList(), emptyList(),
+                false, null, false, { _, _, _ -> }, {}, modifier)
+        }
+        val first = capture()
+        val width = first.width
+        val height = first.height
+        first.recycle()
+        scenario!!.close()
+        scenario = null
+        val unrotated = Offset(width / 2f + height / 2f - 12f, height / 2f)
+        assertTrue(unrotated.x > width)
+        val position = SkyProjection(0.0, 50.0, width.toFloat(), height.toFloat(), 40.0, true)
+            .coordinates(unrotated)!!
+        val star = VisibleObject(CelestialObject("Randstern", "EDGE", 0.0, 0.0, 0.0, 1.0, "A1V"), position)
+        render(200, 300) { modifier ->
+            SkyCanvas(listOf(star), 0.0, 50.0, 40.0, false, emptyList(), emptyList(),
+                false, null, false, { _, _, _ -> }, {}, modifier,
+                opticsSettings = OpticsSettings(rotationDegrees = 90f))
+        }
+        val pixels = capture()
+        val x = pixels.width / 2
+        val y = pixels.height - 12
+        assertTrue("Rotated edge star must remain visible", (y - 5..y + 5).any { row ->
+            (x - 5..x + 5).any { column -> Color.blue(pixels.getPixel(column, row)) > 180 }
         })
     }
 

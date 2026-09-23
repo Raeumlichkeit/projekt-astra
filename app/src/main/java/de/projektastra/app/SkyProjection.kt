@@ -18,11 +18,13 @@ internal class SkyProjection(
     val width: Float,
     val height: Float,
     private val horizontalFov: Double,
-    val perspective: Boolean = false
+    val perspective: Boolean = false,
+    private val clipPadding: Float = 0f
 ) {
     private val valid = width.isFinite() && height.isFinite() && width > 0f && height > 0f &&
         centerAzimuth.isFinite() && centerAltitude.isFinite() &&
-        horizontalFov.isFinite() && horizontalFov >= 0.5 && horizontalFov < 180.0
+        horizontalFov.isFinite() && horizontalFov >= 0.5 && horizontalFov < 180.0 &&
+        clipPadding.isFinite() && clipPadding >= 0f
     private val pitchSin = sin(Math.toRadians(centerAltitude))
     private val pitchCos = cos(Math.toRadians(centerAltitude))
     private val focalLength = width / (2.0 * tan(Math.toRadians(horizontalFov / 4)))
@@ -75,7 +77,7 @@ internal class SkyProjection(
             if (vector.z <= -0.999) return null
             screen(vector)
         } else screen(delta(position.azimuth - centerAzimuth), position.altitude)
-        return point.takeIf { contains(it, padding) }
+        return point.takeIf { contains(it, padding + clipPadding) }
     }
 
     fun contains(point: Offset, padding: Float = 0f) =
@@ -84,12 +86,13 @@ internal class SkyProjection(
     /** Clip the short azimuth arc, including its wrapped copies, never a diagonal across the back of the sky. */
     fun segments(from: HorizontalCoordinates, to: HorizontalCoordinates, padding: Float = 0f): List<SkySegment> {
         if (!valid || !from.valid() || !to.valid() || !padding.isFinite() || padding < 0f) return emptyList()
+        val extent = padding + clipPadding
         if (perspective) {
             var start = camera(from)
             var end = camera(to)
             for (plane in 0..4) {
-                val a = planeDistance(start, plane, padding)
-                val b = planeDistance(end, plane, padding)
+                val a = planeDistance(start, plane, extent)
+                val b = planeDistance(end, plane, extent)
                 if (a < 0 && b < 0) return emptyList()
                 if (a < 0 || b < 0) {
                     val intersection = start.between(end, a / (a - b))
@@ -102,7 +105,7 @@ internal class SkyProjection(
         val endDelta = startDelta + delta(to.azimuth - from.azimuth)
         return (-1..1).mapNotNull { turn ->
             clip(screen(startDelta + turn * 360.0, from.altitude),
-                screen(endDelta + turn * 360.0, to.altitude), padding)
+                screen(endDelta + turn * 360.0, to.altitude), extent)
         }
     }
 
@@ -114,9 +117,9 @@ internal class SkyProjection(
             if (vertices.isEmpty()) return emptyList()
             val clipped = mutableListOf<Vector>()
             var previous = vertices.last()
-            var previousDistance = planeDistance(previous, plane, 0f)
+            var previousDistance = planeDistance(previous, plane, clipPadding)
             vertices.forEach { current ->
-                val currentDistance = planeDistance(current, plane, 0f)
+                val currentDistance = planeDistance(current, plane, clipPadding)
                 if ((previousDistance < 0) != (currentDistance < 0)) {
                     clipped += previous.between(current, previousDistance / (previousDistance - currentDistance))
                 }

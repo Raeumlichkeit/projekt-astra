@@ -1,4 +1,4 @@
-# Datensicherheit – Prüfentwurf 1.1.7-pre.1
+# Datensicherheit – Prüfentwurf 1.1.9-pre.15
 
 Nicht unverändert in Play Console übernehmen: Anbieterrollen und Drittland-/Rechtsgrundlagenprüfung sind noch offen. Verantwortlicher: Jeremy Grez; Support/Datenschutz: jeregrez@gmail.com. Keine ISO-Zertifizierung und keine unabhängige Sicherheitsprüfung behaupten.
 
@@ -10,6 +10,9 @@ Nicht unverändert in Play Console übernehmen: Anbieterrollen und Drittland-/Re
 - Für andere Anbieter sind die Aufbewahrung und die Einordnung als Weitergabe/Dienstleister vor Veröffentlichung einzeln zu prüfen.
 - Keine Werbung, Analyse-SDKs, eigene Konten oder eigener Backend-Server. HTTPS ist erzwungen.
 - Kamera-/Sensordaten, Favoriten und Ereignislisten verlassen die App nicht über deren Netzwerkfunktionen.
+- Standort-Merken ist standardmäßig aus und unabhängig von der GPS-Berechtigung. Nach ausdrücklichem Einschalten werden die letzten genauen Koordinaten und die Höhe im privaten App-Speicher gehalten; Abschalten/Zurücksetzen entfernt sie. Alte automatisch gespeicherte Koordinaten ohne gesetzte Merken-Auswahl werden beim Laden entfernt.
+- Beobachtungstagebuch: Objekt, Zeitpunkt, Notizen, Ausrüstung und Bewertungen; optional bewusst angehängte Ortsdaten und ausgewählte Fotokopien. Fotos können EXIF/GPS-Metadaten enthalten. Keine automatischen Uploads. Löschung im Logbuch; manuelle JSON/XML/Text-Exporte enthalten gegebenenfalls genaue Orte und Notizen im Klartext, jedoch keine Fotodateien.
+- Widget: letzter Wetter-Score lokal gespeichert, Standort aus der separat freigegebenen Standort-Speicherung oder Berlin-Demo. Keine Hintergrund-Ortung. Auf dem Homescreen sichtbare Ortsangaben mit berücksichtigen.
 - Lokaler OSM-Kartencache: maximal 32 MB, Gültigkeit maximal 30 Tage, anschließend Löschung beim nächsten Start/Abruf. Betrachtete Regionen können aus Kacheln erschlossen werden.
 - Online-Freigabe widerrufen und Kartencache löschen unter Info. Alle lokalen Daten über Android-App-Einstellungen löschen.
 - Deinstallation/App-Daten-Löschung entfernt keine schon übermittelten Anbieterprotokolle.
