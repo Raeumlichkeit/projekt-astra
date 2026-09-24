@@ -73,13 +73,18 @@ internal class SkyProjection(
     }
 
     fun point(position: HorizontalCoordinates, padding: Float = 0f): Offset? {
-        if (!valid || !position.valid() || !padding.isFinite() || padding < 0f) return null
-        val point = if (perspective) {
+        if (!padding.isFinite() || padding < 0f) return null
+        return projectedPoint(position)?.takeIf { contains(it, padding + clipPadding) }
+    }
+
+    /** Horizon contours may run beyond the viewport before re-entering it. */
+    fun projectedPoint(position: HorizontalCoordinates): Offset? {
+        if (!valid || !position.valid()) return null
+        return if (perspective) {
             val vector = camera(position)
             if (vector.z <= -0.999) return null
             screen(vector)
         } else screen(delta(position.azimuth - centerAzimuth), position.altitude)
-        return point.takeIf { contains(it, padding + clipPadding) }
     }
 
     fun contains(point: Offset, padding: Float = 0f) =

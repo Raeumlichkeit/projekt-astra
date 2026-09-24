@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.20` · Version Code `38` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.20 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.20).
+**Beta-Stand:** `1.1.9-pre.21` · Version Code `39` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.21 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.21).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -13,12 +13,16 @@ Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengefüh
 | --- | --- |
 | Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont, 88 IAU-Sternbildgrenzen, äquatoriale/horizontale Gitter, Referenzlinien (Äquator, Ekliptik, Galaktisch), Optik & FOV-Kreis/Telrad mit Drehung und Spiegelung, Handschuh-Modus (Lautstärketasten) |
 | Sonnensystem & Mond | Galileische Jupitermonde (Io, Europa, Ganymed, Kallisto) mit Transit/Verfinsterungs-Ereignissen, Saturn Ringsystem & Titan, Mondterminator-Detailrelief & Kraterkatalog |
-| Satelliten & ISS | Lokale Near-Earth-SGP4-Vorhersage für ISS und helle Satelliten mit Pass-Zeiten und Pfaden (ohne Cloud/Tracking); benötigt zeitnahe TLEs, keine Deep-Space-/SDP4-Bahnen |
+| Satelliten & ISS | Lokale Near-Earth-SGP4-Vorhersage für ISS und helle Satelliten mit benannten Passpfaden und Zeiten der größten Höhe (ohne Cloud/Tracking); benötigt zeitnahe TLEs, keine Deep-Space-/SDP4-Bahnen |
 | Aufsuchhilfen | Interaktives Winkelabstand- und Positionsmesswerkzeug, geführter Star-Hopping-Assistent mit Telrad- und Okularfeldern |
 | Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Dew Monitor (Magnus-Tetens Taupunktwarnung), Beobachtungs-Challenges (Messier 110, Caldwell, Herschel 400), „Im Logbuch beobachtet“-Statusbadges |
 | Tagebuch | Beobachtungstagebuch mit Fotos, Pickering 1–10, Antoniadi I–V, NELM fst, JSON-Backup, OAL 2.1 XML Standard-Export & Rotlicht-Textzusammenfassung |
 | AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
 | Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
+
+## Neu in 1.1.9-pre.21 · Horizont und benannte Satellitenbahnen
+
+Beim Blick fast zum Zenit mit sehr weitem Sichtfeld ist der Horizont im Hochformat oben und unten sichtbar. Die obere Bodenzone zeigte bisher irrtümlich Sternhimmel; die Maske deckt nun beide Seiten ab. Sichtbare Satellitenbahnen tragen „SAT“, den Namen und die Zeit ihrer größten Höhe. Die optionale Ekliptiklinie erhält eine eigene Kennzeichnung, damit sie nicht mit einer Satellitenbahn verwechselt wird. [Tests und Grenzen](play-store/pre-release-1.1.9-pre.21.md).
 
 ## Neu in 1.1.9-pre.20 · Milchstraße nach dem Wiederöffnen vollständig
 

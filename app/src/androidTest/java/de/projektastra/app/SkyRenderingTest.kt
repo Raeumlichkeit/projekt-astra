@@ -11,6 +11,7 @@ import android.view.PixelCopy
 import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
@@ -167,6 +169,80 @@ class SkyRenderingTest {
         val pixels = capture()
         val ground = pixels.getPixel(pixels.width / 3 + 10, pixels.height / 3)
         assertTrue("Off-screen horizon must not reveal sky", Color.blue(ground) < 23)
+    }
+
+    @Test fun zenithWidePortraitMasksGroundAtBothMapEdges() {
+        render(200, 300) { modifier ->
+            SkyCanvas(emptyList(), 11.0, 89.0, 150.0, false, emptyList(), emptyList(),
+                false, null, false, { _, _, _ -> }, {},
+                modifier.background(ComposeColor(0xFF6888AA)), drawBackground = false)
+        }
+        val pixels = capture()
+        try {
+            val x = pixels.width / 2
+            listOf(4, pixels.height - 5).forEach { y ->
+                val ground = pixels.getPixel(x, y)
+                assertTrue("Below-horizon edge ($x,$y) must mask the sky texture",
+                    Color.red(ground) < 30 && Color.green(ground) < 30 && Color.blue(ground) < 30)
+            }
+            val sky = pixels.getPixel(x, pixels.height / 2)
+            assertTrue("Zenith centre must preserve the sky texture", Color.blue(sky) > 100)
+        } finally {
+            pixels.recycle()
+        }
+    }
+
+    @Test fun wideZenithViewMasksGroundInTopCornersButNotTopCentre() {
+        render(200, 300) { modifier ->
+            SkyCanvas(emptyList(), 11.0, 80.0, 150.0, false, emptyList(), emptyList(),
+                false, null, false, { _, _, _ -> }, {},
+                modifier.background(ComposeColor(0xFF6888AA)), drawBackground = false)
+        }
+        val pixels = capture()
+        try {
+            listOf(4, pixels.width - 5).forEach { x ->
+                val ground = pixels.getPixel(x, 4)
+                assertTrue("Upper corner ($x,4) must hide below-horizon sky", Color.blue(ground) < 30)
+            }
+            assertTrue("Top centre is still sky", Color.blue(pixels.getPixel(pixels.width / 2, 4)) > 100)
+        } finally {
+            pixels.recycle()
+        }
+    }
+
+    @Test fun nadirWidePortraitMasksGroundAtCentreButKeepsSkyAtEdges() {
+        render(200, 300) { modifier ->
+            SkyCanvas(emptyList(), 11.0, -89.0, 150.0, false, emptyList(), emptyList(),
+                false, null, false, { _, _, _ -> }, {},
+                modifier.background(ComposeColor(0xFF6888AA)), drawBackground = false)
+        }
+        val pixels = capture()
+        try {
+            val x = pixels.width / 2
+            assertTrue("Nadir centre must be ground", Color.blue(pixels.getPixel(x, pixels.height / 2)) < 30)
+            listOf(4, pixels.height - 5).forEach { y ->
+                assertTrue("Above-horizon edge ($x,$y) must stay sky", Color.blue(pixels.getPixel(x, y)) > 100)
+            }
+        } finally {
+            pixels.recycle()
+        }
+    }
+
+    @Test fun elevatedTerrainStillMasksBothEdgesNearZenith() {
+        render(200, 300) { modifier ->
+            SkyCanvas(emptyList(), 11.0, 89.0, 150.0, false, emptyList(), emptyList(),
+                false, TerrainProfile(listOf(TerrainSample(0.0, 20.0)), 100.0), false,
+                { _, _, _ -> }, {}, modifier.background(ComposeColor(0xFF6888AA)), drawBackground = false)
+        }
+        val pixels = capture()
+        try {
+            val x = pixels.width / 2
+            assertTrue(Color.blue(pixels.getPixel(x, 4)) < 30)
+            assertTrue(Color.blue(pixels.getPixel(x, pixels.height - 5)) < 30)
+            assertTrue(Color.blue(pixels.getPixel(x, pixels.height / 2)) > 100)
+        } finally {
+            pixels.recycle()
+        }
     }
 
     @Test fun selectedTargetHasVisibleRingAtMapCenter() {

@@ -178,6 +178,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -2213,6 +2214,13 @@ internal fun SkyCanvas(
         val opticsPadding = 32f
         val canvasCenter = Offset(size.width / 2f, size.height / 2f)
         val applyOptics = !arMode && opticsSettings.isCustomized
+        val referenceLines = if (coordinateFrame != null &&
+            (skyAppearance.showCelestialEquator || skyAppearance.showEcliptic || skyAppearance.showGalacticEquator)) {
+            SkyGridRenderer.generateReferenceLines()
+        } else null
+        val eclipticLine = if (skyAppearance.showEcliptic && coordinateFrame != null) {
+            referenceLines?.ecliptic?.let { SkyGridRenderer.toHorizontal(it, coordinateFrame) }
+        } else null
 
         val labels = mutableListOf<SkyLabelCandidate>()
         val labelPaints = mutableMapOf<String, android.graphics.Paint>()
@@ -2302,6 +2310,31 @@ internal fun SkyCanvas(
             }
         }
 
+        eclipticLine?.horizontalPoints?.asSequence()
+            ?.filter { targetVisibility(it, terrainProfile) == TargetVisibility.ABOVE }
+            ?.mapNotNull { projection.point(it) }
+            ?.minByOrNull { point -> (point - canvasCenter).getDistance() }
+            ?.let { point ->
+                addLabel("ecliptic", "EKLIPTIK", point, SkyLabelKind.ORIENTATION,
+                    10.sp.toPx(), if (redLightMode) android.graphics.Color.rgb(255, 120, 104)
+                    else android.graphics.Color.rgb(255, 202, 40), rank = 2.0)
+            }
+        satellitePasses.forEach { pass ->
+            pass.trackPoints.asSequence()
+                .filter { targetVisibility(it.position, terrainProfile) == TargetVisibility.ABOVE }
+                .mapNotNull { projection.point(it.position) }
+                .minByOrNull { point -> (point - canvasCenter).getDistance() }
+                ?.let { point ->
+                    addLabel("satellite-${pass.noradId}-${pass.riseTime.epochSecond}",
+                        "SAT · ${pass.satelliteName.substringBefore(" (")} · max. ${formatEventTime(pass.maxElevationTime)}",
+                        point, SkyLabelKind.SOLAR_SYSTEM, 11.sp.toPx(),
+                        if (redLightMode) android.graphics.Color.rgb(255, 120, 104)
+                        else android.graphics.Color.rgb(255, 217, 138),
+                        rank = (pass.riseTime.epochSecond - skyInstant.epochSecond).toDouble(),
+                        anchorGap = 9.dp.toPx())
+                }
+        }
+
         val horizonPoints = (0..120).mapNotNull { step ->
             val azimuth = step * 3.0
             projection.point(HorizontalCoordinates(azimuth, terrainProfile?.altitudeAt(azimuth) ?: 0.0), padding = opticsPadding)
@@ -2328,7 +2361,7 @@ internal fun SkyCanvas(
             padding = 8.dp.toPx(), separation = 5.dp.toPx(),
             measureText = { label, text -> labelPaints.getValue(label.id).measureText(text) },
             canPlace = { label, bounds ->
-                label.kind == SkyLabelKind.ORIENTATION ||
+                (label.kind == SkyLabelKind.ORIENTATION && label.id != "ecliptic") ||
                     listOf(bounds.left, (bounds.left + bounds.right) / 2f, bounds.right).all { x ->
                         listOf(bounds.top, bounds.bottom).all { y ->
                             val pt = if (applyOptics) opticsSettings.inverseTransformScreenPoint(Offset(x, y), canvasCenter) else Offset(x, y)
@@ -2364,17 +2397,16 @@ internal fun SkyCanvas(
                     SkyGridRenderer.renderGridLine(this, line, projection, style)
                 }
             }
-            if ((skyAppearance.showCelestialEquator || skyAppearance.showEcliptic || skyAppearance.showGalacticEquator) && coordinateFrame != null) {
-                val ref = SkyGridRenderer.generateReferenceLines()
+            if (referenceLines != null && coordinateFrame != null) {
+                val ref = referenceLines
                 if (skyAppearance.showCelestialEquator) {
                     val horiz = SkyGridRenderer.toHorizontal(ref.celestialEquator, coordinateFrame)
                     val style = SkyGridRenderer.getLineStyle(horiz.type, horiz.isPrimary, redLightMode)
                     SkyGridRenderer.renderGridLine(this, horiz, projection, style)
                 }
-                if (skyAppearance.showEcliptic) {
-                    val horiz = SkyGridRenderer.toHorizontal(ref.ecliptic, coordinateFrame)
-                    val style = SkyGridRenderer.getLineStyle(horiz.type, horiz.isPrimary, redLightMode)
-                    SkyGridRenderer.renderGridLine(this, horiz, projection, style)
+                if (eclipticLine != null) {
+                    val style = SkyGridRenderer.getLineStyle(eclipticLine.type, eclipticLine.isPrimary, redLightMode)
+                    SkyGridRenderer.renderGridLine(this, eclipticLine, projection, style)
                 }
                 if (skyAppearance.showGalacticEquator) {
                     val horiz = SkyGridRenderer.toHorizontal(ref.galacticEquator, coordinateFrame)
@@ -2846,30 +2878,46 @@ private fun DrawScope.drawSphericalTerrainHorizon(
 
     val groundColor = if (oledMode) Color.Black else Color(0xFF03070D)
 
-    // Sample visible horizon curve across the observer's field of view
-    val points = (0..160).mapNotNull { step ->
-        val relAz = -120.0 + step * (240.0 / 160.0)
-        val sampleAz = ((viewAzimuth + relAz) % 360.0 + 360.0) % 360.0
-        val alt = profile?.altitudeAt(sampleAz) ?: 0.0
-        projection.point(HorizontalCoordinates(sampleAz, alt), padding = padding)
-    }
-
-    if (points.isNotEmpty()) {
+    // Away from the horizon, the entire 360° contour divides sky and ground.
+    // It can cross both the top and bottom when a portrait view looks near the zenith.
+    val contour = if (abs(viewAltitude) >= 5.0) horizon.mapNotNull(projection::projectedPoint) else emptyList()
+    if (contour.size == horizon.size) {
         val ground = Path().apply {
-            moveTo(-20f, points.first().y)
-            points.forEach { lineTo(it.x, it.y) }
-            lineTo(size.width + 20f, points.last().y)
-            lineTo(size.width + 20f, size.height + 20f)
-            lineTo(-20f, size.height + 20f)
+            val oppositeAzimuth = normalizeDegrees(viewAzimuth + 180.0)
+            // The camera antipode maps to the contour's outside; optics may rotate off-screen pixels into view.
+            if (-viewAltitude <= (profile?.altitudeAt(oppositeAzimuth) ?: 0.0)) {
+                val margin = hypot(size.width.toDouble(), size.height.toDouble()).toFloat()
+                fillType = PathFillType.EvenOdd
+                moveTo(-margin, -margin)
+                lineTo(size.width + margin, -margin)
+                lineTo(size.width + margin, size.height + margin)
+                lineTo(-margin, size.height + margin)
+                close()
+            }
+            moveTo(contour.first().x, contour.first().y)
+            contour.drop(1).forEach { lineTo(it.x, it.y) }
             close()
         }
         drawPath(ground, groundColor)
-    } else if (listOf(0f, size.width / 2f, size.width).all { x ->
-            listOf(0f, size.height / 2f, size.height).all { y ->
-                projection.coordinates(Offset(x, y))?.let { it.altitude <= (profile?.altitudeAt(it.azimuth) ?: 0.0) } == true
+    } else {
+        // At the horizon the opposite point approaches the projection singularity.
+        val points = (0..160).mapNotNull { step ->
+            val relAz = -120.0 + step * (240.0 / 160.0)
+            val sampleAz = ((viewAzimuth + relAz) % 360.0 + 360.0) % 360.0
+            val alt = profile?.altitudeAt(sampleAz) ?: 0.0
+            projection.point(HorizontalCoordinates(sampleAz, alt), padding = padding)
+        }
+        if (points.isNotEmpty()) {
+            val ground = Path().apply {
+                moveTo(-20f, points.first().y)
+                points.forEach { lineTo(it.x, it.y) }
+                lineTo(size.width + 20f, points.last().y)
+                lineTo(size.width + 20f, size.height + 20f)
+                lineTo(-20f, size.height + 20f)
+                close()
             }
-        }) {
-        drawRect(groundColor)
+            drawPath(ground, groundColor)
+        }
     }
 
     drawPath(
