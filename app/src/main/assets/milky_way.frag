@@ -50,7 +50,8 @@ void main() {
         vec3 right = vec3(viewTrig.y, -viewTrig.x, 0.0);
         vec3 up = vec3(-viewTrig.z * viewTrig.x, -viewTrig.z * viewTrig.y, viewTrig.w);
         vec3 forward = vec3(viewTrig.w * viewTrig.x, viewTrig.w * viewTrig.y, viewTrig.z);
-        direction = normalize(right * cam.x + up * cam.y + forward * cam.z);
+        // The stereographic ray and camera basis are unit-length/orthonormal.
+        direction = right * cam.x + up * cam.y + forward * cam.z;
     }
     float horizonGlow = pow(1.0 - abs(direction.z), 5.0);
     vec3 background = mix(vec3(0.007, 0.012, 0.021), vec3(0.018, 0.028, 0.044), horizonGlow);
@@ -58,7 +59,8 @@ void main() {
         gl_FragColor = arMode > 0.5 ? vec4(0.0) : vec4(background, 1.0);
         return;
     }
-    vec3 equatorial = normalize(horizontalToJ2000 * direction);
+    // This is another rotation; renormalizing each fragment is unnecessary.
+    vec3 equatorial = horizontalToJ2000 * direction;
     float ra = atan(equatorial.y, equatorial.x);
     float dec = asin(clamp(equatorial.z, -1.0, 1.0));
     vec2 uv = vec2(fract(0.5 - ra / (2.0 * PI)), 0.5 - dec / PI);

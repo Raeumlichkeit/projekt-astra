@@ -975,6 +975,9 @@ internal fun SkyScreen(
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var showTimeControls by rememberSaveable { mutableStateOf(false) }
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+    var showLocationDialog by rememberSaveable { mutableStateOf(false) }
+    val controlsScrollState = rememberScrollState()
+    LaunchedEffect(controlsExpanded) { controlsScrollState.scrollTo(0) }
     BackHandler(enabled = fullscreen) { setFullscreen(false) }
     var displayZone by remember { mutableStateOf(ZoneId.systemDefault()) }
     // Save identifiers, not catalog objects or observer coordinates, across Activity recreation.
@@ -1155,6 +1158,7 @@ internal fun SkyScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize().background(if (isOled) Color.Black else Color.Transparent)) {
     val compactHeight = maxHeight < 420.dp
+    val compactLandscape = compactHeight && maxWidth > maxHeight
     // Bound the combined chrome, including notices, so short landscape screens retain sky space.
     val headerMaxHeight = maxHeight * 0.12f
     val orientationMaxHeight = (maxHeight * 0.18f).coerceAtMost(110.dp)
@@ -1235,8 +1239,9 @@ internal fun SkyScreen(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
-        Column(Modifier.fillMaxWidth().heightIn(max = controlsMaxHeight)
-            .verticalScroll(rememberScrollState()).testTag("sky-controls-panel")) {
+        Column(Modifier.fillMaxWidth().heightIn(max = controlsMaxHeight).testTag("sky-controls-panel")) {
+        Column(Modifier.fillMaxWidth().weight(1f, fill = false).clipToBounds()
+            .verticalScroll(controlsScrollState)) {
         Row(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue).padding(horizontal = 12.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Text((when {
@@ -1250,7 +1255,8 @@ internal fun SkyScreen(
             if (!skyTime.live) TextButton(onClick = nowTime) { Text("Jetzt") }
         }
         if (controlsExpanded) {
-            Column(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue).padding(horizontal = 12.dp, vertical = 4.dp),
+            Column(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue)
+                .padding(horizontal = 12.dp).padding(top = 4.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { showSearch = true }) {
@@ -1348,13 +1354,10 @@ internal fun SkyScreen(
                 if (location == null) {
                     Text("Ohne Standortfreigabe zeigt die Karte Berlin als Demo. Dein Standort richtet den Himmel auf dem Gerät aus.",
                         color = AstraTextMuted, fontSize = 12.sp)
-                    LocationButton(onPermissionResult = onLocationPermissionResult,
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        textType = LocationButtonTextType.UsePreciseLocation,
-                        backgroundColor = if (redLightMode) Color(0xFF5A0000) else AstraBlue,
-                        textColor = if (redLightMode) Color(0xFFFF7868) else Night,
-                        iconTint = if (redLightMode) Color(0xFFFF7868) else Night,
-                        cornerRadius = 20.dp, pressedCornerRadius = 12.dp)
+                    if (compactLandscape) TextButton(onClick = { showLocationDialog = true }) {
+                        Icon(Icons.Rounded.GpsFixed, null, Modifier.size(18.dp))
+                        Text(" Standort verwenden")
+                    }
                 } else {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -1392,6 +1395,13 @@ internal fun SkyScreen(
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(notice, Modifier.weight(1f), color = StarGold, fontSize = 12.sp)
                 TextButton(onClick = clearTimeNotice) { Text("OK") }
+            }
+        }
+        }
+        if (controlsExpanded && location == null && !compactLandscape && !showLocationDialog) {
+            Box(Modifier.fillMaxWidth().background(if (isOled) Color.Black else NightBlue)
+                .padding(horizontal = 12.dp, vertical = 4.dp)) {
+                PreciseLocationButton(redLightMode, onLocationPermissionResult)
             }
         }
         }
@@ -1748,6 +1758,19 @@ internal fun SkyScreen(
     }
     }
 
+    if (showLocationDialog) Dialog(onDismissRequest = { showLocationDialog = false }) {
+        Surface(shape = RoundedCornerShape(20.dp), color = if (isOled) Color.Black else NightBlue) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Standort verwenden", fontWeight = FontWeight.Bold)
+                PreciseLocationButton(redLightMode) { granted ->
+                    showLocationDialog = false
+                    onLocationPermissionResult(granted)
+                }
+                TextButton(onClick = { showLocationDialog = false }) { Text("Abbrechen") }
+            }
+        }
+    }
+
     if (showLayersPanel) {
         SkySheetTheme(redLightMode) {
         ModalBottomSheet(onDismissRequest = { showLayersPanel = false }, containerColor = if (isOled) Color.Black else MaterialTheme.colorScheme.surface,
@@ -1909,6 +1932,17 @@ internal fun SkyScreen(
             }
         )
     }
+}
+
+@Composable
+private fun PreciseLocationButton(redLightMode: Boolean, onPermissionResult: (Boolean) -> Unit) {
+    LocationButton(onPermissionResult = onPermissionResult,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        textType = LocationButtonTextType.UsePreciseLocation,
+        backgroundColor = if (redLightMode) Color(0xFF5A0000) else AstraBlue,
+        textColor = if (redLightMode) Color(0xFFFF7868) else Night,
+        iconTint = if (redLightMode) Color(0xFFFF7868) else Night,
+        cornerRadius = 20.dp, pressedCornerRadius = 12.dp)
 }
 
 @Composable
@@ -2146,6 +2180,7 @@ internal fun SkyCanvas(
     val currentOnSelect by rememberUpdatedState(onSelect)
     val isOled = skyAppearance.oledBlackMode || LocalOledMode.current
     val objectsByHip = remember(objects) { objects.mapNotNull { item -> item.celestial.hipId?.let { it to item } }.toMap() }
+    val preparedObjects = remember(objects) { objects.map { it to PreparedSkyPosition(it.position) } }
     Canvas(
         modifier.fillMaxSize().clipToBounds()
             .onSizeChanged { canvasSize = it }
@@ -2268,11 +2303,11 @@ internal fun SkyCanvas(
                     10.sp.toPx(), android.graphics.Color.rgb(184, 210, 255), 180)
             }
 
-        val projected = objects.mapNotNull { item ->
+        val projected = preparedObjects.mapNotNull { (item, direction) ->
             // Manual ground is opaque; skip objects safely below it before the costly projection.
             // AR keeps them because its camera horizon is translucent.
             if (!arMode && item.position.altitude <= -5.0) return@mapNotNull null
-            projection.point(item.position, padding = opticsPadding)?.let { point ->
+            projection.point(direction, padding = opticsPadding)?.let { point ->
                 if (!applyOptics || projection.contains(opticsSettings.transformScreenPoint(point, canvasCenter), 32f)) item to point else null
             }
         }

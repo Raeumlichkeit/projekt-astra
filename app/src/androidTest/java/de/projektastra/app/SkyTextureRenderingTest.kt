@@ -59,9 +59,12 @@ class SkyTextureRenderingTest {
             20.69053 to 45.28034,  // Northern Milky Way near Deneb.
             0.712 to 41.269,
             11.999 to 0.0,        // Explicitly exercise the wrapped RA=12h image edge.
-            12.001 to 0.0
+            12.001 to 0.0,
+            0.0 to 89.9,          // Near-pole precision after the shader skips redundant normalization.
+            12.0 to -89.9
         )
-        launch(state(coordinates.first().first, coordinates.first().second, MilkyWayMode.PHOTO))
+        // Start elsewhere: an unchanged state intentionally no longer queues a redundant frame.
+        launch(state(8.0, 0.0, MilkyWayMode.PHOTO))
         // Match the renderer's supported texture size, including GLES2 devices limited to 2048px.
         var sample = 1
         while ((3840 / sample) * (1920 / sample) * 4 > view.textureBytes && sample < 8) sample *= 2
@@ -307,6 +310,16 @@ class SkyTextureRenderingTest {
         instrumentation.runOnMainSync { view.retry() }
         awaitFrameAfter(before)
         assertTrue("Retry must render a new frame", view.framesRendered.get() > before)
+    }
+
+    @Test fun unchangedComposeUpdatesDoNotRedrawTheWholeTexture() {
+        val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
+        launch(initial)
+        awaitStableFrameCount()
+        val before = view.framesRendered.get()
+        instrumentation.runOnMainSync { repeat(30) { view.update(initial.copy()) } }
+        SystemClock.sleep(200)
+        assertEquals("Unchanged sky state must not submit redundant GPU frames", before, view.framesRendered.get())
     }
 
     private fun state(ra: Double, dec: Double, mode: MilkyWayMode): SkyTextureState {

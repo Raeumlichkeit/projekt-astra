@@ -11,6 +11,21 @@ import kotlin.math.tan
 
 internal data class SkySegment(val start: Offset, val end: Offset)
 
+/** View-independent direction; build once per object/time, reuse across pan frames. */
+internal class PreparedSkyPosition(val horizontal: HorizontalCoordinates) {
+    val east: Double
+    val north: Double
+    val up: Double
+    init {
+        val azimuth = Math.toRadians(horizontal.azimuth)
+        val altitude = Math.toRadians(horizontal.altitude)
+        val cosAltitude = cos(altitude)
+        east = cosAltitude * sin(azimuth)
+        north = cosAltitude * cos(azimuth)
+        up = sin(altitude)
+    }
+}
+
 /** Conformal stereographic perspective for the manual map; the existing AR mapping remains selectable. */
 internal class SkyProjection(
     private val centerAzimuth: Double,
@@ -27,6 +42,8 @@ internal class SkyProjection(
         clipPadding.isFinite() && clipPadding >= 0f
     private val pitchSin = sin(Math.toRadians(centerAltitude))
     private val pitchCos = cos(Math.toRadians(centerAltitude))
+    private val azimuthSin = sin(Math.toRadians(centerAzimuth))
+    private val azimuthCos = cos(Math.toRadians(centerAzimuth))
     private val focalLength = width / (2.0 * tan(Math.toRadians(horizontalFov / 4)))
 
     private data class Vector(val x: Double, val y: Double, val z: Double) {
@@ -43,6 +60,14 @@ internal class SkyProjection(
         return Vector(cosAltitude * sin(azimuth),
             sinAltitude * pitchCos - forward * pitchSin,
             sinAltitude * pitchSin + forward * pitchCos)
+    }
+
+    private fun camera(position: PreparedSkyPosition): Vector {
+        val east = position.east * azimuthCos - position.north * azimuthSin
+        val forward = position.east * azimuthSin + position.north * azimuthCos
+        return Vector(east,
+            position.up * pitchCos - forward * pitchSin,
+            position.up * pitchSin + forward * pitchCos)
     }
 
     private fun screen(vector: Vector): Offset {
@@ -75,6 +100,13 @@ internal class SkyProjection(
     fun point(position: HorizontalCoordinates, padding: Float = 0f): Offset? {
         if (!padding.isFinite() || padding < 0f) return null
         return projectedPoint(position)?.takeIf { contains(it, padding + clipPadding) }
+    }
+
+    fun point(position: PreparedSkyPosition, padding: Float = 0f): Offset? {
+        if (!valid || !position.horizontal.valid() || !padding.isFinite() || padding < 0f) return null
+        val projected = if (perspective) camera(position).let { if (it.z <= -0.999) null else screen(it) }
+            else screen(delta(position.horizontal.azimuth - centerAzimuth), position.horizontal.altitude)
+        return projected?.takeIf { contains(it, padding + clipPadding) }
     }
 
     /** Horizon contours may run beyond the viewport before re-entering it. */

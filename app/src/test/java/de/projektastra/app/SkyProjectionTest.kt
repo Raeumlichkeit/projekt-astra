@@ -253,4 +253,33 @@ class SkyProjectionTest {
         val outsidePoint = narrow.point(HorizontalCoordinates(182.0, 45.0))
         assertNull(outsidePoint)
     }
+
+    @Test fun preparedPositionsMatchExistingProjectionAcrossPanZoomAndAr() {
+        val positions = listOf(
+            sky(0.0, 0.0), sky(13.4, 30.0), sky(89.0, -40.0),
+            sky(179.0, 80.0), sky(270.0, -85.0), sky(359.9, 89.0),
+            sky(-30.0, 10.0), sky(720.0, -20.0)
+        )
+        val prepared = positions.map(::PreparedSkyPosition)
+        for (perspective in listOf(false, true)) {
+            for (fov in listOf(0.5, 25.0, 95.0, 150.0)) {
+                for (azimuth in listOf(0.0, 11.0, 179.0, 359.0)) {
+                    for (altitude in listOf(-80.0, 0.0, 39.0, 89.0)) {
+                        val view = SkyProjection(azimuth, altitude, 901f, 1201f, fov, perspective)
+                        positions.zip(prepared).forEach { (raw, cached) ->
+                            val expected = view.point(raw, padding = 2f)
+                            val actual = view.point(cached, padding = 2f)
+                            if (expected == null) assertNull(actual) else {
+                                assertNotNull(actual)
+                                assertEquals(expected.x, actual!!.x, 0.002f)
+                                assertEquals(expected.y, actual.y, 0.002f)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertNull(SkyProjection(0.0, 0.0, 901f, 1201f, 95.0, true)
+            .point(PreparedSkyPosition(sky(Double.NaN))))
+    }
 }

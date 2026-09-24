@@ -38,8 +38,8 @@ android {
         applicationId = "de.projektastra.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 39
-        versionName = "1.1.9-pre.21"
+        versionCode = 40
+        versionName = "1.1.9-pre.22"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

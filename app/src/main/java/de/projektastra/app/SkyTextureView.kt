@@ -75,7 +75,9 @@ internal class SkyTextureView(context: Context) : TextureView(context), TextureV
 
     fun update(value: SkyTextureState) {
         if (released) return
-        state = value.copy(appearance = value.appearance.normalized())
+        val next = value.copy(appearance = value.appearance.normalized())
+        if (state == next) return
+        state = next
         worker?.update(state, width, height, renderingActive)
     }
 
