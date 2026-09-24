@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.lifecycle.Lifecycle
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -148,7 +149,7 @@ class SkyTextureRenderingTest {
         }
     }
 
-    @Test fun switchingBetweenReducedManualAndFullResolutionArKeepsRendering() {
+    @Test fun switchingBetweenManualAndArKeepsRenderingAtLargeViewport() {
         val manual = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
         launch(manual, width = 901, height = 351)
         awaitStableFrameCount()
@@ -160,7 +161,7 @@ class SkyTextureRenderingTest {
         val manualFrames = view.framesRendered.get()
         update(manual.copy(arMode = true))
         awaitStableFrameCount()
-        assertTrue("AR switch must submit a full-resolution frame", view.framesRendered.get() > manualFrames)
+        assertTrue("AR switch must submit a frame", view.framesRendered.get() > manualFrames)
         capture().useBitmap { image ->
             assertEquals("AR photo remains transparent without opt-in", 0,
                 Color.alpha(image.getPixel(image.width / 2, image.height / 2)))
@@ -169,7 +170,7 @@ class SkyTextureRenderingTest {
         val arFrames = view.framesRendered.get()
         update(manual)
         awaitStableFrameCount()
-        assertTrue("Manual return must submit a reduced-buffer frame", view.framesRendered.get() > arFrames)
+        assertTrue("Manual return must submit a frame", view.framesRendered.get() > arFrames)
         capture().useBitmap { image ->
             assertEquals("Manual photo becomes opaque again", 255,
                 Color.alpha(image.getPixel(image.width / 2, image.height / 2)))
@@ -261,6 +262,41 @@ class SkyTextureRenderingTest {
         val idleCount = view.framesRendered.get()
         SystemClock.sleep(200)
         assertEquals("An unchanged view should render on demand only", idleCount, view.framesRendered.get())
+    }
+
+    @Test fun backgroundAndForegroundKeepTheFullLargeTextureViewport() {
+        val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
+        launch(initial, width = 901, height = 901)
+        val before = capture()
+        try {
+            instrumentation.runOnMainSync { view.setRenderingActive(false) }
+            scenario!!.moveToState(Lifecycle.State.CREATED)
+            scenario!!.moveToState(Lifecycle.State.RESUMED)
+            instrumentation.runOnMainSync {
+                // Android can reset the SurfaceTexture buffer to the measured View size on resume.
+                requireNotNull(view.surfaceTexture).setDefaultBufferSize(view.width, view.height)
+            }
+            val frameBeforeResume = view.framesRendered.get()
+            instrumentation.runOnMainSync { view.setRenderingActive(true) }
+            awaitFrameAfter(frameBeforeResume)
+            capture().useBitmap { after ->
+                assertEquals(before.width, after.width)
+                assertEquals(before.height, after.height)
+                val positions = listOf(1, before.width / 4, before.width / 2,
+                    3 * before.width / 4, before.width - 2)
+                for (y in positions) for (x in positions) {
+                    val expected = before.getPixel(x, y)
+                    val actual = after.getPixel(x, y)
+                    assertEquals("Resumed texture must cover ($x,$y)", 255, Color.alpha(actual))
+                    assertTrue("Resumed texture must match the pre-background viewport at ($x,$y)",
+                        abs(Color.red(actual) - Color.red(expected)) <= 5 &&
+                            abs(Color.green(actual) - Color.green(expected)) <= 5 &&
+                            abs(Color.blue(actual) - Color.blue(expected)) <= 5)
+                }
+            }
+        } finally {
+            before.recycle()
+        }
     }
 
     @Test fun retryResubmitsFrameWhenActive() {

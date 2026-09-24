@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.19` · Version Code `37` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.19 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.19).
+**Beta-Stand:** `1.1.9-pre.20` · Version Code `38` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.20 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.20).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -20,9 +20,13 @@ Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengefüh
 | AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
 | Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
 
+## Neu in 1.1.9-pre.20 · Milchstraße nach dem Wiederöffnen vollständig
+
+Android kann nach dem Minimieren den `TextureView`-Puffer erneut auf die volle Kartenfläche setzen. Die in pre.19 eingeführte 75-%-Pufferverkleinerung führte dann dazu, dass die Milchstraße nur noch als Rechteck unten links erschien. Diese Verkleinerung ist zurückgenommen; echte Größenwechsel der Kartenfläche werden weiterhin korrekt behandelt. Die übrigen Sternkarten-Optimierungen bleiben. Der [Pre-Release](play-store/pre-release-1.1.9-pre.20.md) dokumentiert Tests und die Performance-Grenze.
+
 ## Neu in 1.1.9-pre.19 · Weiteres Entlasten der Sternkarte
 
-Die diffuse Milchstraßen-Fotoebene wird in der manuellen Ansicht mit einer kleineren GPU-Pufferfläche gezeichnet und auf die Displaygröße hochskaliert; Sterne und Beschriftungen bleiben scharf. Sterne sicher unter dem opaken Horizont werden vor der aufwendigen Projektion ausgelassen, AR unverändert. Im Emulator rendert die Fotoebene messbar mehr Bilder, und der Median der gesamten Wisch-Frames sinkt – aber das Schwenken ist noch nicht durchgehend flüssig. Die goldene Diagonale mit Punkten ist eine vorausberechnete Satellitenbahn, die untere goldene Kurve der Horizont. Details und Grenzen: [Pre-Release-Hinweise](play-store/pre-release-1.1.9-pre.19.md).
+In pre.19 wurde die diffuse Milchstraßen-Fotoebene versuchsweise mit einem kleineren GPU-Puffer gezeichnet; diese Maßnahme ist seit pre.20 zurückgenommen. Das frühzeitige Auslassen sicher unter dem Horizont liegender Sterne bleibt. Der pre.19-Emulatortest zeigte einen Gewinn, aber kein durchgehend flüssiges Schwenken. Die goldene Diagonale mit Punkten ist eine vorausberechnete Satellitenbahn, die untere goldene Kurve der Horizont. Historischer Testumfang: [Pre-Release-Hinweise](play-store/pre-release-1.1.9-pre.19.md).
 
 ## Neu in 1.1.9-pre.18 · Ruhigeres Verschieben der Sternkarte
 

@@ -24,7 +24,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.roundToInt
 
 internal data class SkyTextureState(
     val frame: SkyCoordinateFrame,
@@ -98,7 +97,7 @@ internal class SkyTextureView(context: Context) : TextureView(context), TextureV
     }
 
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-        worker?.update(state, this.width, this.height, renderingActive)
+        worker?.update(state, width, height, renderingActive)
     }
 
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
@@ -161,13 +160,8 @@ private class SkyTextureWorker(
         val next = request
         if (!closed.get() && next.active && next.width > 0 && next.height > 0 && next.state != null && !initializationFailed) {
             try {
-                // This diffuse photo needs fewer fragments than the sharp Compose stars and labels.
-                val longestEdge = maxOf(next.width, next.height)
-                val scale = if (next.state.arMode || longestEdge <= 800) 1.0 else minOf(0.75, 1600.0 / longestEdge)
-                val width = maxOf(1, (next.width * scale).roundToInt())
-                val height = maxOf(1, (next.height * scale).roundToInt())
-                if (program == 0) initialize(width, height)
-                if (!closed.get()) render(next, width, height)
+                if (program == 0) initialize(next.width, next.height)
+                if (!closed.get()) render(next)
             } catch (_: Exception) {
                 initializationFailed = true
                 disposeGl()
@@ -311,14 +305,14 @@ private class SkyTextureWorker(
         bufferHeight = height
     }
 
-    private fun render(next: Request, width: Int, height: Int) {
+    private fun render(next: Request) {
         val state = checkNotNull(next.state)
         val appearance = state.appearance.normalized()
-        resizeSurface(width, height)
-        GLES20.glViewport(0, 0, width, height)
+        resizeSurface(next.width, next.height)
+        GLES20.glViewport(0, 0, next.width, next.height)
         GLES20.glUseProgram(program)
         GLES20.glDisable(GLES20.GL_BLEND)
-        GLES20.glUniform2f(uniform("resolution"), width.toFloat(), height.toFloat())
+        GLES20.glUniform2f(uniform("resolution"), next.width.toFloat(), next.height.toFloat())
         GLES20.glUniform2f(uniform("textureSize"), textureWidth.toFloat(), textureHeight.toFloat())
         val azimuth = Math.toRadians(state.azimuth)
         val altitude = Math.toRadians(state.altitude)
@@ -328,7 +322,7 @@ private class SkyTextureWorker(
             kotlin.math.cos(azimuth).toFloat(), kotlin.math.sin(altitude).toFloat(),
             kotlin.math.cos(altitude).toFloat())
         GLES20.glUniform1f(uniform("inverseFocal"),
-            (2.0 * kotlin.math.tan(fov * 0.25) / width).toFloat())
+            (2.0 * kotlin.math.tan(fov * 0.25) / next.width).toFloat())
         GLES20.glUniformMatrix3fv(uniform("horizontalToJ2000"), 1, false, state.frame.horizontalToJ2000, 0)
         GLES20.glUniform1f(uniform("arMode"), if (state.arMode) 1f else 0f)
         val rotation = Math.toRadians(if (state.arMode) 0.0 else state.optics.rotationDegrees.toDouble())

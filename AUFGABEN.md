@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.19.
+Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.20.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -104,8 +104,9 @@ Umgesetzt in `1.1.8-pre.1`. Wetter und zugehöriger Ort werden atomar ersetzt; a
 ### 7. Schneller App- und Sternkartenstart
 
 - [x] Ruckeln beim manuellen Schwenken reduzieren: alle Touch-Deltas übernehmen, unnötige Tap-Detector-Neustarts vermeiden und Milchstraßen-Shader/Projektion entlasten ([pre.18](play-store/pre-release-1.1.9-pre.18.md)).
-- [x] Weitere Entlastung: diffuse Milchstraßen-Fotoebene in der manuellen Ansicht mit kleinerem GPU-Puffer rendern und sicher unter dem Horizont liegende Sterne vor der Projektion auslassen ([pre.19](play-store/pre-release-1.1.9-pre.19.md)).
-- [ ] Verbleibende Wisch-Ruckler mit Frame-Trace auf einem schwächeren echten Gerät lokalisieren und beheben; die Verbesserungen in pre.19 erreichen noch keine durchgehend flüssigen UI-Frames.
+- [x] Sicher unter dem Horizont liegende Sterne vor der Projektion auslassen ([pre.19](play-store/pre-release-1.1.9-pre.19.md)). Die dort eingeführte 75-%-GPU-Pufferverkleinerung wurde wegen eines Darstellungsfehlers nach dem Wiederöffnen in [pre.20](play-store/pre-release-1.1.9-pre.20.md) zurückgenommen.
+- [x] Milchstraßen-Textur nach Minimieren/Wiederöffnen und echten Größenänderungen wieder über die gesamte Kartenfläche zeichnen; Android-Emulator-Regression ergänzen ([pre.20](play-store/pre-release-1.1.9-pre.20.md)).
+- [ ] Verbleibende Wisch-Ruckler mit Frame-Trace auf einem schwächeren echten Gerät lokalisieren und beheben; die verbliebenen Optimierungen erreichen noch keine durchgehend flüssigen UI-Frames.
 - [ ] Satellitenbahnen in der Sternkarte verständlich kennzeichnen und optional ausblendbar machen; derzeit sind auch zukünftige Passagen bis zwölf Stunden im Voraus als goldene Linie mit Zeitpunkten sichtbar.
 - [ ] Gleichlauf von Sternen und Milchstraßen-Textur während längerer Schwenks auf einem leistungsschwachen echten Gerät prüfen; bei verbleibendem Versatz Renderpfade gezielt synchronisieren oder adaptiv abstufen.
 - [x] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
