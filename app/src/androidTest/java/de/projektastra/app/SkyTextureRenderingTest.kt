@@ -89,6 +89,47 @@ class SkyTextureRenderingTest {
         }
     }
 
+    @Test fun rapidManualPanSettlesOnTheLatestTextureDirection() {
+        val startRa = 17.76033
+        val startDec = -28.93617
+        val endRa = 6.75248
+        val endDec = -16.71612
+        val target = state(endRa, endDec, MilkyWayMode.PHOTO)
+        launch(state(startRa, startDec, MilkyWayMode.PHOTO))
+        val before = view.framesRendered.get()
+        instrumentation.runOnMainSync {
+            repeat(80) { step ->
+                val fraction = (step + 1) / 80.0
+                view.update(if (step == 79) target else state(
+                    startRa + (endRa - startRa) * fraction,
+                    startDec + (endDec - startDec) * fraction,
+                    MilkyWayMode.PHOTO
+                ))
+            }
+        }
+        awaitFrameAfter(before)
+        awaitStableFrameCount()
+
+        var sample = 1
+        while ((3840 / sample) * (1920 / sample) * 4 > view.textureBytes && sample < 8) sample *= 2
+        instrumentation.targetContext.assets.open("milkyway_gaia_2020.jpg").use { stream ->
+            val source = requireNotNull(BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply {
+                inScaled = false
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }))
+            source.useBitmap {
+                capture().useBitmap { image ->
+                    val actual = image.getPixel(image.width / 2, image.height / 2)
+                    val expected = expectedPhotoPixel(source, endRa, endDec, target.altitude)
+                    listOf(Color.red(actual), Color.green(actual), Color.blue(actual)).forEachIndexed { channel, value ->
+                        assertEquals("Latest pan direction, channel=$channel", expected[channel], value / 255.0, 12.0 / 255.0)
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun arTextureIsTransparentUnlessExplicitlyEnabled() {
         val disabled = state(17.76033, -28.93617, MilkyWayMode.NATURAL).copy(arMode = true)
         launch(disabled)

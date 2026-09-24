@@ -292,8 +292,15 @@ private class SkyTextureWorker(
         GLES20.glDisable(GLES20.GL_BLEND)
         GLES20.glUniform2f(uniform("resolution"), next.width.toFloat(), next.height.toFloat())
         GLES20.glUniform2f(uniform("textureSize"), textureWidth.toFloat(), textureHeight.toFloat())
-        GLES20.glUniform3f(uniform("view"), Math.toRadians(state.azimuth).toFloat(),
-            Math.toRadians(state.altitude).toFloat(), Math.toRadians(state.fov).toFloat())
+        val azimuth = Math.toRadians(state.azimuth)
+        val altitude = Math.toRadians(state.altitude)
+        val fov = Math.toRadians(state.fov)
+        GLES20.glUniform3f(uniform("view"), azimuth.toFloat(), altitude.toFloat(), fov.toFloat())
+        GLES20.glUniform4f(uniform("viewTrig"), kotlin.math.sin(azimuth).toFloat(),
+            kotlin.math.cos(azimuth).toFloat(), kotlin.math.sin(altitude).toFloat(),
+            kotlin.math.cos(altitude).toFloat())
+        GLES20.glUniform1f(uniform("inverseFocal"),
+            (2.0 * kotlin.math.tan(fov * 0.25) / next.width).toFloat())
         GLES20.glUniformMatrix3fv(uniform("horizontalToJ2000"), 1, false, state.frame.horizontalToJ2000, 0)
         GLES20.glUniform1f(uniform("arMode"), if (state.arMode) 1f else 0f)
         val rotation = Math.toRadians(if (state.arMode) 0.0 else state.optics.rotationDegrees.toDouble())

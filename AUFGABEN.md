@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.17.
+Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.18.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -103,6 +103,8 @@ Umgesetzt in `1.1.8-pre.1`. Wetter und zugehöriger Ort werden atomar ersetzt; a
 
 ### 7. Schneller App- und Sternkartenstart
 
+- [x] Ruckeln beim manuellen Schwenken reduzieren: alle Touch-Deltas übernehmen, unnötige Tap-Detector-Neustarts vermeiden und Milchstraßen-Shader/Projektion entlasten ([pre.18](play-store/pre-release-1.1.9-pre.18.md)).
+- [ ] Gleichlauf von Sternen und Milchstraßen-Textur während längerer Schwenks auf einem leistungsschwachen echten Gerät prüfen; bei verbleibendem Versatz Renderpfade gezielt synchronisieren oder adaptiv abstufen.
 - [x] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
 - [x] HYG-/OpenNGC-/IAU-Daten pro Prozess zwischenspeichern und bei wiederholtem Tabwechsel nicht erneut parsen (Sternkarte und Beobachtungsliste, `beta` / `1.1.9-pre.1`).
 

@@ -3,6 +3,8 @@ uniform sampler2D skyTexture;
 uniform vec2 resolution;
 uniform vec2 textureSize;
 uniform vec3 view;
+uniform vec4 viewTrig;
+uniform float inverseFocal;
 uniform mat3 horizontalToJ2000;
 uniform float arMode;
 uniform float enhanced;
@@ -12,9 +14,14 @@ const float PI = 3.141592653589793;
 
 // Bilinear wrap at RA=12h without requiring power-of-two texture dimensions on GLES2.
 vec3 sampleSky(vec2 uv) {
+    float y = clamp(uv.y, 0.5 / textureSize.y, 1.0 - 0.5 / textureSize.y);
+    float edge = 0.5 / textureSize.x;
+    // Hardware bilinear filtering covers the whole image except the wrapped RA seam.
+    if (uv.x >= edge && uv.x <= 1.0 - edge) {
+        return texture2D(skyTexture, vec2(uv.x, y)).rgb;
+    }
     float pixel = uv.x * textureSize.x - 0.5;
     float left = floor(pixel);
-    float y = clamp(uv.y, 0.5 / textureSize.y, 1.0 - 0.5 / textureSize.y);
     vec2 a = vec2((mod(left, textureSize.x) + 0.5) / textureSize.x, y);
     vec2 b = vec2((mod(left + 1.0, textureSize.x) + 0.5) / textureSize.x, y);
     return mix(texture2D(skyTexture, a).rgb, texture2D(skyTexture, b).rgb, fract(pixel));
@@ -36,14 +43,13 @@ void main() {
         if (abs(alt) > PI * 0.5) { gl_FragColor = vec4(0.0); return; }
         direction = vec3(cos(alt) * sin(az), cos(alt) * cos(az), sin(alt));
     } else {
-        float focal = resolution.x / (2.0 * tan(view.z * 0.25));
-        vec2 offset = vec2(pixel.x - resolution.x * 0.5, resolution.y * 0.5 - pixel.y) / focal;
+        vec2 offset = vec2(pixel.x - resolution.x * 0.5, resolution.y * 0.5 - pixel.y) * inverseFocal;
         float r2 = dot(offset, offset);
         float denom = 1.0 + r2;
         vec3 cam = vec3(2.0 * offset.x / denom, 2.0 * offset.y / denom, (1.0 - r2) / denom);
-        vec3 right = vec3(cos(az), -sin(az), 0.0);
-        vec3 up = vec3(-sin(alt) * sin(az), -sin(alt) * cos(az), cos(alt));
-        vec3 forward = vec3(cos(alt) * sin(az), cos(alt) * cos(az), sin(alt));
+        vec3 right = vec3(viewTrig.y, -viewTrig.x, 0.0);
+        vec3 up = vec3(-viewTrig.z * viewTrig.x, -viewTrig.z * viewTrig.y, viewTrig.w);
+        vec3 forward = vec3(viewTrig.w * viewTrig.x, viewTrig.w * viewTrig.y, viewTrig.z);
         direction = normalize(right * cam.x + up * cam.y + forward * cam.z);
     }
     float horizonGlow = pow(1.0 - abs(direction.z), 5.0);

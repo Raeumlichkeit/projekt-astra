@@ -1414,12 +1414,17 @@ internal fun SkyScreen(
                 showConstellationIllustrations = showIllustrations,
                 terrainProfile = (terrainState as? TerrainState.Ready)?.profile,
                 gesturesEnabled = !arEnabled,
-                onViewChange = { azimuth, altitude, fov ->
-                    if (selection.tracking) targetMessage = "Nachführen durch manuelle Bedienung beendet"
-                    updateSelection(selection.release())
-                    manualAzimuth = azimuth.toFloat()
-                    manualAltitude = altitude.toFloat()
-                    manualFov = fov.toFloat()
+                onTransform = { panX, panY, zoom ->
+                    if (selectionTracking) {
+                        targetMessage = "Nachführen durch manuelle Bedienung beendet"
+                        manualAzimuth = viewAzimuth
+                        manualAltitude = viewAltitude
+                        updateSelection(selection.release())
+                    }
+                    val fov = manualFov.toDouble()
+                    manualAzimuth = normalizeDegrees(manualAzimuth - panX * fov).toFloat()
+                    manualAltitude = (manualAltitude + panY * fov).coerceIn(-90.0, 90.0).toFloat()
+                    manualFov = (fov / zoom).coerceIn(0.5, 150.0).toFloat()
                 },
                 onSelect = {
                     manualAzimuth = viewAzimuth
@@ -2108,7 +2113,7 @@ internal fun SkyCanvas(
     showConstellationIllustrations: Boolean,
     terrainProfile: TerrainProfile?,
     gesturesEnabled: Boolean,
-    onViewChange: (azimuth: Double, altitude: Double, fov: Double) -> Unit,
+    onTransform: (panX: Double, panY: Double, zoom: Double) -> Unit,
     onSelect: (VisibleObject) -> Unit,
     modifier: Modifier = Modifier,
     drawBackground: Boolean = true,
@@ -2130,9 +2135,10 @@ internal fun SkyCanvas(
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var firstFrameReported by remember { mutableStateOf(false) }
-    val latestAzimuth by rememberUpdatedState(viewAzimuth)
-    val latestAltitude by rememberUpdatedState(viewAltitude)
-    val latestFov by rememberUpdatedState(horizontalFov)
+    val currentOnTransform by rememberUpdatedState(onTransform)
+    val currentAzimuth by rememberUpdatedState(viewAzimuth)
+    val currentAltitude by rememberUpdatedState(viewAltitude)
+    val currentFov by rememberUpdatedState(horizontalFov)
     val currentMeasurementState by rememberUpdatedState(measurementState)
     val currentOnMeasurementPointSelected by rememberUpdatedState(onMeasurementPointSelected)
     val currentCoordinateFrame by rememberUpdatedState(coordinateFrame)
@@ -2142,7 +2148,7 @@ internal fun SkyCanvas(
     Canvas(
         modifier.fillMaxSize().clipToBounds()
             .onSizeChanged { canvasSize = it }
-            .pointerInput(objects, viewAzimuth, viewAltitude, canvasSize, horizontalFov, arMode, opticsSettings, measurementState.isActive) {
+            .pointerInput(objects, canvasSize, arMode, opticsSettings, measurementState.isActive) {
                 detectTapGestures { tap ->
                     val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
                     val effectiveTap = if (!arMode && opticsSettings.isCustomized) {
@@ -2150,8 +2156,8 @@ internal fun SkyCanvas(
                     } else {
                         tap
                     }
-                    val projection = SkyProjection(viewAzimuth, viewAltitude,
-                        canvasSize.width.toFloat(), canvasSize.height.toFloat(), horizontalFov,
+                    val projection = SkyProjection(currentAzimuth, currentAltitude,
+                        canvasSize.width.toFloat(), canvasSize.height.toFloat(), currentFov,
                         perspective = !arMode,
                         clipPadding = if (!arMode && opticsSettings.isCustomized)
                             hypot(canvasSize.width.toDouble(), canvasSize.height.toDouble()).toFloat() else 0f)
@@ -2184,15 +2190,9 @@ internal fun SkyCanvas(
                     } else {
                         rawPan
                     }
-                    val verticalFov = latestFov * canvasSize.height / canvasSize.width
-                    val nextAzimuth = normalizeDegrees(
-                        latestAzimuth - pan.x / canvasSize.width * latestFov
-                    )
-                    val nextAltitude = (
-                        latestAltitude + pan.y / canvasSize.height * verticalFov
-                    ).coerceIn(-90.0, 90.0)
-                    val nextFov = (latestFov / zoom).coerceIn(0.5, 150.0)
-                    onViewChange(nextAzimuth, nextAltitude, nextFov)
+                    // Apply every touch delta to the parent's current state; recomposition may lag input.
+                    currentOnTransform(pan.x.toDouble() / canvasSize.width, pan.y.toDouble() / canvasSize.width,
+                        zoom.toDouble())
                 }
             }
             .then(

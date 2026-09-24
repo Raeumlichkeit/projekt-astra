@@ -127,7 +127,7 @@ class SkyRenderingTest {
         var azimuth by mutableDoubleStateOf(0.0)
         render { modifier ->
             SkyCanvas(emptyList(), azimuth, 0.0, 40.0, false, emptyList(), emptyList(),
-                false, null, true, { nextAzimuth, _, _ -> azimuth = nextAzimuth }, {}, modifier)
+                false, null, true, { panX, _, _ -> azimuth -= panX * 40.0 }, {}, modifier)
         }
         val time = SystemClock.uptimeMillis()
         touch(MotionEvent.ACTION_DOWN, Offset(bounds.width() * 0.8f, bounds.height() / 2f), time)
@@ -136,6 +136,27 @@ class SkyRenderingTest {
         }
         touch(MotionEvent.ACTION_UP, Offset(bounds.width() * 0.2f, bounds.height() / 2f), time)
         assertTrue(azimuth > 0.0 && azimuth < 40.0)
+    }
+
+    @Test fun rapidDragKeepsDeltasBeforeRecomposition() {
+        var azimuth by mutableDoubleStateOf(0.0)
+        render { modifier ->
+            SkyCanvas(emptyList(), azimuth, 0.0, 40.0, false, emptyList(), emptyList(),
+                false, null, true, { panX, _, _ -> azimuth -= panX * 40.0 }, {}, modifier)
+        }
+        val time = SystemClock.uptimeMillis()
+        touch(MotionEvent.ACTION_DOWN, Offset(bounds.width() * 0.8f, bounds.height() / 2f), time)
+        scenario!!.onActivity { activity ->
+            (1..10).forEach { step ->
+                val event = MotionEvent.obtain(time, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE,
+                    bounds.left + bounds.width() * (0.8f - step * 0.06f),
+                    bounds.top + bounds.height() / 2f, 0)
+                try { activity.window.decorView.dispatchTouchEvent(event) } finally { event.recycle() }
+            }
+        }
+        instrumentation.waitForIdleSync()
+        touch(MotionEvent.ACTION_UP, Offset(bounds.width() * 0.2f, bounds.height() / 2f), time)
+        assertTrue("Rapid pan lost touch deltas: $azimuth°", azimuth in 18.0..27.0)
     }
 
     @Test fun groundStillCoversViewWhenHorizonIsAboveTheTopEdge() {

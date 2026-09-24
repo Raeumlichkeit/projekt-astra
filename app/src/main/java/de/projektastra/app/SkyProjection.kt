@@ -35,7 +35,7 @@ internal class SkyProjection(
     }
 
     private fun camera(position: HorizontalCoordinates): Vector {
-        val azimuth = Math.toRadians(delta(position.azimuth - centerAzimuth))
+        val azimuth = Math.toRadians(position.azimuth - centerAzimuth)
         val altitude = Math.toRadians(position.altitude)
         val forward = cos(altitude) * cos(azimuth)
         return Vector(cos(altitude) * sin(azimuth),

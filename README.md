@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.17` · Version Code `35` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.17 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.17).
+**Beta-Stand:** `1.1.9-pre.18` · Version Code `36` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.18 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.18).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -19,6 +19,10 @@ Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengefüh
 | Tagebuch | Beobachtungstagebuch mit Fotos, Pickering 1–10, Antoniadi I–V, NELM fst, JSON-Backup, OAL 2.1 XML Standard-Export & Rotlicht-Textzusammenfassung |
 | AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
 | Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
+
+## Neu in 1.1.9-pre.18 · Ruhigeres Verschieben der Sternkarte
+
+Schnelle Wischbewegungen gehen nicht mehr zwischen zwei Neuzeichnungen verloren. Die Milchstraßen-Textur nutzt die GPU-Filterung außerhalb der RA-Naht und berechnet ihre Blickrichtungsbasis nur einmal pro Bild; Sternpositionen sparen eine unnötige Winkel-Normalisierung. Das senkt die Renderarbeit, ersetzt aber keinen Test auf einem schwächeren echten Gerät. Details und Grenzen stehen in den [Pre-Release-Hinweisen](play-store/pre-release-1.1.9-pre.18.md).
 
 ## Neu in 1.1.9-pre.17 · Querformat
 
