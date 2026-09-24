@@ -148,6 +148,34 @@ class SkyTextureRenderingTest {
         }
     }
 
+    @Test fun switchingBetweenReducedManualAndFullResolutionArKeepsRendering() {
+        val manual = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
+        launch(manual, width = 901, height = 351)
+        awaitStableFrameCount()
+        capture().useBitmap { image ->
+            assertEquals("Manual photo starts opaque", 255,
+                Color.alpha(image.getPixel(image.width / 2, image.height / 2)))
+        }
+
+        val manualFrames = view.framesRendered.get()
+        update(manual.copy(arMode = true))
+        awaitStableFrameCount()
+        assertTrue("AR switch must submit a full-resolution frame", view.framesRendered.get() > manualFrames)
+        capture().useBitmap { image ->
+            assertEquals("AR photo remains transparent without opt-in", 0,
+                Color.alpha(image.getPixel(image.width / 2, image.height / 2)))
+        }
+
+        val arFrames = view.framesRendered.get()
+        update(manual)
+        awaitStableFrameCount()
+        assertTrue("Manual return must submit a reduced-buffer frame", view.framesRendered.get() > arFrames)
+        capture().useBitmap { image ->
+            assertEquals("Manual photo becomes opaque again", 255,
+                Color.alpha(image.getPixel(image.width / 2, image.height / 2)))
+        }
+    }
+
     @Test fun opticsRotationAndMirrorKeepTextureAlignedAtPortraitEdges() {
         val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
         launch(initial, width = 201, height = 301)
@@ -165,6 +193,48 @@ class SkyTextureRenderingTest {
                     assertEquals("Texture must cover the rotated edge", 255, Color.alpha(target))
                 }
             }
+        }
+    }
+
+    @Test fun resizedTextureMatchesFreshViewportAtLatestDirection() {
+        val initial = state(17.76033, -28.93617, MilkyWayMode.PHOTO)
+        val target = state(6.75248, -16.71612, MilkyWayMode.PHOTO)
+        val width = 901
+        val height = 351
+        launch(initial)
+        val before = view.framesRendered.get()
+        instrumentation.runOnMainSync {
+            view.layoutParams = FrameLayout.LayoutParams(width, height)
+            view.update(target)
+        }
+        instrumentation.waitForIdleSync()
+        assertEquals(width, view.width)
+        assertEquals(height, view.height)
+        awaitFrameAfter(before)
+        awaitStableFrameCount()
+        val resized = capture()
+
+        scenario?.close()
+        scenario = null
+        launch(target, width, height)
+        val fresh = capture()
+        try {
+            assertEquals(width, resized.width)
+            assertEquals(height, resized.height)
+            val columns = listOf(1, width / 4, width / 2, width * 3 / 4, width - 2)
+            val rows = listOf(1, height / 4, height / 2, height * 3 / 4, height - 2)
+            for (y in rows) for (x in columns) {
+                val actual = resized.getPixel(x, y)
+                val expected = fresh.getPixel(x, y)
+                assertEquals("Resized texture must cover ($x,$y)", 255, Color.alpha(actual))
+                assertTrue("Resized texture must keep the latest direction at ($x,$y)",
+                    abs(Color.red(actual) - Color.red(expected)) <= 5 &&
+                        abs(Color.green(actual) - Color.green(expected)) <= 5 &&
+                        abs(Color.blue(actual) - Color.blue(expected)) <= 5)
+            }
+        } finally {
+            resized.recycle()
+            fresh.recycle()
         }
     }
 

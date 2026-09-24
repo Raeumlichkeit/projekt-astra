@@ -2261,6 +2261,9 @@ internal fun SkyCanvas(
             }
 
         val projected = objects.mapNotNull { item ->
+            // Manual ground is opaque; skip objects safely below it before the costly projection.
+            // AR keeps them because its camera horizon is translucent.
+            if (!arMode && item.position.altitude <= -5.0) return@mapNotNull null
             projection.point(item.position, padding = opticsPadding)?.let { point ->
                 if (!applyOptics || projection.contains(opticsSettings.transformScreenPoint(point, canvasCenter), 32f)) item to point else null
             }

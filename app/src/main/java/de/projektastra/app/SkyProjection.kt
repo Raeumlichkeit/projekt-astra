@@ -37,10 +37,12 @@ internal class SkyProjection(
     private fun camera(position: HorizontalCoordinates): Vector {
         val azimuth = Math.toRadians(position.azimuth - centerAzimuth)
         val altitude = Math.toRadians(position.altitude)
-        val forward = cos(altitude) * cos(azimuth)
-        return Vector(cos(altitude) * sin(azimuth),
-            sin(altitude) * pitchCos - forward * pitchSin,
-            sin(altitude) * pitchSin + forward * pitchCos)
+        val sinAltitude = sin(altitude)
+        val cosAltitude = cos(altitude)
+        val forward = cosAltitude * cos(azimuth)
+        return Vector(cosAltitude * sin(azimuth),
+            sinAltitude * pitchCos - forward * pitchSin,
+            sinAltitude * pitchSin + forward * pitchCos)
     }
 
     private fun screen(vector: Vector): Offset {

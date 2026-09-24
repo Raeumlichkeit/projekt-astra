@@ -24,6 +24,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.roundToInt
 
 internal data class SkyTextureState(
     val frame: SkyCoordinateFrame,
@@ -97,7 +98,7 @@ internal class SkyTextureView(context: Context) : TextureView(context), TextureV
     }
 
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-        worker?.update(state, width, height, renderingActive)
+        worker?.update(state, this.width, this.height, renderingActive)
     }
 
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
@@ -140,8 +141,11 @@ private class SkyTextureWorker(
     private val queued = AtomicBoolean(false)
     @Volatile private var request = Request(null, 0, 0, false)
     private var display: EGLDisplay = EGL14.EGL_NO_DISPLAY
+    private var eglConfig: EGLConfig? = null
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var bufferWidth = 0
+    private var bufferHeight = 0
     private var nativeSurface: Surface? = null
     private var program = 0
     private var texture = 0
@@ -157,8 +161,13 @@ private class SkyTextureWorker(
         val next = request
         if (!closed.get() && next.active && next.width > 0 && next.height > 0 && next.state != null && !initializationFailed) {
             try {
-                if (program == 0) initialize()
-                if (!closed.get()) render(next)
+                // This diffuse photo needs fewer fragments than the sharp Compose stars and labels.
+                val longestEdge = maxOf(next.width, next.height)
+                val scale = if (next.state.arMode || longestEdge <= 800) 1.0 else minOf(0.75, 1600.0 / longestEdge)
+                val width = maxOf(1, (next.width * scale).roundToInt())
+                val height = maxOf(1, (next.height * scale).roundToInt())
+                if (program == 0) initialize(width, height)
+                if (!closed.get()) render(next, width, height)
             } catch (_: Exception) {
                 initializationFailed = true
                 disposeGl()
@@ -190,7 +199,7 @@ private class SkyTextureWorker(
         }
     }
 
-    private fun initialize() {
+    private fun initialize(width: Int, height: Int) {
         display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         check(display != EGL14.EGL_NO_DISPLAY)
         val version = IntArray(2)
@@ -203,14 +212,18 @@ private class SkyTextureWorker(
             EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8,
             EGL14.EGL_NONE), 0, configs, 0, 1, count, 0) && count[0] > 0)
         val config = checkNotNull(configs[0])
+        eglConfig = config
         eglContext = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT,
             intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
         check(eglContext != EGL14.EGL_NO_CONTEXT)
+        surfaceTexture.setDefaultBufferSize(width, height)
         nativeSurface = Surface(surfaceTexture)
         eglSurface = EGL14.eglCreateWindowSurface(display, config, nativeSurface,
             intArrayOf(EGL14.EGL_NONE), 0)
         check(eglSurface != EGL14.EGL_NO_SURFACE)
         check(EGL14.eglMakeCurrent(display, eglSurface, eglSurface, eglContext))
+        bufferWidth = width
+        bufferHeight = height
         val vertex = compile(GLES20.GL_VERTEX_SHADER,
             "attribute vec2 position; void main() { gl_Position = vec4(position, 0.0, 1.0); }")
         val fragmentText = context.assets.open("milky_way.frag").bufferedReader().use { it.readText() }
@@ -284,13 +297,28 @@ private class SkyTextureWorker(
 
     private fun uniform(name: String) = uniforms.getOrPut(name) { GLES20.glGetUniformLocation(program, name) }
 
-    private fun render(next: Request) {
+    private fun resizeSurface(width: Int, height: Int) {
+        if (width == bufferWidth && height == bufferHeight) return
+        check(EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT))
+        check(EGL14.eglDestroySurface(display, eglSurface))
+        eglSurface = EGL14.EGL_NO_SURFACE
+        surfaceTexture.setDefaultBufferSize(width, height)
+        eglSurface = EGL14.eglCreateWindowSurface(display, checkNotNull(eglConfig), checkNotNull(nativeSurface),
+            intArrayOf(EGL14.EGL_NONE), 0)
+        check(eglSurface != EGL14.EGL_NO_SURFACE)
+        check(EGL14.eglMakeCurrent(display, eglSurface, eglSurface, eglContext))
+        bufferWidth = width
+        bufferHeight = height
+    }
+
+    private fun render(next: Request, width: Int, height: Int) {
         val state = checkNotNull(next.state)
         val appearance = state.appearance.normalized()
-        GLES20.glViewport(0, 0, next.width, next.height)
+        resizeSurface(width, height)
+        GLES20.glViewport(0, 0, width, height)
         GLES20.glUseProgram(program)
         GLES20.glDisable(GLES20.GL_BLEND)
-        GLES20.glUniform2f(uniform("resolution"), next.width.toFloat(), next.height.toFloat())
+        GLES20.glUniform2f(uniform("resolution"), width.toFloat(), height.toFloat())
         GLES20.glUniform2f(uniform("textureSize"), textureWidth.toFloat(), textureHeight.toFloat())
         val azimuth = Math.toRadians(state.azimuth)
         val altitude = Math.toRadians(state.altitude)
@@ -300,7 +328,7 @@ private class SkyTextureWorker(
             kotlin.math.cos(azimuth).toFloat(), kotlin.math.sin(altitude).toFloat(),
             kotlin.math.cos(altitude).toFloat())
         GLES20.glUniform1f(uniform("inverseFocal"),
-            (2.0 * kotlin.math.tan(fov * 0.25) / next.width).toFloat())
+            (2.0 * kotlin.math.tan(fov * 0.25) / width).toFloat())
         GLES20.glUniformMatrix3fv(uniform("horizontalToJ2000"), 1, false, state.frame.horizontalToJ2000, 0)
         GLES20.glUniform1f(uniform("arMode"), if (state.arMode) 1f else 0f)
         val rotation = Math.toRadians(if (state.arMode) 0.0 else state.optics.rotationDegrees.toDouble())
@@ -334,8 +362,11 @@ private class SkyTextureWorker(
         nativeSurface = null
         program = 0
         texture = 0
+        eglConfig = null
         display = EGL14.EGL_NO_DISPLAY
         eglContext = EGL14.EGL_NO_CONTEXT
         eglSurface = EGL14.EGL_NO_SURFACE
+        bufferWidth = 0
+        bufferHeight = 0
     }
 }
