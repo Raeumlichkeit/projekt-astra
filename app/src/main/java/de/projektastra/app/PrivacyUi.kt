@@ -3,9 +3,12 @@ package de.projektastra.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -18,11 +21,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlin.math.roundToInt
 
 @Composable
 internal fun OnlineConsentDialog(onChoice: (Boolean) -> Unit) {
@@ -82,6 +91,7 @@ internal fun PrivacyControls(
 @Composable
 internal fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val fontScale = LocalConfiguration.current.fontScale
     val view = remember(context) {
         PrivateWebViews.create(context, javascript = false).apply {
             val html = context.assets.open("privacy-policy.html").bufferedReader().use { it.readText() }
@@ -89,10 +99,23 @@ internal fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
         }
     }
     DisposableEffect(view) { onDispose { PrivateWebViews.dispose(view) } }
-    AlertDialog(onDismissRequest = onDismiss,
-        title = { Text("Datenschutzerklärung") },
-        text = { AndroidView(factory = { view }, modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp, max = 560.dp)) },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Schließen") } })
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Card(Modifier.padding(16.dp).widthIn(max = 720.dp).fillMaxWidth()
+            .heightIn(max = 680.dp).fillMaxHeight(0.9f)
+            .semantics { paneTitle = "Datenschutzerklärung" }) {
+            Column(Modifier.fillMaxSize()) {
+                // The document already includes its heading. Keep it inside the scrolling WebView
+                // so large text cannot push the close action out of a short landscape window.
+                AndroidView(factory = { view },
+                    update = { it.settings.textZoom = (fontScale * 100).roundToInt() },
+                    modifier = Modifier.fillMaxWidth().weight(1f))
+                TextButton(onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    Text("Schließen")
+                }
+            }
+        }
+    }
 }
 
 @Composable

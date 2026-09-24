@@ -189,6 +189,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
@@ -450,6 +452,13 @@ private fun AstraTheme(redLightMode: Boolean, oledMode: Boolean = false, content
 private enum class AstraTab { SKY, WEATHER, EVENTS, PLAN, ABOUT }
 
 @Composable
+private fun isCompactLandscape(): Boolean {
+    val size = LocalWindowInfo.current.containerSize
+    val height = with(LocalDensity.current) { size.height.toDp() }
+    return size.width > size.height && height < 480.dp
+}
+
+@Composable
 private fun AstraApp(
     redLightMode: Boolean,
     setRedLightMode: (Boolean) -> Unit,
@@ -459,14 +468,15 @@ private fun AstraApp(
     setSkyFullscreen: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    var tab by remember { mutableStateOf(AstraTab.SKY) }
+    val compactLandscape = isCompactLandscape()
+    var tab by rememberSaveable { mutableStateOf(AstraTab.SKY) }
     var location by remember { mutableStateOf(LocationStore.getSavedLocation(context)) }
     var rememberLocation by remember { mutableStateOf(LocationStore.isRememberEnabled(context)) }
-    var useSessionLocation by remember { mutableStateOf(true) }
+    var useSessionLocation by rememberSaveable { mutableStateOf(true) }
     var permissionGranted by remember { mutableStateOf(false) }
     var cameraGranted by remember { mutableStateOf(false) }
-    var arEnabled by remember { mutableStateOf(false) }
-    var pendingSkyObjectId by remember { mutableStateOf<String?>(null) }
+    var arEnabled by rememberSaveable { mutableStateOf(false) }
+    var pendingSkyObjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingSkyPosition by remember { mutableStateOf<HorizontalCoordinates?>(null) }
     var skyNotice by remember { mutableStateOf<String?>(null) }
     val skyClock = rememberSaveable(saver = Saver<SkyClock, String>(
@@ -570,36 +580,36 @@ private fun AstraApp(
                 NavigationBarItem(
                     selected = tab == AstraTab.SKY,
                     onClick = { tab = AstraTab.SKY },
-                    icon = { Icon(Icons.Rounded.Public, null) },
-                    label = { Text("Sternkarte") },
+                    icon = { Icon(Icons.Rounded.Public, if (compactLandscape) "Sternkarte" else null) },
+                    label = if (compactLandscape) null else ({ Text("Sternkarte") }),
                     colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.WEATHER,
                     onClick = { tab = AstraTab.WEATHER },
-                    icon = { Icon(Icons.Rounded.Cloud, null) },
-                    label = { Text("Wetter") },
+                    icon = { Icon(Icons.Rounded.Cloud, if (compactLandscape) "Wetter" else null) },
+                    label = if (compactLandscape) null else ({ Text("Wetter") }),
                     colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.EVENTS,
                     onClick = { tab = AstraTab.EVENTS },
-                    icon = { Icon(Icons.Rounded.CalendarMonth, null) },
-                    label = { Text("Kalender") },
+                    icon = { Icon(Icons.Rounded.CalendarMonth, if (compactLandscape) "Kalender" else null) },
+                    label = if (compactLandscape) null else ({ Text("Kalender") }),
                     colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.PLAN,
                     onClick = { tab = AstraTab.PLAN },
-                    icon = { Icon(Icons.Rounded.Bookmarks, null) },
-                    label = { Text("Plan") },
+                    icon = { Icon(Icons.Rounded.Bookmarks, if (compactLandscape) "Plan" else null) },
+                    label = if (compactLandscape) null else ({ Text("Plan") }),
                     colors = navigationColors
                 )
                 NavigationBarItem(
                     selected = tab == AstraTab.ABOUT,
                     onClick = { tab = AstraTab.ABOUT },
-                    icon = { Icon(Icons.Rounded.Info, null) },
-                    label = { Text("Info") },
+                    icon = { Icon(Icons.Rounded.Info, if (compactLandscape) "Info" else null) },
+                    label = if (compactLandscape) null else ({ Text("Info") }),
                     colors = navigationColors
                 )
             }
@@ -959,19 +969,21 @@ internal fun SkyScreen(
     val stars = catalogs.stars ?: StarCatalog.fallbackObjects
     val deepSkyObjects = catalogs.deepSky.orEmpty()
     val iauBoundaries = catalogs.boundaries.orEmpty()
-    var selected by remember { mutableStateOf<VisibleObject?>(null) }
+    var selectedCatalogId by rememberSaveable { mutableStateOf<String?>(null) }
     var logEntryTarget by remember { mutableStateOf<CelestialObject?>(null) }
-    var showSearch by remember { mutableStateOf(false) }
-    var showTimeControls by remember { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var showTimeControls by rememberSaveable { mutableStateOf(false) }
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = fullscreen) { setFullscreen(false) }
     var displayZone by remember { mutableStateOf(ZoneId.systemDefault()) }
-    var selection by remember { mutableStateOf(SkyTargetSelection()) }
+    // Save identifiers, not catalog objects or observer coordinates, across Activity recreation.
+    var selectionTargetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectionTracking by rememberSaveable { mutableStateOf(false) }
     var targetMessage by remember { mutableStateOf<String?>(null) }
-    var showDeepSky by remember { mutableStateOf(false) }
-    var showBoundaries by remember { mutableStateOf(false) }
-    var showIllustrations by remember { mutableStateOf(false) }
-    var showLayersPanel by remember { mutableStateOf(false) }
+    var showDeepSky by rememberSaveable { mutableStateOf(false) }
+    var showBoundaries by rememberSaveable { mutableStateOf(false) }
+    var showIllustrations by rememberSaveable { mutableStateOf(false) }
+    var showLayersPanel by rememberSaveable { mutableStateOf(false) }
     var manualAzimuth by rememberSaveable { mutableFloatStateOf(180f) }
     var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
     var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
@@ -1002,13 +1014,13 @@ internal fun SkyScreen(
     var textureReady by remember { mutableStateOf<Boolean?>(null) }
     var textureRetry by remember { mutableIntStateOf(0) }
     var firstMapFrameRendered by remember { mutableStateOf(false) }
-    var showCalibration by remember { mutableStateOf(false) }
+    var showCalibration by rememberSaveable { mutableStateOf(false) }
     var terrainState by remember { mutableStateOf<TerrainState>(TerrainState.Loading) }
     var opticsSettings by remember { mutableStateOf(OpticsStore.loadSettings(context)) }
     var opticsProfiles by remember { mutableStateOf(OpticsStore.loadProfiles(context)) }
-    var showOpticsSheet by remember { mutableStateOf(false) }
+    var showOpticsSheet by rememberSaveable { mutableStateOf(false) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
-    var showMoonDetailSheet by remember { mutableStateOf(false) }
+    var showMoonDetailSheet by rememberSaveable { mutableStateOf(false) }
     var measurementState by remember { mutableStateOf(CelestialMeasurementState()) }
     var starHopSession by remember { mutableStateOf(StarHopSessionState()) }
     var showStarHopSheet by remember { mutableStateOf(false) }
@@ -1031,15 +1043,6 @@ internal fun SkyScreen(
         displayZone = ZoneId.systemDefault()
         onStopOrDispose { }
     }
-    var wasArEnabled by remember { mutableStateOf(arEnabled) }
-    LaunchedEffect(arEnabled) {
-        if (wasArEnabled && !arEnabled && selection.target == null) {
-            manualAzimuth = orientation.azimuth
-            manualAltitude = orientation.altitude
-        }
-        if (arEnabled) selection = selection.release()
-        wasArEnabled = arEnabled
-    }
     var terrainRetry by remember { mutableIntStateOf(0) }
     LaunchedEffect(
         (observer.latitude * 1_000).roundToInt(),
@@ -1055,6 +1058,29 @@ internal fun SkyScreen(
     val solarSystem = remember(observer, skyInstant) { SolarSystemCatalog.at(observer, skyInstant) }
     val searchIndex = catalogs.searchIndex ?: remember { SkySearchIndex(emptyList()) }
     val movingSearchTargets = remember(solarSystem) { solarSystem.map { SkySearchTarget(it) } }
+    val selectionTarget = remember(selectionTargetId, stars, deepSkyObjects) {
+        val id = selectionTargetId
+        if (id == null) null
+        else (stars + deepSkyObjects).firstOrNull { it.catalogId == id }?.let { SkySearchTarget(it) }
+            ?: constellationSearchTargets(stars).firstOrNull { it.id == id }
+    } ?: movingSearchTargets.firstOrNull { it.id == selectionTargetId }
+    val selectedObject = remember(selectedCatalogId, stars, deepSkyObjects) {
+        selectedCatalogId?.let { id -> (stars + deepSkyObjects).firstOrNull { it.catalogId == id } }
+    } ?: solarSystem.firstOrNull { it.catalogId == selectedCatalogId }
+    val selection = SkyTargetSelection(selectionTarget, selectionTracking && selectionTarget != null)
+    fun updateSelection(value: SkyTargetSelection) {
+        selectionTargetId = value.target?.id
+        selectionTracking = value.tracking
+    }
+    var wasArEnabled by remember { mutableStateOf(arEnabled) }
+    LaunchedEffect(arEnabled) {
+        if (wasArEnabled && !arEnabled && selectionTargetId == null) {
+            manualAzimuth = orientation.azimuth
+            manualAltitude = orientation.altitude
+        }
+        if (arEnabled) selectionTracking = false
+        wasArEnabled = arEnabled
+    }
     val resolveTarget: (SkySearchTarget) -> CelestialObject = { target ->
         solarSystem.firstOrNull { it.catalogId == target.objectData.catalogId } ?: target.objectData
     }
@@ -1071,7 +1097,7 @@ internal fun SkyScreen(
     val openTarget: (SkySearchTarget) -> Unit = { target ->
         val position = positionOf(target)
         useManualMap()
-        selection = selection.select(target)
+        updateSelection(selection.select(target))
         manualAzimuth = position.azimuth.toFloat()
         manualAltitude = position.altitude.toFloat()
         if (target.needsDeepSky) showDeepSky = true
@@ -1082,7 +1108,7 @@ internal fun SkyScreen(
             else -> null
         }
         showSearch = false
-        selected = null
+        selectedCatalogId = null
     }
     LaunchedEffect(requestedObjectId, solarSystem, catalogs.objectsReady) {
         if (requestedObjectId != null && catalogs.objectsReady) {
@@ -1100,7 +1126,7 @@ internal fun SkyScreen(
         requestedPosition?.let {
             manualAzimuth = it.azimuth.toFloat()
             manualAltitude = it.altitude.toFloat()
-            selection = SkyTargetSelection()
+            updateSelection(SkyTargetSelection())
             consumePositionRequest()
         }
     }
@@ -1131,7 +1157,7 @@ internal fun SkyScreen(
     // Bound the combined chrome, including notices, so short landscape screens retain sky space.
     val headerMaxHeight = maxHeight * 0.12f
     val orientationMaxHeight = (maxHeight * 0.18f).coerceAtMost(110.dp)
-    val controlsMaxHeight = (maxHeight * 0.34f).coerceAtMost(270.dp)
+    val controlsMaxHeight = (maxHeight * if (compactHeight) 0.26f else 0.34f).coerceAtMost(270.dp)
     val targetMaxHeight = (maxHeight * 0.18f).coerceAtMost(148.dp)
     Column(Modifier.fillMaxSize().background(if (isOled) Color.Black else Color.Transparent)) {
         if (!fullscreen && !compactHeight) {
@@ -1183,9 +1209,10 @@ internal fun SkyScreen(
                 .verticalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
                 Text("${cardinalDirection(viewAzimuth)} ${viewAzimuth.toInt()}° · Höhe ${viewAltitude.toInt()}°",
                     color = StarGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text("Sichtfeld ${(if (arEnabled) cameraFov else manualFov.toDouble()).format(0)}° horizontal",
+                Text("Sichtfeld ${(if (arEnabled) cameraFov else manualFov.toDouble()).format(0)}° horizontal" +
+                    if (compactHeight && location == null) " · Berlin Demo" else "",
                     fontSize = 12.sp, color = AstraTextMuted, modifier = Modifier.testTag("sky-fov"))
-                if ((fullscreen || compactHeight) && location == null) Text("Berlin Demo", fontSize = 11.sp, color = AstraTextMuted)
+                if (fullscreen && !compactHeight && location == null) Text("Berlin Demo", fontSize = 11.sp, color = AstraTextMuted)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row {
@@ -1202,7 +1229,7 @@ internal fun SkyScreen(
                     if (fullscreen) "Vollbild beenden" else "Sternkarte im Vollbild")
             }
             }
-            Text(if (!skyTime.live) "Simulation" else if (arEnabled) "AR · Jetzt" else "Jetzt",
+            if (!compactHeight) Text(if (!skyTime.live) "Simulation" else if (arEnabled) "AR · Jetzt" else "Jetzt",
                 fontSize = 11.sp, maxLines = 1, color = if (skyTime.live) AstraTextMuted else StarGold,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
@@ -1251,7 +1278,7 @@ internal fun SkyScreen(
                     }
                     TextButton(onClick = {
                         manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
-                        selection = selection.release(); toggleAr()
+                        updateSelection(selection.release()); toggleAr()
                     }) {
                         Icon(if (arEnabled) Icons.Rounded.Map else Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
                         Text(if (arEnabled) " Karte" else " AR · Jetzt")
@@ -1274,23 +1301,23 @@ internal fun SkyScreen(
                     }
                     if (!arEnabled) {
                         TextButton(onClick = {
-                            selection = selection.release()
+                            updateSelection(selection.release())
                             manualAzimuth = orientation.azimuth; manualAltitude = orientation.altitude
                             manualFov = 95f
                         }) { Text("Ausrichten") }
                         TextButton(onClick = {
-                            selection = SkyTargetSelection(); targetMessage = null
+                            updateSelection(SkyTargetSelection()); targetMessage = null
                             manualAzimuth = 180f; manualAltitude = 35f; manualFov = 95f
                         }, modifier = Modifier.testTag("sky-reset")) {
                             Icon(Icons.Rounded.RestartAlt, null, Modifier.size(18.dp)); Text(" Ansicht zurücksetzen")
                         }
                         IconButton(onClick = {
                             manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
-                            selection = selection.release(); manualFov = (manualFov / 1.25f).coerceAtLeast(0.5f)
+                            updateSelection(selection.release()); manualFov = (manualFov / 1.25f).coerceAtLeast(0.5f)
                         }, enabled = manualFov > 0.5f) { Icon(Icons.Rounded.Add, "Sternkarte vergrößern") }
                         IconButton(onClick = {
                             manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
-                            selection = selection.release(); manualFov = (manualFov * 1.25f).coerceAtMost(150f)
+                            updateSelection(selection.release()); manualFov = (manualFov * 1.25f).coerceAtMost(150f)
                         }, enabled = manualFov < 150f) { Icon(Icons.Rounded.Remove, "Sternkarte verkleinern") }
                     }
                     TextButton(onClick = { showCalibration = true }) { Text("Kalibrieren") }
@@ -1389,7 +1416,7 @@ internal fun SkyScreen(
                 gesturesEnabled = !arEnabled,
                 onViewChange = { azimuth, altitude, fov ->
                     if (selection.tracking) targetMessage = "Nachführen durch manuelle Bedienung beendet"
-                    selection = selection.release()
+                    updateSelection(selection.release())
                     manualAzimuth = azimuth.toFloat()
                     manualAltitude = altitude.toFloat()
                     manualFov = fov.toFloat()
@@ -1397,9 +1424,9 @@ internal fun SkyScreen(
                 onSelect = {
                     manualAzimuth = viewAzimuth
                     manualAltitude = viewAltitude
-                    selection = selection.select(SkySearchTarget(it.celestial))
+                    updateSelection(selection.select(SkySearchTarget(it.celestial)))
                     targetMessage = null
-                    selected = it
+                    selectedCatalogId = it.celestial.catalogId
                 },
                 drawBackground = arEnabled || textureReady != true,
                 showGrid = appearance.showGrid,
@@ -1430,7 +1457,7 @@ internal fun SkyScreen(
                         manualAzimuth = horiz.azimuth.toFloat()
                         manualAltitude = horiz.altitude.toFloat()
                         manualFov = fov.toFloat().coerceIn(0.5f, 150f)
-                        selection = selection.release()
+                        updateSelection(selection.release())
                     },
                     onOpenSheet = { showStarHopSheet = true },
                     onDismissSession = { starHopSession = StarHopSessionState() },
@@ -1670,7 +1697,7 @@ internal fun SkyScreen(
                     guidance = guidance,
                     onOpenCalibration = { showCalibration = true },
                     onDismissTarget = {
-                        selection = selection.release()
+                        updateSelection(selection.release())
                         targetMessage = null
                     },
                     redLightMode = redLightMode
@@ -1694,17 +1721,17 @@ internal fun SkyScreen(
                     if (!arEnabled) TextButton(onClick = {
                         manualAzimuth = viewAzimuth
                         manualAltitude = viewAltitude
-                        selection = if (selection.tracking) selection.release() else selection.follow()
+                        updateSelection(if (selection.tracking) selection.release() else selection.follow())
                         targetMessage = null
                     }) { Text(if (selection.tracking) "Nachführen stoppen" else "Nachführen") }
                     TextButton(onClick = { openTarget(target) }) { Text("Zentrieren") }
                     if (target.regionName == null) TextButton(onClick = {
-                        selected = VisibleObject(resolveTarget(target), positionOf(target))
+                        selectedCatalogId = target.objectData.catalogId
                     }) { Text("Infos") }
                     TextButton(onClick = {
                         manualAzimuth = viewAzimuth
                         manualAltitude = viewAltitude
-                        selection = SkyTargetSelection()
+                        updateSelection(SkyTargetSelection())
                         targetMessage = null
                     }) { Text("Schließen") }
                 }
@@ -1792,10 +1819,10 @@ internal fun SkyScreen(
         retry = { catalogRetry++ }, movingTargets = movingSearchTargets,
         loggedObjectIds = loggedCatalogIds)
 
-    selected?.let { original ->
-        val target = SkySearchTarget(original.celestial)
+    selectedObject?.let { original ->
+        val target = SkySearchTarget(original)
         val item = VisibleObject(resolveTarget(target), positionOf(target))
-        ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = if (isOled) Color.Black else NightBlue) {
+        ModalBottomSheet(onDismissRequest = { selectedCatalogId = null }, containerColor = if (isOled) Color.Black else NightBlue) {
             TextButton(onClick = { openTarget(target) }) { Text("In Karte zentrieren") }
             ObjectDetails(
                 item = item,
@@ -1808,19 +1835,19 @@ internal fun SkyScreen(
                 onAddLogEntry = { logEntryTarget = it },
                 onOpenMoonDetail = {
                     showMoonDetailSheet = true
-                    selected = null
+                    selectedCatalogId = null
                 },
                 onStartMeasurement = { obj ->
                     measurementState = CelestialMeasurementState(
                         isActive = true,
                         origin = MeasurementPoint.ObjectPoint(obj.celestial)
                     )
-                    selected = null
+                    selectedCatalogId = null
                 },
                 onStartStarHop = { route ->
                     starHopSession = StarHopSessionState(activeRoute = route)
                     showStarHopSheet = true
-                    selected = null
+                    selectedCatalogId = null
                 },
                 isObservedInLogbook = ObservationCatalogMatcher.isObserved(item.celestial.catalogId, loggedCatalogIds)
             )
@@ -1846,7 +1873,7 @@ internal fun SkyScreen(
                 manualAzimuth = horiz.azimuth.toFloat()
                 manualAltitude = horiz.altitude.toFloat()
                 manualFov = fov.toFloat().coerceIn(0.5f, 150f)
-                selection = selection.release()
+                updateSelection(selection.release())
             },
             onDismissRequest = { showStarHopSheet = false },
             onAddLogEntry = { catalogId ->
@@ -3177,8 +3204,10 @@ private fun AstraScreenHeader(
     eyebrow: String,
     title: String,
     subtitle: String,
-    icon: ImageVector
+    icon: ImageVector,
+    keepSubtitleInCompact: Boolean = false
 ) {
+    val compactLandscape = isCompactLandscape()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -3191,9 +3220,11 @@ private fun AstraScreenHeader(
                 else Brush.horizontalGradient(
                     listOf(AstraBlue.copy(alpha = 0.13f), Color.Transparent, StarGold.copy(alpha = 0.06f))
                 )
-            ).padding(20.dp),
+            ).padding(horizontal = if (compactLandscape) 12.dp else 20.dp,
+                vertical = if (compactLandscape) 8.dp else 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (!compactLandscape) {
             Box(
                 Modifier.size(52.dp).background(AstraBlue.copy(alpha = 0.16f), RoundedCornerShape(17.dp)),
                 contentAlignment = Alignment.Center
@@ -3201,10 +3232,12 @@ private fun AstraScreenHeader(
                 Icon(icon, contentDescription = null, tint = StarGold, modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.width(15.dp))
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(eyebrow, color = AstraBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text(title, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = AstraTextMuted, fontSize = 12.sp)
+                if (!compactLandscape) Text(eyebrow, color = AstraBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(title, fontSize = if (compactLandscape) 20.sp else 27.sp, fontWeight = FontWeight.Bold,
+                    maxLines = if (compactLandscape) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+                if (!compactLandscape || keepSubtitleInCompact) Text(subtitle, color = AstraTextMuted, fontSize = 12.sp)
             }
         }
     }
@@ -3286,7 +3319,8 @@ internal fun WeatherScreen(
                 title = "Beobachtungswetter",
                 subtitle = if (location == null) "Demo-Standort Berlin"
                 else "Wetter für deinen ungefähren Standort",
-                icon = Icons.Rounded.Cloud
+                icon = Icons.Rounded.Cloud,
+                keepSubtitleInCompact = true
             )
             Text("Nach unten ziehen zum Aktualisieren", color = AstraTextMuted, fontSize = 12.sp)
             simulatedSkyTime?.let {
@@ -3455,7 +3489,8 @@ private fun EventsScreen(
             title = "Himmelskalender",
             subtitle = if (location == null) "Berechnet für Demo-Standort Berlin"
             else "Lokal für deinen Beobachtungsort berechnet",
-            icon = Icons.Rounded.CalendarMonth
+            icon = Icons.Rounded.CalendarMonth,
+            keepSubtitleInCompact = true
         )
         Text(
             "Die Einschätzung berücksichtigt Standort, Radiantenhöhe und ungefähres Mondlicht. " +
@@ -5228,18 +5263,25 @@ private fun FullPhotoDialog(
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)
         ) {
             Column(
                 Modifier.fillMaxWidth().padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
+                ) {
+                    Text("Schließen")
+                }
                 if (bitmap != null) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Beobachtungsfoto",
                         modifier = Modifier
+                            .weight(1f, fill = false)
                             .fillMaxWidth()
                             .heightIn(max = 420.dp)
                             .clipToBounds(),
@@ -5247,12 +5289,6 @@ private fun FullPhotoDialog(
                     )
                 } else {
                     Text("Foto konnte nicht geladen werden.", color = AstraTextMuted)
-                }
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = AstraSurfaceHigh, contentColor = Color.White)
-                ) {
-                    Text("Schließen")
                 }
             }
         }

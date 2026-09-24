@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 23. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.16.
+Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.17.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -10,6 +10,7 @@ Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bes
 
 ### Review-Korrekturen nach dem Beta-Merge
 
+- [x] Querformat: Reiter und wichtige Sternkarten-/AR-Zustände bei Android-Drehung erhalten, Sternkarte bei geringer Höhe kompakter darstellen und Schließen in Datenschutz-/Fotodialog erreichbar halten. Rotationstest und Grenzen in [pre.17](play-store/pre-release-1.1.9-pre.17.md).
 - [x] Die 17 Lint-Warnungen und zwei Hinweise aus pre.15 beheben: Widget-Schrift/Layout/Texte, gezielte Dependency-Updates und Kotlin-Schreibweisen. Neue Widget-/WorkManager-Emulatorprüfungen; Nachweise in [pre.16](play-store/pre-release-1.1.9-pre.16.md).
 - [x] Logbuch atomisch speichern, beschädigte Bestandsdaten vor Überschreiben schützen und Importpfade/Dateigrößen/Zeitpunkte validieren.
 - [x] Fotoentfernung erst beim Speichern übernehmen; historische Beobachtungskoordinaten beim Bearbeiten erhalten.
