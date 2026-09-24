@@ -1,6 +1,6 @@
 # Aufgaben und Prioritäten
 
-Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.22.
+Stand: 24. September 2026 · Aktueller Korrekturstand: Version 1.1.9-pre.23.
 
 Diese Liste führt offene Arbeit und ausdrücklich abgehakte Ausbauschritte. Bestehende Funktionen stehen auch in der [README](README.md). Die Reihenfolge ist eine Arbeitsplanung, keine automatische Freigabe für Veröffentlichungen oder neue Datenübertragungen.
 
@@ -110,7 +110,8 @@ Umgesetzt in `1.1.8-pre.1`. Wetter und zugehöriger Ort werden atomar ersetzt; a
 - [x] Android-17-Standortknopf aus der scrollbaren Kartenbedienung entfernen: im Hochformat fester Bereich oberhalb der Karte, im kompakten Querformat eigener Dialog; Scrollen und Schließen prüfen ([pre.22](play-store/pre-release-1.1.9-pre.22.md)).
 - [x] Sternrichtungen für das Schwenken einmal vorberechnen und unveränderte GPU-Ansichten nicht erneut zeichnen; Bildregistrierung absichern ([pre.22](play-store/pre-release-1.1.9-pre.22.md)).
 - [ ] Verbleibende Wisch-Ruckler mit Frame-Trace auf einem schwächeren echten Gerät lokalisieren und beheben; die verbliebenen Optimierungen erreichen noch keine durchgehend flüssigen UI-Frames.
-- [ ] Satellitenbahnen in der Sternkarte optional ausblendbar machen; derzeit sind auch zukünftige Passagen bis zwölf Stunden im Voraus sichtbar.
+- [x] Satellitenbahnen und Beschriftungen standardmäßig ausblenden, mit gespeichertem Schalter aktivieren und ungenutzte Vorhersagen abbrechen ([pre.23](play-store/pre-release-1.1.9-pre.23.md)).
+- [x] Gemessene Sternfarben-Umrechnung aus dem Draw-Pfad entfernen und für Gerätetests eine R8-optimierte, weiterhin testsignierte APK bereitstellen ([pre.23](play-store/pre-release-1.1.9-pre.23.md)).
 - [ ] Gleichlauf von Sternen und Milchstraßen-Textur während längerer Schwenks auf einem leistungsschwachen echten Gerät prüfen; bei verbleibendem Versatz Renderpfade gezielt synchronisieren oder adaptiv abstufen.
 - [x] Kataloge, Sternbildgrenzen, Geländeprofil und Suchindex aus dem UI-Thread verlagern oder gestuft laden; der erste Kartenrahmen soll ohne vollständigen Deep-Sky-Aufbau erscheinen.
 - [x] HYG-/OpenNGC-/IAU-Daten pro Prozess zwischenspeichern und bei wiederholtem Tabwechsel nicht erneut parsen (Sternkarte und Beobachtungsliste, `beta` / `1.1.9-pre.1`).
@@ -218,6 +219,7 @@ Umgesetzt in `de.projektastra.app.hardware` (`CameraExposureController.kt`, `Sen
 
 - [x] Handschuh-Modus / Physische Tastenbedienung: Optionale Steuerung des Sternkarten-Zooms (Hinein/Heraus) und Weiterschalten in Listen über die Lautstärketasten (Volume +/-) für frostige Nächte mit dicken Handschuhen.
 - [x] Akkuschonendes Homescreen-Widget (Android Glance / AppWidget): Anzeige von aktueller Mondphase, Beleuchtungsgrad, astronomischem Dunkelheitsfenster und heutigem Wetter-Score basierend auf dem letzten lokal gespeicherten Ort (strikt ohne Hintergrund-GPS).
+- [x] Widget um kommende Himmelskalender-Ereignisse, direkten Kalenderaufruf und Android-Systemfarben mit Hell-/Dunkelvarianten erweitern; an Widgethöhe und große Schrift anpassen ([pre.23](play-store/pre-release-1.1.9-pre.23.md)).
 - [x] Dunkler OLED-Reinstschwarz-Modus ohne graue Zwischenflächen für maximale Dunkeladaption und minimale OLED-Entladung.
 - [x] Barrierefreiheit und Tasten-Navigation (D-Pad / Tastatur) für externe Bluetooth-Controller im Rotlichtbetrieb testen.
 

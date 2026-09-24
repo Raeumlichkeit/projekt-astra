@@ -2,8 +2,8 @@
 
 Projekt Astra ist eine persönliche Android-App für die manuelle Sternkarte, eine live ausgerichtete AR-Ansicht, astronomisches Wetter und Beobachtungsplanung.
 
-**Beta-Stand:** `1.1.9-pre.22` · Version Code `40` · Android 9 / API 28 bis Android 17 / API 37<br>
-Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.22 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.22).
+**Beta-Stand:** `1.1.9-pre.23` · Version Code `41` · Android 9 / API 28 bis Android 17 / API 37<br>
+Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengeführten Stand `1.1.9-pre.14`. Zum Testen: [v1.1.9-pre.23 öffnen](https://github.com/Raeumlichkeit/projekt-astra/releases/tag/v1.1.9-pre.23).
 
 ![Sternkarte](play-store/screenshots/01-sternenkarte.png)
 
@@ -13,12 +13,18 @@ Dieser Korrekturstand liegt auf `beta`; `main` enthält den zuvor zusammengefüh
 | --- | --- |
 | Sternkarte | Manuell verschieben und zoomen, sphärische Projektion, Sternfarben, Horizont, 88 IAU-Sternbildgrenzen, äquatoriale/horizontale Gitter, Referenzlinien (Äquator, Ekliptik, Galaktisch), Optik & FOV-Kreis/Telrad mit Drehung und Spiegelung, Handschuh-Modus (Lautstärketasten) |
 | Sonnensystem & Mond | Galileische Jupitermonde (Io, Europa, Ganymed, Kallisto) mit Transit/Verfinsterungs-Ereignissen, Saturn Ringsystem & Titan, Mondterminator-Detailrelief & Kraterkatalog |
-| Satelliten & ISS | Lokale Near-Earth-SGP4-Vorhersage für ISS und helle Satelliten mit benannten Passpfaden und Zeiten der größten Höhe (ohne Cloud/Tracking); benötigt zeitnahe TLEs, keine Deep-Space-/SDP4-Bahnen |
+| Satelliten & ISS | Standardmäßig aus; über „Satelliten“ oder „Himmel & Ebenen“ zuschaltbare Near-Earth-SGP4-Vorhersage mit benannten Bahnen und Zeiten der größten Höhe. Auswahl wird gespeichert; benötigt zeitnahe TLEs, keine Deep-Space-/SDP4-Bahnen |
 | Aufsuchhilfen | Interaktives Winkelabstand- und Positionsmesswerkzeug, geführter Star-Hopping-Assistent mit Telrad- und Okularfeldern |
 | Beobachtungsplan | „Heute Nacht im Überblick“ (Dunkelheit, Mond & Seeing), Dew Monitor (Magnus-Tetens Taupunktwarnung), Beobachtungs-Challenges (Messier 110, Caldwell, Herschel 400), „Im Logbuch beobachtet“-Statusbadges |
 | Tagebuch | Beobachtungstagebuch mit Fotos, Pickering 1–10, Antoniadi I–V, NELM fst, JSON-Backup, OAL 2.1 XML Standard-Export & Rotlicht-Textzusammenfassung |
 | AR & Kamera | CameraX-Kamerabild mit Nacht-Belichtungskorrektur (AE EV Stepping), adaptiver Tiefpass-Sensorfilterung, manueller ±15° Pitch-Trimmung und AR-Zielhilfe |
-| Widget & Design | Passives Homescreen-Widget (Mondphase, Dunkelheitsfenster, Wetter-Score ohne Hintergrund-GPS), OLED Reinstschwarz (#000000) & Rotlichtmodus |
+| Widget & Design | Homescreen-Widget mit Mondphase, Dunkelheitsfenster, Wetter-Score und kommenden Kalenderereignissen; Android-Systemfarben ab Android 12, heller/dunkler Ersatz auf älteren Geräten, ohne Hintergrund-GPS. OLED Reinstschwarz (#000000) & Rotlichtmodus in der App |
+
+## Neu in 1.1.9-pre.23 · Satellitenschalter und Kalender-Widget
+
+Satellitenbahnen und ihre Namen sind standardmäßig ausgeblendet. Der Schnellknopf in der aufgeklappten Kartenbedienung sowie der Schalter unter „Himmel & Ebenen“ speichern die Auswahl; ausgeschaltet laufen auch keine Passvorhersagen. Das Widget zeigt das nächste Ereignis, bei ausreichender Höhe zwei, und öffnet beim Antippen den Himmelskalender. Seine Farben folgen ab Android 12 der Systempalette. Bei großer Systemschrift weicht die sichtbare Ortszeile den Beobachtungsdaten; Screenreader erhalten sie weiterhin.
+
+Für flüssigeres Schwenken werden Sternfarben wiederverwendet, statt sie für jeden Frame neu umzurechnen. Die Test-APK verwendet nun den optimierten Release-Code mit R8, bleibt aber mit dem bisherigen Testschlüssel signiert und als Update installierbar. [Tests und Grenzen](play-store/pre-release-1.1.9-pre.23.md).
 
 ## Neu in 1.1.9-pre.22 · Standortknopf und Schwenken
 

@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
+import java.util.concurrent.CancellationException
 
 class SatellitePassPredictorTest {
 
@@ -15,6 +16,20 @@ class SatellitePassPredictorTest {
     )
 
     private val predictor = SatellitePassPredictor()
+
+    @Test
+    fun `cancellation interrupts pass prediction promptly`() {
+        var checks = 0
+        try {
+            predictor.predictPasses(issTle, GeoPoint(52.52, 13.405, 34.0), issTle.epochInstant,
+                durationHours = 12, checkCancellation = {
+                    if (++checks == 5) throw CancellationException()
+                })
+            throw AssertionError("Prediction completed after cancellation")
+        } catch (_: CancellationException) {
+            assertEquals(5, checks)
+        }
+    }
 
     @Test
     fun `predicts passes and verifies geometric properties`() {

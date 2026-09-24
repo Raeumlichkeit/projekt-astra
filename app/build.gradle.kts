@@ -13,6 +13,9 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// Explicit opt-in for a fast, release-optimized test APK compatible with earlier debug-signed betas.
+val astraTestApk = providers.gradleProperty("astraTestApk").map(String::toBoolean).getOrElse(false)
+
 abstract class PreparePrivacyAssets : DefaultTask() {
     @get:InputFile abstract val policy: RegularFileProperty
     @get:InputFile abstract val satelliteLicense: RegularFileProperty
@@ -38,8 +41,8 @@ android {
         applicationId = "de.projektastra.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 40
-        versionName = "1.1.9-pre.22"
+        versionCode = 41
+        versionName = "1.1.9-pre.23"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -68,7 +71,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (keystorePropertiesFile.exists()) {
+            if (astraTestApk) {
+                signingConfig = signingConfigs.getByName("debug")
+            } else if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
@@ -85,6 +90,7 @@ android {
 tasks.register("verifyPlayRelease") {
     dependsOn("bundleRelease")
     doLast {
+        check(!astraTestApk) { "Testsignatur aktiv: kein Play-Store-Upload erlaubt." }
         check(keystorePropertiesFile.exists()) { "Upload-Key fehlt: Bundle ist nicht für Play signiert." }
         check(!rootProject.file("play-store/privacy-policy.html").readText().let {
             it.contains("RELEASE_BLOCKER") || it.contains("LEGAL_REVIEW_PENDING")

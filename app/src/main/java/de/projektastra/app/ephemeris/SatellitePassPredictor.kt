@@ -41,7 +41,8 @@ internal class SatellitePassPredictor(private val propagator: Sgp4Propagator = S
         observer: GeoPoint,
         startTime: Instant,
         durationHours: Int = 48,
-        minElevationDegrees: Double = 10.0
+        minElevationDegrees: Double = 10.0,
+        checkCancellation: () -> Unit = {}
     ): List<SatellitePass> {
         val passes = mutableListOf<SatellitePass>()
         val endTime = startTime.plusSeconds(durationHours * 3600L)
@@ -52,6 +53,7 @@ internal class SatellitePassPredictor(private val propagator: Sgp4Propagator = S
         var passRiseTime: Instant? = null
 
         while (t < endTime) {
+            checkCancellation()
             val pos = propagator.propagate(tle, t, observer)
             val alt = pos?.coordinates?.altitude ?: -90.0
 
@@ -63,7 +65,7 @@ internal class SatellitePassPredictor(private val propagator: Sgp4Propagator = S
                 val set = refineBoundary(tle, observer, t.minusSeconds(coarseStep), t, minElevationDegrees, isRise = false)
                 val start = passRiseTime ?: t.minusSeconds(coarseStep)
 
-                val pass = buildPassRecord(tle, observer, start, set)
+                val pass = buildPassRecord(tle, observer, start, set, checkCancellation)
                 passes.add(pass)
                 inPass = false
                 passRiseTime = null
@@ -99,7 +101,8 @@ internal class SatellitePassPredictor(private val propagator: Sgp4Propagator = S
         tle: TleData,
         observer: GeoPoint,
         riseTime: Instant,
-        setTime: Instant
+        setTime: Instant,
+        checkCancellation: () -> Unit
     ): SatellitePass {
         val durationSeconds = (setTime.epochSecond - riseTime.epochSecond).coerceAtLeast(10L)
         val stepCount = (durationSeconds / 10).toInt().coerceAtLeast(2)
@@ -115,6 +118,7 @@ internal class SatellitePassPredictor(private val propagator: Sgp4Propagator = S
         var prevIllum = IlluminationStatus.SUNLIT
 
         for (i in 0..stepCount) {
+            checkCancellation()
             val curTime = riseTime.plusSeconds(i * 10L).coerceAtMost(setTime)
             val pos = propagator.propagate(tle, curTime, observer) ?: continue
             val alt = pos.coordinates.altitude

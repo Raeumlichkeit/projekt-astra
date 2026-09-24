@@ -12,6 +12,7 @@ class SkyAppearanceTest {
         assertEquals(1f, appearance.intensity, 0f)
         assertFalse(appearance.showInAr)
         assertFalse(appearance.showGrid)
+        assertFalse(appearance.showSatellites)
         assertEquals(SkyLabelDensity.NORMAL, appearance.labelDensity)
     }
 
@@ -67,6 +68,11 @@ class SkyAppearanceTest {
         assertTrue(appearance.showInAr)
         assertTrue(appearance.showGrid)
         assertEquals(SkyLabelDensity.RICH, appearance.labelDensity)
+    }
+
+    @Test fun satelliteChoiceRestoresAndSurvivesNormalization() {
+        assertTrue(SkyAppearance.restore(showSatellites = true).normalized().showSatellites)
+        assertFalse(SkyAppearance.restore(showSatellites = false).showSatellites)
     }
 
     @Test fun switchingOffPreservesTheChosenIntensityForLater() {

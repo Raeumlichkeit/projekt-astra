@@ -4,8 +4,17 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.SystemClock
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -100,6 +109,7 @@ class SkyTextureRenderingTest {
         val endDec = -16.71612
         val target = state(endRa, endDec, MilkyWayMode.PHOTO)
         launch(state(startRa, startDec, MilkyWayMode.PHOTO))
+        awaitStableFrameCount()
         val before = view.framesRendered.get()
         instrumentation.runOnMainSync {
             repeat(80) { step ->
@@ -310,6 +320,72 @@ class SkyTextureRenderingTest {
         instrumentation.runOnMainSync { view.retry() }
         awaitFrameAfter(before)
         assertTrue("Retry must render a new frame", view.framesRendered.get() > before)
+    }
+
+    @Test fun composeTextureKeepsPanningUnderCanvasWithoutBitmapReads() {
+        val skyState = mutableStateOf(state(17.76033, -28.93617, MilkyWayMode.PHOTO))
+        scenario = ActivityScenario.launch(ComponentActivity::class.java).also { scene ->
+            scene.onActivity { activity ->
+                activity.setContent {
+                    val current = skyState.value
+                    Box(Modifier.fillMaxSize()) {
+                        SkyTextureLayer(current, Modifier.fillMaxSize())
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawCircle(androidx.compose.ui.graphics.Color.White, 2f,
+                                Offset(current.azimuth.toFloat(), 10f))
+                        }
+                    }
+                }
+            }
+        }
+        fun findTexture(node: View): SkyTextureView? {
+            if (node is SkyTextureView) return node
+            if (node is ViewGroup) for (index in 0 until node.childCount) {
+                findTexture(node.getChildAt(index))?.let { return it }
+            }
+            return null
+        }
+        var texture: SkyTextureView? = null
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        while (texture == null && SystemClock.uptimeMillis() < deadline) {
+            scenario!!.onActivity { texture = findTexture(it.window.decorView) }
+            if (texture == null) SystemClock.sleep(50)
+        }
+        view = requireNotNull(texture) { "Compose did not attach its TextureView" }
+        awaitFrameAfter(0)
+        // Do not call getBitmap/screenshot while checking progress: TextureView.getBitmap can
+        // itself trigger the layer update callback and conceal an acquisition-gate deadlock.
+        val directions = listOf(6.75248 to -16.71612, 20.69053 to 45.28034,
+            17.76033 to -28.93617, 6.75248 to -16.71612)
+        for ((ra, dec) in directions) {
+            awaitStableFrameCount()
+            val before = view.framesRendered.get()
+            instrumentation.runOnMainSync { skyState.value = state(ra, dec, MilkyWayMode.PHOTO) }
+            awaitFrameAfter(before)
+        }
+        awaitStableFrameCount()
+        var sample = 1
+        while ((3840 / sample) * (1920 / sample) * 4 > view.textureBytes && sample < 8) sample *= 2
+        instrumentation.targetContext.assets.open("milkyway_gaia_2020.jpg").use { stream ->
+            requireNotNull(BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply {
+                inScaled = false
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            })).useBitmap { source ->
+                capture().useBitmap { image ->
+                    val (ra, dec) = directions.last()
+                    val expected = expectedPhotoPixel(source, ra, dec, skyState.value.altitude)
+                    val actual = image.getPixel(image.width / 2, image.height / 2)
+                    listOf(Color.red(actual), Color.green(actual), Color.blue(actual)).forEachIndexed { channel, value ->
+                        assertEquals("Final Compose pan direction, channel=$channel",
+                            expected[channel], value / 255.0, 12.0 / 255.0)
+                    }
+                }
+            }
+        }
+        val idleCount = view.framesRendered.get()
+        SystemClock.sleep(200)
+        assertEquals("Compose texture must settle when gestures stop", idleCount, view.framesRendered.get())
     }
 
     @Test fun unchangedComposeUpdatesDoNotRedrawTheWholeTexture() {

@@ -310,7 +310,10 @@ private val screenBackgroundBrush: Brush
     }
 
 class MainActivity : ComponentActivity() {
+    private var calendarRequest by mutableIntStateOf(0)
+
     companion object {
+        const val ACTION_OPEN_CALENDAR = "de.projektastra.app.OPEN_CALENDAR"
         var volumeKeyZoomHandler: ((Boolean) -> Boolean)? = null
     }
 
@@ -335,7 +338,14 @@ class MainActivity : ComponentActivity() {
         PrivacySettings.migrateLegacyBrowserData(this)
         PublicTileCache.prune(this)
         SecureNetwork.configure(PrivacySettings.load(this))
-        setContent { AstraRoot() }
+        if (savedInstanceState == null && intent.action == ACTION_OPEN_CALENDAR) calendarRequest++
+        setContent { AstraRoot(calendarRequest) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == ACTION_OPEN_CALENDAR) calendarRequest++
     }
 
     override fun onStart() {
@@ -367,7 +377,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AstraRoot() {
+private fun AstraRoot(calendarRequest: Int = 0) {
     val context = LocalContext.current
     val window = LocalActivity.current?.window
     val preferences = remember { context.getSharedPreferences("astra_settings", Context.MODE_PRIVATE) }
@@ -415,7 +425,8 @@ private fun AstraRoot() {
                 }
             }
         ) {
-            AstraApp(redLightMode, setRedLightMode, oledBlackMode, setOledBlackMode, skyFullscreen) { skyFullscreen = it }
+            AstraApp(redLightMode, setRedLightMode, oledBlackMode, setOledBlackMode, skyFullscreen,
+                calendarRequest) { skyFullscreen = it }
         }
     }
 }
@@ -466,11 +477,18 @@ private fun AstraApp(
     oledBlackMode: Boolean = false,
     setOledBlackMode: (Boolean) -> Unit = {},
     skyFullscreen: Boolean,
+    calendarRequest: Int = 0,
     setSkyFullscreen: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val compactLandscape = isCompactLandscape()
     var tab by rememberSaveable { mutableStateOf(AstraTab.SKY) }
+    LaunchedEffect(calendarRequest) {
+        if (calendarRequest > 0) {
+            tab = AstraTab.EVENTS
+            setSkyFullscreen(false)
+        }
+    }
     var location by remember { mutableStateOf(LocationStore.getSavedLocation(context)) }
     var rememberLocation by remember { mutableStateOf(LocationStore.isRememberEnabled(context)) }
     var useSessionLocation by rememberSaveable { mutableStateOf(true) }
@@ -992,6 +1010,12 @@ internal fun SkyScreen(
     var manualAltitude by rememberSaveable { mutableFloatStateOf(35f) }
     var manualFov by rememberSaveable { mutableFloatStateOf(95f) }
     var appearance by remember { mutableStateOf(SkyAppearancePreferences.load(context).copy(oledBlackMode = oledBlackMode)) }
+    fun updateAppearance(updated: SkyAppearance) {
+        val normalized = updated.normalized()
+        appearance = normalized
+        SkyAppearancePreferences.save(context, normalized)
+        if (normalized.oledBlackMode != oledBlackMode) setOledBlackMode(normalized.oledBlackMode)
+    }
     LaunchedEffect(oledBlackMode) {
         if (appearance.oledBlackMode != oledBlackMode) {
             appearance = appearance.copy(oledBlackMode = oledBlackMode)
@@ -1029,17 +1053,24 @@ internal fun SkyScreen(
     var starHopSession by remember { mutableStateOf(StarHopSessionState()) }
     var showStarHopSheet by remember { mutableStateOf(false) }
     val skyInstant = skyTime.instant
-    val satelliteCatalog = remember(context) { SatelliteCatalog.loadActiveSatellites(context) }
+    val satelliteCatalog = remember(context, appearance.showSatellites) {
+        if (appearance.showSatellites) SatelliteCatalog.loadActiveSatellites(context) else emptyList()
+    }
     val passPredictor = remember { SatellitePassPredictor(Sgp4Propagator()) }
     val predictionMinute = Math.floorDiv(skyInstant.epochSecond, 60L)
-    var satellitePasses by remember(satelliteCatalog, observer, predictionMinute) {
+    var satellitePasses by remember(appearance.showSatellites, satelliteCatalog, observer, predictionMinute) {
         mutableStateOf(emptyList<SatellitePass>())
     }
-    LaunchedEffect(satelliteCatalog, observer, predictionMinute) {
+    LaunchedEffect(appearance.showSatellites, satelliteCatalog, observer, predictionMinute) {
+        if (!appearance.showSatellites) return@LaunchedEffect
         satellitePasses = withContext(Dispatchers.Default) {
+            val predictionContext = currentCoroutineContext()
             satelliteCatalog.take(3).flatMap { tle ->
-                currentCoroutineContext().ensureActive()
-                passPredictor.predictPasses(tle, observer, Instant.ofEpochSecond(predictionMinute * 60), durationHours = 12)
+                predictionContext.ensureActive()
+                passPredictor.predictPasses(
+                    tle, observer, Instant.ofEpochSecond(predictionMinute * 60), durationHours = 12,
+                    checkCancellation = { predictionContext.ensureActive() }
+                )
             }
         }
     }
@@ -1283,6 +1314,10 @@ internal fun SkyScreen(
                         modifier = Modifier.semantics { stateDescription = if (showDeepSky) "Ein" else "Aus" }) {
                         Text(if (showDeepSky) "Deep Sky ✓" else "Deep Sky")
                     }
+                    TextButton(onClick = { updateAppearance(appearance.copy(showSatellites = !appearance.showSatellites)) },
+                        modifier = Modifier.semantics { stateDescription = if (appearance.showSatellites) "Ein" else "Aus" }) {
+                        Text(if (appearance.showSatellites) "Satelliten ✓" else "Satelliten")
+                    }
                     TextButton(onClick = {
                         manualAzimuth = viewAzimuth; manualAltitude = viewAltitude
                         updateSelection(selection.release()); toggleAr()
@@ -1453,7 +1488,7 @@ internal fun SkyScreen(
                 redLightMode = redLightMode,
                 onFirstFrameRendered = { firstMapFrameRendered = true },
                 skyInstant = skyInstant,
-                satellitePasses = satellitePasses,
+                satellitePasses = if (appearance.showSatellites) satellitePasses else emptyList(),
                 coordinateFrame = coordinateFrame,
                 skyAppearance = appearance,
                 measurementState = measurementState,
@@ -1785,14 +1820,8 @@ internal fun SkyScreen(
                         Icon(Icons.Rounded.Close, "Ebenen schließen")
                     }
                 }
-                SkyAppearanceControls(appearance, { updated ->
-                    val normalized = updated.normalized()
-                    appearance = normalized
-                    SkyAppearancePreferences.save(context, normalized)
-                    if (normalized.oledBlackMode != oledBlackMode) {
-                        setOledBlackMode(normalized.oledBlackMode)
-                    }
-                }, showBoundaries, { showBoundaries = it }, showIllustrations, { showIllustrations = it })
+                SkyAppearanceControls(appearance, ::updateAppearance,
+                    showBoundaries, { showBoundaries = it }, showIllustrations, { showIllustrations = it })
                 if (textureReady == false) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Die Milchstraßentextur ist auf diesem Gerät gerade nicht verfügbar. Sterne und Objektinformationen bleiben nutzbar.",
@@ -2181,6 +2210,12 @@ internal fun SkyCanvas(
     val isOled = skyAppearance.oledBlackMode || LocalOledMode.current
     val objectsByHip = remember(objects) { objects.mapNotNull { item -> item.celestial.hipId?.let { it to item } }.toMap() }
     val preparedObjects = remember(objects) { objects.map { it to PreparedSkyPosition(it.position) } }
+    // Compose's perceptual color interpolation converts color spaces; spectral colors do not
+    // change with the viewport, so perform it once per distinct catalog color instead of per pan.
+    val starColors = remember(objects) {
+        objects.asSequence().map { it.celestial }.filter { it.objectType == CelestialType.STAR }
+            .map { it.colorIndex }.distinct().associateWith(::starColor)
+    }
     Canvas(
         modifier.fillMaxSize().clipToBounds()
             .onSizeChanged { canvasSize = it }
@@ -2613,7 +2648,7 @@ internal fun SkyCanvas(
                 }
                 when (objectData.objectType) {
                     CelestialType.STAR -> {
-                        val color = starColor(objectData.colorIndex)
+                        val color = starColors.getValue(objectData.colorIndex)
                         val alpha = (1f - (objectData.magnitude.toFloat() - 1.5f).coerceAtLeast(0f) * 0.115f).coerceIn(0.42f, 1f)
                         if (objectData.magnitude < 2.0) {
                             drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0f)),
@@ -3523,13 +3558,13 @@ private fun ForecastTimeline(
 }
 
 
-private enum class SkyEventKind(val label: String) {
+internal enum class SkyEventKind(val label: String) {
     METEOR("Sternschnuppen"),
     SOLAR_ECLIPSE("Sonnenfinsternis"),
     LUNAR_ECLIPSE("Mondfinsternis")
 }
 
-private data class SkyEvent(
+internal data class SkyEvent(
     val title: String,
     val kind: SkyEventKind,
     val instant: Instant,
@@ -3668,9 +3703,13 @@ private fun EventCard(event: SkyEvent, saved: Boolean, toggleSaved: () -> Unit, 
     }
 }
 
-private fun buildUpcomingEvents(observer: GeoPoint, meteorShowers: List<MeteorDefinition>): List<SkyEvent> {
+internal fun buildUpcomingEvents(
+    observer: GeoPoint,
+    meteorShowers: List<MeteorDefinition>,
+    now: Instant = Instant.now()
+): List<SkyEvent> {
     val zone = ZoneId.systemDefault()
-    val today = LocalDate.now(zone)
+    val today = now.atZone(zone).toLocalDate()
     val meteorEvents = (today.year..today.year + 1).flatMap { year ->
         meteorShowers.filter { it.year == year }.map { shower ->
             val instant = ZonedDateTime.of(
@@ -3710,17 +3749,17 @@ private fun buildUpcomingEvents(observer: GeoPoint, meteorShowers: List<MeteorDe
         }
     }
 
-    val eclipseEvents = exactLocalEclipseEvents(observer)
+    val eclipseEvents = exactLocalEclipseEvents(observer, now)
 
-    val now = Instant.now().minus(1, ChronoUnit.DAYS)
+    val cutoff = now.minus(1, ChronoUnit.DAYS)
     return (meteorEvents + eclipseEvents)
-        .filter { it.instant.isAfter(now) }
+        .filter { it.instant.isAfter(cutoff) }
         .sortedBy { it.instant }
         .take(18)
 }
 
-private fun exactLocalEclipseEvents(observer: GeoPoint): List<SkyEvent> {
-    val start = Instant.now().toAstroTime()
+private fun exactLocalEclipseEvents(observer: GeoPoint, now: Instant): List<SkyEvent> {
+    val start = now.toAstroTime()
     val place = observer.toAstroObserver()
     val solar = localSolarEclipsesAfter(start, place).take(2).map { eclipse ->
         val maximum = eclipse.peak.time.toInstant()

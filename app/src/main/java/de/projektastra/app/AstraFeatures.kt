@@ -229,6 +229,13 @@ internal object MeteorCalendarRepository {
         online = false
     )
 
+    /** Reuse an already downloaded calendar without starting a network request. */
+    fun cachedOrBundled(context: Context): MeteorCalendarSnapshot {
+        val cached = context.getSharedPreferences("astra_imo", Context.MODE_PRIVATE)
+            .getString(CACHE_NAME, null)
+        return cached?.let { runCatching { parse(it, true) }.getOrNull() } ?: bundled(context)
+    }
+
     fun refresh(context: Context, callback: (MeteorCalendarSnapshot) -> Unit) {
         val preferences = context.getSharedPreferences("astra_imo", Context.MODE_PRIVATE)
         val cachedJson = preferences.getString(CACHE_NAME, null)

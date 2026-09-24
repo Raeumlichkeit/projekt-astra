@@ -80,6 +80,7 @@ internal data class SkyAppearance(
     val showCelestialEquator: Boolean = false,
     val showEcliptic: Boolean = false,
     val showGalacticEquator: Boolean = false,
+    val showSatellites: Boolean = false,
     val labelDensity: SkyLabelDensity = SkyLabelDensity.NORMAL,
     val oledBlackMode: Boolean = false,
     val gloveModeZoom: Boolean = true
@@ -102,6 +103,7 @@ internal data class SkyAppearance(
             showCelestialEquator: Boolean = false,
             showEcliptic: Boolean = false,
             showGalacticEquator: Boolean = false,
+            showSatellites: Boolean = false,
             labelDensityName: String? = null,
             oledBlackMode: Boolean = false,
             gloveModeZoom: Boolean = true
@@ -115,6 +117,7 @@ internal data class SkyAppearance(
             showCelestialEquator = showCelestialEquator,
             showEcliptic = showEcliptic,
             showGalacticEquator = showGalacticEquator,
+            showSatellites = showSatellites,
             labelDensity = SkyLabelDensity.entries.firstOrNull { it.name == labelDensityName }
                 ?: SkyLabelDensity.NORMAL,
             oledBlackMode = oledBlackMode,
@@ -133,6 +136,7 @@ internal object SkyAppearancePreferences {
     private const val SHOW_CELESTIAL_EQUATOR = "sky_appearance_show_celestial_equator"
     private const val SHOW_ECLIPTIC = "sky_appearance_show_ecliptic"
     private const val SHOW_GALACTIC_EQUATOR = "sky_appearance_show_galactic_equator"
+    private const val SHOW_SATELLITES = "sky_appearance_show_satellites"
     private const val LABEL_DENSITY = "sky_appearance_label_density"
     private const val OLED_BLACK_MODE = "oled_black_mode"
     private const val GLOVE_MODE_ZOOM = "glove_mode_zoom"
@@ -150,6 +154,7 @@ internal object SkyAppearancePreferences {
             showCelestialEquator = runCatching { preferences.getBoolean(SHOW_CELESTIAL_EQUATOR, false) }.getOrDefault(false),
             showEcliptic = runCatching { preferences.getBoolean(SHOW_ECLIPTIC, false) }.getOrDefault(false),
             showGalacticEquator = runCatching { preferences.getBoolean(SHOW_GALACTIC_EQUATOR, false) }.getOrDefault(false),
+            showSatellites = runCatching { preferences.getBoolean(SHOW_SATELLITES, false) }.getOrDefault(false),
             labelDensityName = runCatching { preferences.getString(LABEL_DENSITY, null) }.getOrNull(),
             oledBlackMode = runCatching { preferences.getBoolean(OLED_BLACK_MODE, false) }.getOrDefault(false),
             gloveModeZoom = runCatching { preferences.getBoolean(GLOVE_MODE_ZOOM, true) }.getOrDefault(true)
@@ -168,6 +173,7 @@ internal object SkyAppearancePreferences {
             putBoolean(SHOW_CELESTIAL_EQUATOR, normalized.showCelestialEquator)
             putBoolean(SHOW_ECLIPTIC, normalized.showEcliptic)
             putBoolean(SHOW_GALACTIC_EQUATOR, normalized.showGalacticEquator)
+            putBoolean(SHOW_SATELLITES, normalized.showSatellites)
             putString(LABEL_DENSITY, normalized.labelDensity.name)
             putBoolean(OLED_BLACK_MODE, normalized.oledBlackMode)
             putBoolean(GLOVE_MODE_ZOOM, normalized.gloveModeZoom)
@@ -265,6 +271,12 @@ internal fun SkyAppearanceControls(
             "Ausgewählte Objekte und Orientierungspunkte haben Vorrang. Wenn es eng wird, erscheinen weniger Namen, damit die Karte lesbar bleibt.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        AppearanceSwitch(
+            title = "Satellitenbahnen und Beschriftungen",
+            detail = "Zeigt vorhergesagte Bahnen und Namen heller Satelliten am Himmel.",
+            checked = current.showSatellites,
+            onCheckedChange = { onChange(current.copy(showSatellites = it)) }
         )
         HorizontalDivider()
         Text("Orientierung", style = MaterialTheme.typography.titleMedium)

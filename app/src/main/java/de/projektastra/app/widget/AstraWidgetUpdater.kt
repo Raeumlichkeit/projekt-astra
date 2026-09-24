@@ -11,13 +11,18 @@ import androidx.core.content.edit
 import de.projektastra.app.GeoPoint
 import de.projektastra.app.LocationStore
 import de.projektastra.app.MainActivity
+import de.projektastra.app.MeteorCalendarRepository
 import de.projektastra.app.R
+import de.projektastra.app.SkyEvent
 import de.projektastra.app.TonightWindowCalculator
+import de.projektastra.app.buildUpcomingEvents
 import de.projektastra.app.ephemeris.LunarTerminatorCalculator
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -33,7 +38,15 @@ data class WidgetState(
     val usesBackgroundGps: Boolean = false,
     val usesRunningBackgroundService: Boolean = false,
     /** Null means there is no astronomical darkness; the full explanation stays accessible. */
-    val darknessWindowCompact: String? = darknessWindow
+    val darknessWindowCompact: String? = darknessWindow,
+    val upcomingEvents: List<WidgetEvent> = emptyList()
+)
+
+data class WidgetEvent(
+    val title: String,
+    val instant: Instant,
+    val status: String,
+    val approximate: Boolean
 )
 
 /**
@@ -44,6 +57,16 @@ object AstraWidgetUpdater {
 
     private const val PREFS_NAME = "astra_widget_prefs"
     private const val KEY_CACHED_WEATHER_SCORE = "cached_weather_score"
+    private val worker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "astra-widget").apply { isDaemon = true }
+    }
+    private data class EventCache(
+        val day: LocalDate,
+        val observer: GeoPoint,
+        val sourceHash: Int,
+        val events: List<SkyEvent>
+    )
+    @Volatile private var eventCache: EventCache? = null
 
     fun saveWeatherScore(context: Context, score: Int) {
         runCatching {
@@ -121,10 +144,38 @@ object AstraWidgetUpdater {
         weatherScore: Int? = getCachedWeatherScore(context)
     ): WidgetState {
         val savedLocation = runCatching { LocationStore.getSavedLocation(context) }.getOrNull()
-        return calculateState(savedLocation, time, weatherScore)
+        val observer = savedLocation ?: GeoPoint(52.5200, 13.4050, 34.0)
+        val events = runCatching { calendarEvents(context, observer, time) }.getOrDefault(emptyList())
+        return calculateState(savedLocation, time, weatherScore).copy(upcomingEvents = events)
     }
 
-    fun buildRemoteViews(context: Context, state: WidgetState): RemoteViews {
+    private fun calendarEvents(context: Context, observer: GeoPoint, now: Instant): List<WidgetEvent> {
+        val zone = ZoneId.systemDefault()
+        val day = now.atZone(zone).toLocalDate()
+        val snapshot = MeteorCalendarRepository.cachedOrBundled(context)
+        val sourceHash = snapshot.showers.hashCode()
+        val cached = eventCache
+        val events = if (cached != null && cached.day == day && cached.observer == observer &&
+            cached.sourceHash == sourceHash) cached.events else {
+            // The shared calendar includes local eclipse searches; calculate it once per day and observer.
+            buildUpcomingEvents(observer, snapshot.showers, day.atStartOfDay(zone).toInstant()).also {
+                eventCache = EventCache(day, observer, sourceHash, it)
+            }
+        }
+        return upcomingWidgetEvents(events, now)
+    }
+
+    internal fun upcomingWidgetEvents(events: List<SkyEvent>, now: Instant): List<WidgetEvent> {
+        val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
+        return events.asSequence()
+            .filter { if (it.timeIsApproximate) !it.instant.atZone(ZoneId.systemDefault()).toLocalDate().isBefore(today)
+                else it.instant.isAfter(now) }
+            .take(2)
+            .map { WidgetEvent(it.title, it.instant, it.status, it.timeIsApproximate) }
+            .toList()
+    }
+
+    fun buildRemoteViews(context: Context, state: WidgetState, heightDp: Int = 110): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_astra_tonight)
         val illumination = context.getString(R.string.widget_illumination, state.moonIlluminationPercent)
         val score = state.weatherScore?.let { context.getString(R.string.widget_score, it) }
@@ -134,8 +185,34 @@ object AstraWidgetUpdater {
         val compact = context.resources.configuration.fontScale > 1.3f
         val detailVisibility = if (compact) View.GONE else View.VISIBLE
         views.setViewVisibility(R.id.widget_title, detailVisibility)
+        views.setViewVisibility(R.id.widget_location, detailVisibility)
         views.setViewVisibility(R.id.widget_moon_illumination, detailVisibility)
         views.setViewVisibility(R.id.widget_weather_label, detailVisibility)
+
+        val shortEvent = compact
+        val firstEvent = state.upcomingEvents.firstOrNull()
+        val secondEvent = state.upcomingEvents.getOrNull(1)
+            .takeIf { heightDp >= if (compact) 205 else 155 }
+        val eventDate = DateTimeFormatter.ofPattern("dd.MM.", Locale.GERMAN)
+            .withZone(ZoneId.systemDefault())
+        val fullEventDate = DateTimeFormatter.ofPattern("d. MMMM yyyy", Locale.GERMAN)
+            .withZone(ZoneId.systemDefault())
+        val fullEventTime = DateTimeFormatter.ofPattern("d. MMMM yyyy 'um' HH:mm", Locale.GERMAN)
+            .withZone(ZoneId.systemDefault())
+        fun eventText(event: WidgetEvent) = if (shortEvent) event.title
+            else "${eventDate.format(event.instant)} · ${event.title}"
+        fun eventDescription(event: WidgetEvent) = context.getString(R.string.widget_event_accessibility,
+            event.title, (if (event.approximate) fullEventDate else fullEventTime).format(event.instant),
+            event.status)
+        views.setTextViewText(R.id.widget_event_primary, firstEvent?.let(::eventText)
+            ?: context.getString(R.string.widget_event_pending))
+        views.setContentDescription(R.id.widget_event_primary, firstEvent?.let(::eventDescription)
+            ?: context.getString(R.string.widget_event_pending))
+        views.setViewVisibility(R.id.widget_event_secondary, if (secondEvent != null) View.VISIBLE else View.GONE)
+        if (secondEvent != null) {
+            views.setTextViewText(R.id.widget_event_secondary, eventText(secondEvent))
+            views.setContentDescription(R.id.widget_event_secondary, eventDescription(secondEvent))
+        }
 
         views.setTextViewText(R.id.widget_location, state.lastKnownLocationLabel)
         views.setTextViewText(R.id.widget_moon_phase, state.moonPhaseLabel)
@@ -152,7 +229,10 @@ object AstraWidgetUpdater {
         views.setContentDescription(R.id.widget_root,
             listOf(context.getString(R.string.app_name), state.lastKnownLocationLabel,
                 state.moonPhaseLabel, illumination,
-                context.getString(R.string.widget_weather_accessibility, score), state.darknessWindow)
+                context.getString(R.string.widget_weather_accessibility, score), state.darknessWindow,
+                firstEvent?.let(::eventDescription) ?: context.getString(R.string.widget_event_pending),
+                secondEvent?.let(::eventDescription))
+                .filterNotNull()
                 .joinToString(". "))
 
         // PendingIntent to launch MainActivity on tap
@@ -162,6 +242,14 @@ object AstraWidgetUpdater {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, flags)
         views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+        val calendarIntent = Intent(context, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_OPEN_CALENDAR
+            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        views.setOnClickPendingIntent(R.id.widget_event_primary,
+            PendingIntent.getActivity(context, 1, calendarIntent, flags))
+        views.setOnClickPendingIntent(R.id.widget_event_secondary,
+            PendingIntent.getActivity(context, 1, calendarIntent, flags))
 
         return views
     }
@@ -171,11 +259,25 @@ object AstraWidgetUpdater {
         val component = ComponentName(context, AstraAppWidgetProvider::class.java)
         val widgetIds = appWidgetManager.getAppWidgetIds(component)
         if (widgetIds.isEmpty()) return
+        updateWidgets(context, widgetIds)
+    }
 
-        val state = calculateState(context)
-        val views = buildRemoteViews(context, state)
-        for (id in widgetIds) {
-            appWidgetManager.updateAppWidget(id, views)
+    fun updateWidgets(context: Context, widgetIds: IntArray, onComplete: () -> Unit = {}) {
+        val appContext = context.applicationContext
+        worker.execute {
+            try {
+                if (widgetIds.isNotEmpty()) {
+                    val manager = AppWidgetManager.getInstance(appContext)
+                    val state = calculateState(appContext)
+                    for (id in widgetIds) {
+                        val height = manager.getAppWidgetOptions(id)
+                            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
+                        manager.updateAppWidget(id, buildRemoteViews(appContext, state, height))
+                    }
+                }
+            } finally {
+                onComplete()
+            }
         }
     }
 }

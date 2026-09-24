@@ -3,6 +3,7 @@ package de.projektastra.app.widget
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.os.Bundle
 
 /**
  * AppWidgetProvider for the Projekt Astra Homescreen Widget.
@@ -15,11 +16,17 @@ class AstraAppWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        super.onUpdate(context, appWidgetManager, appWidgetIds)
-        val state = AstraWidgetUpdater.calculateState(context)
-        val views = AstraWidgetUpdater.buildRemoteViews(context, state)
-        for (appWidgetId in appWidgetIds) {
-            appWidgetManager.updateAppWidget(appWidgetId, views)
-        }
+        val result = goAsync()
+        AstraWidgetUpdater.updateWidgets(context, appWidgetIds) { result.finish() }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        val result = goAsync()
+        AstraWidgetUpdater.updateWidgets(context, intArrayOf(appWidgetId)) { result.finish() }
     }
 }

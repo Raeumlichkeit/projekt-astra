@@ -1,17 +1,48 @@
 package de.projektastra.app.widget
 
+import androidx.compose.ui.graphics.Color
 import de.projektastra.app.GeoPoint
+import de.projektastra.app.SkyEvent
+import de.projektastra.app.SkyEventKind
 import de.projektastra.app.TonightWindowCalculator
 import de.projektastra.app.ephemeris.LunarTerminatorCalculator
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
 class AstraWidgetTest {
+
+    @Test
+    fun onlyUpcomingCalendarEventsAppearAndTodaysApproximatePeakRemainsVisible() {
+        val zone = ZoneId.systemDefault()
+        val day = LocalDate.of(2026, 9, 20)
+        val midnight = day.atStartOfDay(zone).toInstant()
+        val noon = day.atTime(LocalTime.NOON).atZone(zone).toInstant()
+        fun event(title: String, instant: Instant, approximate: Boolean) = SkyEvent(
+            title = title,
+            kind = SkyEventKind.METEOR,
+            instant = instant,
+            timeIsApproximate = approximate,
+            status = "Lokal sichtbar",
+            statusColor = Color.White,
+            facts = "",
+            description = ""
+        )
+        val selected = AstraWidgetUpdater.upcomingWidgetEvents(listOf(
+            event("Gestern", midnight.minusSeconds(86400), true),
+            event("Vergangene Finsternis", midnight, false),
+            event("Heute Meteorschauer", midnight, true),
+            event("Morgen", midnight.plusSeconds(86400), true),
+            event("Übermorgen", midnight.plusSeconds(172800), true)
+        ), noon)
+        assertEquals(listOf("Heute Meteorschauer", "Morgen"), selected.map { it.title })
+    }
 
     @Test
     fun missingWeatherScoreRemainsUnknown() {

@@ -15,6 +15,7 @@ import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import de.projektastra.app.widget.AstraWidgetUpdater
+import de.projektastra.app.widget.WidgetEvent
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,12 +37,32 @@ class WidgetLayoutTest {
             assertEquals("—", view.findViewById<TextView>(R.id.widget_weather_score).text.toString())
             assertEquals("Standort: —", view.findViewById<TextView>(R.id.widget_location).text.toString())
             assertEquals("Nacht: —", view.findViewById<TextView>(R.id.widget_darkness_window).text.toString())
+            assertEquals("Kalender: —", view.findViewById<TextView>(R.id.widget_event_primary).text.toString())
         }
     }
 
     @Test fun remoteViewsFitMinimumSizeAtNormalFont() = checkLayout(fontScale = 1f)
 
     @Test fun remoteViewsFitMinimumSizeAtDoubleFont() = checkLayout(fontScale = 2f)
+
+    @Test fun expandedWidgetShowsTwoEventsWithoutOverlap() = checkLayout(fontScale = 1f, heightDp = 160)
+
+    @Test fun widgetPaletteFollowsDayNightConfiguration() {
+        val app = instrumentation.targetContext
+        fun color(night: Boolean, id: Int): Int {
+            val configuration = Configuration(app.resources.configuration).apply {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                    (if (night) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO)
+            }
+            return app.createConfigurationContext(configuration).getColor(id)
+        }
+        assertNotEquals(color(false, R.color.widget_background), color(true, R.color.widget_background))
+        for (night in listOf(false, true)) {
+            val surface = android.graphics.Color.luminance(color(night, R.color.widget_background))
+            val primary = android.graphics.Color.luminance(color(night, R.color.widget_primary))
+            assertTrue(if (night) primary > surface else primary < surface)
+        }
+    }
 
     @Test fun missingWeatherIsNotReplacedByAnInventedScore() {
         val app = instrumentation.targetContext
@@ -65,7 +86,7 @@ class WidgetLayoutTest {
         }
     }
 
-    private fun checkLayout(fontScale: Float) {
+    private fun checkLayout(fontScale: Float, heightDp: Int = 110) {
         instrumentation.runOnMainSync {
             val app = instrumentation.targetContext
             val configuration = Configuration(app.resources.configuration).apply { this.fontScale = fontScale }
@@ -73,13 +94,16 @@ class WidgetLayoutTest {
             val state = AstraWidgetUpdater.calculateState(GeoPoint(52.52, 13.405, 34.0),
                 Instant.parse("2026-09-20T22:00:00Z"), weatherScore = 100)
                 .copy(moonPhaseLabel = "Abnehmender Mond", moonIlluminationPercent = 100,
-                    lastKnownLocationLabel = "33,9°S, 170,7°W")
-            val root = AstraWidgetUpdater.buildRemoteViews(context, state)
+                    lastKnownLocationLabel = "33,9°S, 170,7°W",
+                    upcomingEvents = listOf(
+                        WidgetEvent("Perseiden", Instant.parse("2026-09-21T00:00:00Z"), "Gute Bedingungen", true),
+                        WidgetEvent("Geminiden", Instant.parse("2026-12-14T00:00:00Z"), "Sichtbar", true)))
+            val root = AstraWidgetUpdater.buildRemoteViews(context, state, heightDp)
                 .apply(context, FrameLayout(context)) as ViewGroup
             assertEquals(fontScale, root.resources.configuration.fontScale, 0.01f)
             val density = context.resources.displayMetrics.density
             val width = (180 * density).roundToInt()
-            val height = (110 * density).roundToInt()
+            val height = (heightDp * density).roundToInt()
             root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
             root.layout(0, 0, width, height)
@@ -104,8 +128,14 @@ class WidgetLayoutTest {
             for (first in rectangles.indices) for (second in first + 1 until rectangles.size) {
                 assertFalse("Widget text fields overlap", Rect.intersects(rectangles[first], rectangles[second]))
             }
-            listOf(R.id.widget_location, R.id.widget_moon_phase, R.id.widget_weather_score, R.id.widget_darkness_window)
+            listOf(R.id.widget_moon_phase, R.id.widget_weather_score,
+                R.id.widget_darkness_window, R.id.widget_event_primary)
                 .forEach { assertEquals(View.VISIBLE, root.findViewById<View>(it).visibility) }
+            assertEquals(if (fontScale > 1.3f) View.GONE else View.VISIBLE,
+                root.findViewById<View>(R.id.widget_location).visibility)
+            assertEquals(if (heightDp >= if (fontScale > 1.3f) 205 else 155) View.VISIBLE else View.GONE,
+                root.findViewById<View>(R.id.widget_event_secondary).visibility)
+            assertTrue(root.findViewById<TextView>(R.id.widget_event_primary).contentDescription.contains("Perseiden"))
             assertEquals(if (fontScale > 1.3f) "☁ 100" else "100/100",
                 root.findViewById<TextView>(R.id.widget_weather_score).text.toString())
             val darkness = root.findViewById<TextView>(R.id.widget_darkness_window)
@@ -117,11 +147,12 @@ class WidgetLayoutTest {
             assertTrue(root.contentDescription.contains("Beleuchtung: 100%"))
             assertTrue(root.contentDescription.contains(state.darknessWindow))
             assertTrue(root.contentDescription.contains(state.lastKnownLocationLabel))
+            assertTrue(root.contentDescription.contains("Perseiden"))
             // Only this synthetic fixture is rendered; no launcher/user state is captured.
             val image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             try {
                 root.draw(Canvas(image))
-                FileOutputStream(File(requireNotNull(app.externalCacheDir), "widget-layout-$fontScale.png")).use {
+                FileOutputStream(File(requireNotNull(app.externalCacheDir), "widget-layout-$fontScale-$heightDp.png")).use {
                     assertTrue(image.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
             } finally {

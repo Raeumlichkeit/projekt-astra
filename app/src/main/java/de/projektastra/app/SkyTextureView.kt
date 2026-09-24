@@ -159,11 +159,15 @@ private class SkyTextureWorker(
     }
     private val draw = Runnable {
         queued.set(false)
-        val next = request
+        var next = request
         if (!closed.get() && next.active && next.width > 0 && next.height > 0 && next.state != null && !initializationFailed) {
             try {
                 if (program == 0) initialize(next.width, next.height)
-                if (!closed.get()) render(next)
+                // Decoding/upload can outlast several gestures, a resize, or a lifecycle stop.
+                next = request
+                if (!closed.get() && next.active && next.width > 0 && next.height > 0 && next.state != null) {
+                    render(next)
+                }
             } catch (_: Exception) {
                 initializationFailed = true
                 disposeGl()
@@ -174,13 +178,17 @@ private class SkyTextureWorker(
 
     fun update(state: SkyTextureState?, width: Int, height: Int, active: Boolean) {
         request = Request(state, width, height, active)
+        scheduleDraw()
+    }
+
+    private fun scheduleDraw() {
         if (!closed.get() && queued.compareAndSet(false, true)) handler.post(draw)
     }
 
     fun retry() {
-        if (!closed.get()) {
+        if (!closed.get()) handler.post {
             initializationFailed = false
-            if (queued.compareAndSet(false, true)) handler.post(draw)
+            scheduleDraw()
         }
     }
 
