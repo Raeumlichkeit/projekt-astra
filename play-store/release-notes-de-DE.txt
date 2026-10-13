@@ -1,6 +1,0 @@
-Neu in Projekt Astra 1.1.7-pre.2:
-
-• Deutlicher Hinweis auf veraltete NASA-Lichtdaten von 2016 direkt am Astra-Score
-• Warnung auch über der internen Lichtkarte, einschließlich Vollbild
-• Neuladen ändert den historischen Datenstand nicht
-• Score-Berechnung und externe Karte unverändert
